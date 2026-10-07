@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00140">
+	<!-- Concurrent Viewer List 조회 -->
+	<select id="retrieveConcurrentViewerList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	  SELECT /* LGUTLC00140.retrieveConcurrentViewerList */
+		         request_id 
+	           , request_user_id 
+	           , employee_name  
+	           , system_code
+	           , module_code
+	           , program_id
+	           , program_name
+	           , batch_id 
+	           , batch_name
+	           , schedule_flag 
+	           , pop_up_alarm_flag
+	           , user_check_flag
+	           , actual_start_date
+	           , actual_end_date
+	           , trx_sec
+	           , trx_hhmiss
+	           , argument_text 
+	           , status_code 
+	           , status_code_name 
+	           , error_flag 
+	           , error_content 
+	           , file_id 
+           FROM lgcom_batch_log_v
+	      WHERE 1 = 1
+		<if test="systemCode != null and systemCode != ''">
+			AND system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+			AND module_code = #{moduleCode}
+		</if>
+		<if test="programId != null and programId != ''">
+			AND program_id = #{programId}
+		</if>
+		<if test="requestUserId != null and requestUserId != ''">
+			AND request_user_id = #{requestUserId}
+		</if>
+		<if test="requestId != null and requestId != ''">
+			AND request_id = #{requestId}
+		</if>
+		<if test="alarmFlag != null and alarmFlag != ''">
+			AND pop_up_alarm_flag = #{alarmFlag}
+		</if>
+		<if test="scheduleFlag != null and scheduleFlag != ''">
+			AND schedule_flag = #{scheduleFlag}
+		</if>
+		<if test="userCheckFlag != null and userCheckFlag != ''">
+			AND user_check_flag = #{userCheckFlag}
+		</if>
+		<if test="userProgramAliasName != null and userProgramAliasName != ''">
+			AND UPPER(program_name) LIKE '%'||UPPER(#{programName}) || '%'
+		</if>
+		<if test="dateFrom != null and dateFrom != ''">
+		<![CDATA[
+			AND actual_start_date >= to_char( trunc( to_date( #{dateFrom}, 'YYYY-MM-DD') ), 'YYYY-MM-DD HH24:MI:SS' )
+		 ]]>	
+		</if>
+		<if test="dateTo != null and dateTo != ''">
+		<![CDATA[
+			AND actual_end_date <  to_char( trunc( to_date( #{dateTo}, 'YYYY-MM-DD') + 1 ), 'YYYY-MM-DD HH24:MI:SS' )
+		 ]]>	
+		</if>
+		ORDER BY actual_start_date DESC
+	</select>
+</mapper>

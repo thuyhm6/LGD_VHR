@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTC0018">
+<!-- Automatically changes to Unpaid leave -->
+	<select id="getMailInformation" parameterType="LGCOMData" resultType="LGCOMData">
+		select 
+		        a.CODE_DATA1_VALUE
+		       ,a.CODE_DATA2_VALUE
+		       ,a.CODE_DATA3_VALUE
+		       ,a.CODE_DATA4_VALUE
+		       ,a.CODE_DATA5_VALUE
+		       ,b.mail_id
+		       ,b.subject_text
+		       ,b.mail_detail_content
+		       ,c.mail_recipient_addr
+		       ,d.mail_addr
+		       ,e.employee_number
+		       ,e.organization_id
+		       ,e.org_name_local
+		       ,f.org_type
+		  from  lgcom_common_code_c a
+		       ,lgcom_mail_content_n b
+		       ,LGCOM_MAIL_RECIPIENT_N c
+		       ,LGCOM_USER_M d
+		       ,emp_master e
+		       ,org_master f
+		 where  a.CODE_DATA1_VALUE = b.mail_id
+		   and  b.mail_id = c.mail_id
+		   and  c.mail_recipient_addr = d.mail_addr
+		   and  d.user_name = e.employee_number
+		   and  e.ORGANIZATION_ID = f.ORGANIZATION_ID
+		   and  a.code_type_code = 'LGVHR_MAIL_TEMPLATE_LIST'
+		   AND  a.common_code    = 'ATTENDANCE_REPORT_SEND_EMAIL'
+	</select>
+	
+	<select id="getAttendanceData" parameterType="LGCOMData" resultType="LGCOMData">
+		with attendance AS (
+				   select   
+				           b.employee_number
+				          ,b.status
+				          ,b.full_name_english
+				          ,b.organization_id
+				          ,b.org_name_eng
+				          ,b.PERSON_TYPE
+				          ,b.position
+				          ,c.employee_no
+				          ,c.time_and_attendance_date
+				          ,c.check_in_date
+				          ,c.check_out_date
+				          ,d.shift_type_code
+				          ,d.time_and_attendance_code
+				          ,d.night_shift_flag
+				          ,e.time_and_attendance_code as res_time_and_attendance_code
+				          ,e.a_Day_Of_The_Week_Code
+				          ,e.work_start_time
+				          ,e.night_shift_flag as res_night_shift_flag
+				          ,to_date(to_char(c.time_and_attendance_date,'YYYY-MM-DD')||' '||e.work_start_time,'YYYY-MM-DD HH24:MI') as work_start_datetime
+				          ,case
+				             when c.CHECK_IN_DATE > to_date(to_char(c.time_and_attendance_date,'YYYY-MM-DD')||' '||e.work_start_time,'YYYY-MM-DD HH24:MI') then 'Y'
+				             ELSE 'N'
+				           end as in_time_over_yn
+				          ,case
+				             when e.a_Day_Of_The_Week_Code = 'FRI' and d.shift_type_code = '1A' THEN to_date(to_char(c.time_and_attendance_date,'YYYY-MM-DD')||' 17:00','YYYY-MM-DD HH24:MI')
+				             when d.shift_type_code = '1A' THEN to_date(to_char(c.time_and_attendance_date,'YYYY-MM-DD')||' 18:00','YYYY-MM-DD HH24:MI') 
+				             when d.shift_type_code != '1A' and e.night_shift_flag = 'N' THEN to_date(to_char(c.time_and_attendance_date,'YYYY-MM-DD')||' 20:00','YYYY-MM-DD HH24:MI')
+				             when d.shift_type_code != '1A' and e.night_shift_flag = 'Y' THEN to_date(to_char(c.time_and_attendance_date,'YYYY-MM-DD')||' 08:00','YYYY-MM-DD HH24:MI')+1
+				           end as work_end_datetime
+				     from (
+				          select 
+				                 LEVEL AS hierarchy_level
+				                ,PARENT_ORG_ID
+				                ,ORGANIZATION_ID
+				                ,ORG_NAME_ENG
+				                ,ORG_TYPE
+				            from org_master
+				          start with ORGANIZATION_ID = #{organizationId}
+				          connect by PRIOR ORGANIZATION_ID = PARENT_ORG_ID
+				          order SIBLINGS by ORG_TYPE ASC
+				        ) a
+				         ,emp_master b
+				         ,tb_att_idcard_acs_time_n c
+				         ,tb_att_plan_n d
+				         ,tb_att_result_n e
+				    where a.ORGANIZATION_ID = b.organization_id
+				      and b.employee_number = c.employee_no
+				      and c.time_and_attendance_date = d.time_and_attendance_date
+				      and c.employee_no = d.employee_no
+				      and c.time_and_attendance_date = e.time_and_attendance_date
+				      and c.employee_no = e.employee_no
+				      and e.time_and_attendance_code <![CDATA[<>]]> 'WH'
+				      and b.status = 'Active Assignment'
+				      and c.TIME_AND_ATTENDANCE_DATE = to_date(to_char(sysdate-2,'YYYY-MM-DD'),'YYYY-MM-DD')
+				    order by b.employee_number asc
+				)
+				select
+				        employee_number 				as employeeNumber
+				       ,status
+				       ,full_name_english 				as fullNameEnglish
+				       ,organization_id 				as organizationId
+				       ,org_name_eng 					as orgNameEng
+				       ,PERSON_TYPE 					as personType
+				       ,employee_no 					as employeeNo
+				       ,time_and_attendance_date 		as timeAndAttendanceDate
+				       ,check_in_date 					as checkInDate
+				       ,check_out_date 					as checkOutDate
+				       ,shift_type_code 				as shiftTypeCode
+				       ,time_and_attendance_code 		as timeAndAttendanceCode
+				       ,night_shift_flag 				as nightShiftFlag
+				       ,res_time_and_attendance_code 	as resTimeAndAttendanceCode
+				       ,a_Day_Of_The_Week_Code 			as aDayOfTheWeekCode
+				       ,work_start_time 				as workStartTime
+				       ,res_night_shift_flag 			as resNightShiftFlag
+				       ,work_start_datetime 			as workStartDatetime
+				       ,in_time_over_yn 				as inTimeOverYn
+				       ,work_end_datetime 				as workEndDatetime
+				  from attendance
+				 where (in_time_over_yn = 'Y' and res_time_and_attendance_code <![CDATA[<>]]> 'HL')
+				    or work_end_datetime <![CDATA[>]]> check_out_date
+				    or res_time_and_attendance_code in ('AL','OB','DB','OR','DR','AB','UL','UM','UF','US','PF','PL','PM')
+	</select>
+</mapper>

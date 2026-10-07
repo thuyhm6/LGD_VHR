@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00110">
+	<select id="retrieveKeywordLogList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT uiv.application_user_id
+		       , NVL(umv.full_name_local,umv.english_full_name) AS employee_name
+		       , uiv.log_seq_no
+		       , uiv.inquiry_condition_value
+		       , uiv.column_content
+		       , TO_CHAR(uiv.effective_to_date,'YYYY-MM-DD') AS effective_to_date
+		    FROM LGCOM_USER_INPUT_VALUE_LOG_N uiv
+		       , LGCOM_USER_M_V               umv
+		   WHERE uiv.effective_to_date &gt;= TRUNC(SYSDATE)
+		     AND uiv.application_user_id = umv.application_user_id
+		<if test="userIds != null">
+			AND uiv.application_user_id IN
+			<foreach collection="userIds" index="index" open="(" close=")" separator=",">
+				#{userIds[${index}]}
+			</foreach>
+		</if>
+		<if test="keyword != null and keyword != ''">
+			AND UPPER(uiv.inquiry_condition_value) LIKE UPPER(#{keyword}) || '%'
+		</if>
+		<if test="keyvalue != null and keyvalue != ''">
+			AND UPPER(uiv.column_content) LIKE '%' || UPPER(#{keyvalue}) || '%'
+		</if>
+		ORDER BY uiv.application_user_id, uiv.inquiry_condition_value, uiv.column_content
+	</select>
+</mapper>

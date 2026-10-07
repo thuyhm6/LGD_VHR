@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT20551">
+
+	<select id="retrieveSwapHolidayRequest" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT  /*  LGVATT20551.retrieveSwapHolidayRequest  */ 
+		        ATT_SO.SUBSIDIARY_CODE
+		       ,ATT_SO.EMPLOYEE_NO
+		       ,EM.FULL_NAME_LOCAL        AS employee_Name
+		       ,EM.ORG_NAME_LOCAL         AS organization_Name
+		       ,EM.organization_ID        AS organization_ID
+		       ,ATT_SO.shift_type_code       AS SHIFT_TYPE_CODE
+	           ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', ATT_SO.shift_type_code, NULL, 'en') AS FROM dual) AS SHIFT_TYPE_NAME
+		       ,ATT_SO.TIME_AND_ATTENDANCE_YYYYMM
+		       ,TO_CHAR(ATT_SO.WEEKLY_HOLIDAY, 'DD/MM/YYYY') AS WEEKLY_HOLIDAY
+		       ,ATT_SO.WEEKLY_HOLIDAY_SHIFT_TYPE_CODE
+		       ,(SELECT T.SHIFT_TYPE_CODE
+		          FROM TB_ATT_RESULT_N T
+		         WHERE T.SUBSIDIARY_CODE = ATT_SO.SUBSIDIARY_CODE
+		           AND T.TIME_AND_ATTENDANCE_DATE = ATT_SO.WEEKLY_HOLIDAY
+		           AND T.EMPLOYEE_NO = ATT_SO.EMPLOYEE_NO) AS RESULT_WH_SHIFT_TYPE_CODE
+		       ,TO_CHAR(ATT_SO.WORKING_DAY, 'DD/MM/YYYY')    AS WORKING_DAY
+		       ,ATT_SO.WORKING_DAY_SHIFT_TYPE_CODE
+		       ,(SELECT T.SHIFT_TYPE_CODE
+		          FROM TB_ATT_RESULT_N T
+		         WHERE T.SUBSIDIARY_CODE = ATT_SO.SUBSIDIARY_CODE
+		           AND T.TIME_AND_ATTENDANCE_DATE = ATT_SO.WORKING_DAY
+		           AND T.EMPLOYEE_NO = ATT_SO.EMPLOYEE_NO) AS RESULT_NW_SHIFT_TYPE_CODE
+		       ,ATT_SO.TIME_ATTEND_INPUT_REASON_DESC
+		       ,ATT_SO.CREATION_USER_ID
+		       ,ATT_SO.CREATION_DATE
+		       ,ATT_SO.LAST_UPDATE_USER_ID
+		       ,ATT_SO.LAST_UPDATE_DATE
+		  FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N ATT_SO LEFT OUTER JOIN EMP_MASTER EM ON (ATT_SO.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER)
+		 WHERE 1=1		 
+		   AND ATT_SO.SUBSIDIARY_CODE = #{subsidiaryCode}                                                            
+		
+		   <if test="requestNo != null and requestNo != ''">
+		   AND ATT_SO.REQUEST_NO = #{requestNo}
+		   </if>
+		   AND ATT_SO.approval_request_id = #{requestMasterId}
+		 ORDER BY ATT_SO.REQUEST_SEQ_NO ASC
+	</select>
+
+    <!-- 근태 담당자 조직 가져오기 -->
+    <select id="retrieveAttContractOrg" parameterType="LGCOMData" resultType="LGCOMData">
+    	SELECT /*  LGVATT20551.retrieveAttContractOrg  */ 
+    	       ATT.ORGANIZATION_ID AS CODE
+		      ,ORG_M.ORG_NAME_LOCAL AS NAME       
+		  FROM TB_ATT_CONTRACT_N ATT LEFT OUTER JOIN ORG_MASTER ORG_M ON (ATT.ORGANIZATION_ID = ORG_M.ORGANIZATION_ID)    
+		 WHERE ATT.TIME_ATTEND_CONTACT_USER_ID=#{employeeNo}
+		   AND att.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+           AND SYSDATE BETWEEN nvl(att.effective_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(att.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+           AND SYSDATE BETWEEN nvl(ORG_M.org_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(ORG_M.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+         ORDER BY ORG_M.ORG_NAME_LOCAL
+    </select>
+    
+    <!-- 근태 담당자 조직 산하 기능직 직원 리스트 조회 -->
+    <select id="retrieveAttContractOrgLineWorkerList" parameterType="LGCOMData" resultType="LGCOMData">
+    	        SELECT   /*  LGVATT20551.retrieveAttContractOrgLineWorkerList  */ 
+    	        		ATT.ORGANIZATION_ID AS ORGANIZATION_ID
+				        ,M.EMPLOYEE_NUMBER  AS CODE
+				        ,M.EMPLOYEE_NUMBER  AS NAME	             
+				  FROM TB_ATT_CONTRACT_N ATT LEFT OUTER JOIN EMP_MASTER M ON (ATT.ORGANIZATION_ID = M.ORGANIZATION_ID)  
+				 WHERE ATT.TIME_ATTEND_CONTACT_USER_ID=#{employeeNo} 
+				   AND att.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                   AND SYSDATE BETWEEN nvl(att.effective_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(att.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+                   AND M.Status = 'Active Assignment'
+                   AND M.flsa_yn = 'N'
+                   AND M.fse_yn = 'N'
+    </select>
+    
+    <select id="retrieveEmployeeName" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT   /*  LGVATT20551."retrieveEmployeeName"  */ 
+            M.FULL_NAME_LOCAL  AS EMPLOYEE_NAME
+           ,M.ATTRIBUTE10      AS SHIFT_TYPE_CODE             
+		  FROM EMP_MASTER M   
+		 WHERE M.EMPLOYEE_NUMBER=#{employeeNo} 
+    </select>
+    
+    <select id="retrieveEmployeeNo" parameterType="LGCOMData" resultType="LGCOMData">
+    	         
+		 SELECT  EM.ORGANIZATION_ID AS ORGANIZATION_ID
+		        ,EM.EMPLOYEE_NUMBER CODE
+		        ,EM.EMPLOYEE_NUMBER NAME
+		        ,lgvatt_common_pkg.get_unit_requestor( #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                            ,#{orgId} ) AS org_get_arm_info           
+		  FROM EMP_MASTER EM
+		 WHERE EM.ORGANIZATION_ID = #{orgId}
+		   AND EM.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		   AND EM.Status = 'Active Assignment'
+		   AND EM.flsa_yn = 'N'
+              AND EM.fse_yn = 'N'
+            ORDER BY EM.EMPLOYEE_NUMBER
+    </select>
+    
+    <select id="retrieveARMInfoWithHRPartLD" parameterType="LGCOMData" resultType="LGCOMData">
+            SELECT /* LGVATT20551.retrieveARMInfoWithHRPartLD */ 
+               sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = #{ARM_PARAM.employeeNo}
+        AND    em.attribute1     IS NOT NULL
+        AND    em.attribute1      = sv.user_name
+        AND    em.attribute4      = md.user_name(+)
+        UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = #{ARM_PARAM.employeeNo}
+        AND    em.attribute2     IS NOT NULL
+        AND    em.attribute2      = sv.user_name
+        AND    em.attribute5      = md.user_name(+)
+        UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_organization_m om
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = om.organization_manager_emp_no
+        AND    om.organization_code = '84044' /* change HR leader 84010 to 87543 */
+        AND    em.employee_number      = sv.user_name
+        AND    em.employee_number      = md.user_name(+)
+        AND    em.employee_number != #{createBy}
+        AND   NOT EXISTS (select 1 from emp_master e 
+                           where e.employee_number = #{ARM_PARAM.employeeNo} 
+                            and (e.attribute2 = em.employee_number or e.attribute5 = em.employee_number or e.attribute1 = em.employee_number or e.attribute4 = em.employee_number))
+        
+        <if test="otLevel == 'L4'">
+        UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = lgvhr_common_pkg.decode_lookup('LGVHR_ATT_COMMON_CODE', 'HR_APPROVAL_LINE', 'A2')
+        AND    em.employee_number      = sv.user_name
+        AND    em.attribute2          != sv.user_name
+        AND    em.employee_number      = md.user_name(+)
+        AND    em.employee_number     != #{createBy}
+        AND   NOT EXISTS (select 1 from emp_master e 
+                           where e.employee_number = #{ARM_PARAM.employeeNo} 
+                            and (e.attribute2 = em.employee_number or e.attribute5 = em.employee_number or e.attribute1 = em.employee_number or e.attribute4 = em.employee_number))
+        UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_organization_m om
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = om.organization_manager_emp_no
+        AND    om.organization_code = NVL((select NVL(lm.division_code, '84001') from lgcom_organization_m lm where lm.organization_code = #{ARM_PARAM.organizationId}),'84001')
+        AND    em.employee_number      = sv.user_name
+        AND    em.employee_number      = md.user_name(+)
+        </if>
+    </select>
+    
+    <!-- 특별 연장근무 저장 -->
+    <update id="saveSwapHolidayRequest" parameterType="LGCOMData">
+    	 MERGE /* LGVATT20551.saveSwapHolidayRequest */ INTO TB_ATT_SWAP_HOLIDAY_REQUEST_N ATT_SO
+         USING DUAL
+                 ON (     
+                      	  ATT_SO.REQUEST_CODE = #{requestCode}
+                      AND ATT_SO.APPROVAL_REQUEST_ID = #{approvalRequestId}
+                      AND ATT_SO.EMPLOYEE_NO = #{employeeNo}
+                      AND ATT_SO.TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY'), 'YYYYMM')
+                    )
+           WHEN MATCHED THEN
+                UPDATE SET                         
+                        ATT_SO.SHIFT_TYPE_CODE                 = #{shiftTypeCode}
+                        ,ATT_SO.WEEKLY_HOLIDAY                 = #{weeklyHoliday}
+                        ,ATT_SO.WEEKLY_HOLIDAY_SHIFT_TYPE_CODE = #{weeklyHolidayShiftTypeCode}
+                        ,ATT_SO.WORKING_DAY                    = #{workingDay}
+                        ,ATT_SO.WORKING_DAY_SHIFT_TYPE_CODE    = #{workingDayShiftTypeCode}
+                        ,CONFIRM_FLAG                          = 'Y'
+                        ,PROGRESS_STATUS_CODE                  = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = ATT_SO.approval_request_id AND request_code = ATT_SO.request_code) 
+                        ,LAST_UPDATE_USER_ID                   = #{sessionUserId}
+                        ,LAST_UPDATE_DATE                      = SYSDATE
+           WHEN NOT MATCHED THEN
+                INSERT 
+                       ( 
+                        REQUEST_NO
+                       ,REQUEST_SEQ_NO 
+                       ,REQUEST_DATE
+                       ,SUBSIDIARY_CODE
+                       ,EMPLOYEE_NO
+                       ,TIME_AND_ATTENDANCE_YYYYMM
+                       ,SHIFT_TYPE_CODE
+                       ,WEEKLY_HOLIDAY
+                       ,WEEKLY_HOLIDAY_SHIFT_TYPE_CODE
+                       ,WORKING_DAY
+                       ,WORKING_DAY_SHIFT_TYPE_CODE
+                       ,TIME_ATTEND_INPUT_REASON_DESC
+                       ,APPROVAL_REQUEST_ID
+                       ,REQUEST_CODE
+                       ,PROGRESS_STATUS_CODE
+                       ,CONFIRM_FLAG                   
+                       ,CREATION_USER_ID
+                       ,CREATION_DATE
+                       ,LAST_UPDATE_USER_ID
+                       ,LAST_UPDATE_DATE
+                        )VALUES(
+                        #{requestNo}
+                       ,sq_tb_att_swap_holiday.NEXTVAL
+                       ,SYSDATE
+                       ,#{subsidiaryCode} 
+                       ,#{employeeNo}
+                       ,#{timeAndAttendanceYyyymm}
+                       ,#{shiftTypeCode}
+                       ,TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY')
+                       ,#{weeklyHolidayShiftTypeCode}
+                       ,TO_DATE(#{workingDay}, 'DD/MM/YYYY')
+                       ,#{workingDayShiftTypeCode}
+                       ,#{timeAttendInputReasonDesc}
+                       ,#{approvalRequestId}
+                       ,#{requestCode}
+                       ,'20'
+                       ,'N'                     
+                       ,#{sessionUserId}
+                       ,SYSDATE
+                       ,#{sessionUserId}
+                       ,SYSDATE
+                           )
+
+    </update>
+    
+    <update id="updateSwapHolidayRequest" parameterType="LGCOMData">
+    	UPDATE TB_ATT_SWAP_HOLIDAY_REQUEST_N ATT_SO
+    	   SET ATT_SO.PROGRESS_STATUS_CODE		= (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = ATT_SO.approval_request_id AND request_code = ATT_SO.request_code) 
+              ,ATT_SO.LAST_UPDATE_USER_ID      = #{sessionUserId}
+              ,ATT_SO.LAST_UPDATE_DATE         = SYSDATE
+    	 WHERE ATT_SO.SUBSIDIARY_CODE 			= #{LGVHR_PROJECT_SESSION.subsidiaryCode} 
+    	   AND ATT_SO.REQUEST_CODE 			= #{requestCode}
+           AND ATT_SO.APPROVAL_REQUEST_ID 		= #{approvalRequestId}
+    </update>
+    
+    <!-- 반려 시 승인상태 변경 -->
+	<update  id="updateRequestProgress" parameterType="LGCOMData">
+		UPDATE TB_ATT_SWAP_HOLIDAY_REQUEST_N
+		<choose>
+		<when test="approvalCommand == 'INPROGRESS'">
+           SET progress_status_code = '30'
+        </when>
+        <when test="approvalCommand == 'APPROVAL'">
+           SET progress_status_code = '40'
+        </when>
+        <when test="approvalCommand == 'REJECT'">
+           SET progress_status_code = '50'
+        </when>
+        <when test="approvalCommand == 'REQUESTCANCEL'">
+           SET progress_status_code = '70'
+        </when>
+        <otherwise>
+           SET progress_status_code = '20'
+        </otherwise>
+        </choose>
+		      ,last_update_user_id  = #{sessionAppUserId}
+		      ,last_update_date     = SYSDATE
+		 WHERE approval_request_id = #{requestMasterId}
+		 AND request_code = #{requestCode}
+		 AND subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	</update>
+    
+    <update id="deleteSwapHolidayRequest" parameterType="LGCOMData">
+    	DELETE FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N ATT_SO
+    	 WHERE ATT_SO.SUBSIDIARY_CODE = #{subsidiaryCode} 
+    	   AND ATT_SO.TIME_AND_ATTENDANCE_DATE = TO_DATE(#{timeAndAttendanceDate}, 'DD/MM/YYYY') 
+    	   AND ATT_SO.EMPLOYEE_NO = #{employeeNo}
+    </update>
+    
+    <!-- 수청요청서 승인/반려 후처리 -->
+    <select id="applyAttSwapWhApproval" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATT20551.applyAttSwapWhApproval */
+              lgvatt_transaction_pkg.apply_att_swap_wh_approval(#{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                                #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/,
+                                                                #{sessionAppUserId},
+                                                                #{LGVHR_PROJECT_SESSION.subsidiaryCode},
+                                                                #{requestMasterId},
+                                                                #{approvalCommand}        
+                                                               )
+        }
+    </select>
+    
+    <!-- 요청서 작성 시 필요한 기본정보를 조회한다.(재량권 번호, 요청서번호) -->
+    <select id="retrieveRequestDocBaseInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20551.retrieveRequestDocBaseInfo */
+               cc.code_data1_value   AS arm_no
+             , cc.parent_common_code AS request_code /* LGCOM 결재의 문서유형코드LGCOM_APPROVAL_REQUEST_CODE와 매핑 */
+        FROM   lgcom_common_code_c cc
+        WHERE  cc.code_type_code = 'LGVCOM_APPROVAL_REQUEST_CODE'
+        AND    cc.common_code    = 'ATT0007' /* 사무직 수정요청서 결재요청 */
+    </select>
+    
+    <select id="retrieveRequestHeaderInfo" parameterType="LGCOMData" resultType="LGCOMData">
+		    SELECT  /* LGVATT20551.retrieveRequestHeaderInfo */
+		           EM.FULL_NAME_LOCAL        AS requestor_info
+		           ,(SELECT common_code_name
+		              FROM LGCOM_COMMON_CODE_MULTI_LANG_C
+		             WHERE code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+		               AND language_code  = NVL('en','en')
+		               AND common_code    = ATT_SO.PROGRESS_STATUS_CODE) AS status_name
+		           ,TO_CHAR(ATT_SO.LAST_UPDATE_DATE, 'DD/MM/YYYY') AS request_date   
+		           , ATT_SO.PROGRESS_STATUS_CODE as startus_code    		    
+		           
+		      FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N ATT_SO LEFT OUTER JOIN EMP_MASTER EM ON (ATT_SO.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER)
+		  LEFT OUTER JOIN tb_att_result_n tar ON (tar.employee_no = ATT_SO.EMPLOYEE_NO AND TAR.time_and_attendance_date = ATT_SO.TIME_AND_ATTENDANCE_DATE) 
+		     WHERE 1=1 
+		       AND ATT_SO.TIME_AND_ATTENDANCE_DATE = TO_DATE(#{timeAndAttendanceDate}, 'DD/MM/YYYY') 
+		       AND ATT_SO.EMPLOYEE_NO = #{employeeNo}
+		       AND ATT_SO.SUBSIDIARY_CODE = #{subsidiaryCode}                                                        
+		       AND ATT_SO.LAST_UPDATE_USER_ID = #{sessionUserId}
+		       
+    
+    </select>
+    
+    <select id="checkAttendanceDate" parameterType="LGCOMData" resultType="LGCOMData">
+    	<![CDATA[
+		    SELECT /* LGVATT20551.checkAttendanceDate */
+		       COUNT(*) AS count
+			FROM (select subsidiary_code, time_and_attendance_date, employee_no, TIME_AND_ATTENDANCE_CODE FROM tb_att_result_n 
+                  union all
+                  select subsidiary_code, time_and_attendance_date, employee_no, TIME_AND_ATTENDANCE_CODE FROM tb_att_plan_n) ta
+			WHERE  1 = 1
+			AND    ta.subsidiary_code = #{subsidiaryCode}
+			AND    ta.time_and_attendance_date = TO_DATE(#{attendanceDate}, 'DD/MM/YYYY')
+			AND    ta.employee_no = #{employeeNo}
+			AND    ta.TIME_AND_ATTENDANCE_CODE = #{workCode}
+		]]>
+    </select>
+    <select id="checkWorkingTime" parameterType="LGCOMData" resultType="LGCOMData">
+    	<![CDATA[
+		    SELECT /* LGVATT20551.checkWorkingTime */
+		       TO_NUMBER(lgvatt_common_pkg.get_work_days_by_swap(#{subsidiaryCode}, TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY'), TO_DATE(#{workingDay}, 'DD/MM/YYYY'),#{employeeNo}, 'WORKING_TIME'))  AS count
+		       ,lgvatt_common_pkg.get_work_days_by_swap(#{subsidiaryCode}, TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY'), TO_DATE(#{workingDay}, 'DD/MM/YYYY'),#{employeeNo}, 'START_DATE') AS start_date
+		       ,lgvatt_common_pkg.get_work_days_by_swap(#{subsidiaryCode}, TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY'), TO_DATE(#{workingDay}, 'DD/MM/YYYY'),#{employeeNo}, 'END_DATE') AS end_date
+		       ,(select t.shift_type_code from tb_att_result_n t  where  t.subsidiary_code = #{subsidiaryCode}  and t.time_and_attendance_date = TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY') and t.employee_no = #{employeeNo}) as weekly_holiday_shift_type_code
+		       ,(select t.shift_type_code from tb_att_result_n t  where  t.subsidiary_code = #{subsidiaryCode}  and t.time_and_attendance_date = TO_DATE(#{workingDay}, 'DD/MM/YYYY') and t.employee_no = #{employeeNo}) as working_day_shift_type_code
+			FROM   dual
+		]]>
+    </select>
+    <select id="retrieveSwapdate" parameterType="LGCOMData" resultType="LGCOMData">
+    	<![CDATA[
+		    SELECT /* LGVATT20551.retrieveSwapdate */
+		       lgvatt_common_pkg.get_work_days_by_swap(#{subsidiaryCode}, TO_DATE(#{weeklyHoliday}, 'YYYYMMDD'), TO_DATE(#{weeklyHoliday}, 'YYYYMMDD'),#{employeeNo}, #{type}) AS swap_date
+			FROM   dual
+		]]>
+    </select>
+    
+</mapper>

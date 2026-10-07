@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVINFC0004">
+	
+	<select id="executeEmpMasterInterface" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVINFC0004.executeEmpMasterInterface */
+		       lgvinf_if_batch_pkg.main_emp( #{errorCode, mode=OUT, jdbcType=VARCHAR}, 
+		                                     #{errorBuf, mode=OUT, jdbcType=VARCHAR}, 
+		                                     #{USER_SESSION.applicationUserId, mode=IN, jdbcType=VARCHAR} ) }
+	</select>
+	
+</mapper>

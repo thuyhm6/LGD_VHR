@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00204">
+
+	<!-- LOAD -->
+	<select id="retrieveCalendarEventList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+  		SELECT CALENDAR_SCHEDULE_TYPE_CODE			
+  			 , SCHEDULE_START_DATE		
+  			 , SCHEDULE_COMPLETION_DATE		
+  			 , SCHEDULE_DESC					
+  			
+  		FROM LGCOM_USER_CALENDAR_SCHEDULE_N
+  		
+  		WHERE ( TO_CHAR( SCHEDULE_START_DATE, 'YYYYMMDD') > #{currentDate.startDate}
+  		    	    AND
+  		    	    TO_CHAR( SCHEDULE_START_DATE, 'YYYYMMDD') < #{currentDate.endDate} )
+  		  	   OR ( TO_CHAR( SCHEDULE_COMPLETION_DATE, 'YYYYMMDD') < #{currentDate.endDate}
+  		  	        AND
+  		  	        TO_CHAR( SCHEDULE_COMPLETION_DATE, 'YYYYMMDD') > #{currentDate.startDate})
+	  
+  		UNION ALL
+  		
+  		SELECT CALENDAR_SCHEDULE_TYPE_CODE		
+  			 , SCHEDULE_START_DATE		
+  			 , SCHEDULE_COMPLETION_DATE		
+  			 , SCHEDULE_DESC					
+  			
+  		FROM LGCOM_USER_CALENDAR_SCHEDULE_N	
+  		
+  		WHERE TO_CHAR( SCHEDULE_START_DATE, 'YYYY-MM' ) 	 < #{currentDate.startDate}
+  		  AND TO_CHAR( SCHEDULE_COMPLETION_DATE, 'YYYY-MM' ) > #{currentDate.endDate}  	  
+    ]]>
+	</select>
+	
+	<!-- SAVE -->
+	<insert id="insertCalendarEventList" parameterType="java.util.HashMap">
+  		INSERT INTO LGCOM_USER_CALENDAR_SCHEDULE_N ( 
+			  APPLICATION_USER_ID
+			, CALENDAR_SCHEDULE_TYPE_CODE
+			, SCHEDULE_START_DATE
+  			, SCHEDULE_COMPLETION_DATE
+  			, SCHEDULE_DESC
+  			, CREATED_BY
+  			, CREATION_DATE
+  			, LAST_UPDATED_BY
+  			, LAST_UPDATE_DATE
+  			, LOG_SEQ_NO)
+  		
+  		VALUES (
+  			  #{USER_SESSION.applicationUserId}
+  			, #{allDay}	
+  			, TO_DATE( #{start}, 'YYYY-MM-DD HH24:MI' )
+  			, TO_DATE( #{end}, 'YYYY-MM-DD HH24:MI')
+  			, #{title}
+  			, #{USER_SESSION.applicationUserId}
+  			, SYSDATE
+  			, #{USER_SESSION.applicationUserId}
+  			, SYSDATE
+  			, LGCOM_USER_CALENDAR_SCHD_SEQ.NEXTVAL
+  		)
+	</insert>
+	
+	<delete id="deleteCalendarEventList" parameterType="java.util.HashMap">
+	<![CDATA[
+		    DELETE FROM LGCOM_USER_CALENDAR_SCHEDULE_N
+  		    WHERE ( TO_CHAR( SCHEDULE_START_DATE, 'YYYYMMDD') > #{currentDate.startDate}
+  		    	    AND
+  		    	    TO_CHAR( SCHEDULE_START_DATE, 'YYYYMMDD') < #{currentDate.endDate} )
+  		  	   OR ( TO_CHAR( SCHEDULE_COMPLETION_DATE, 'YYYYMMDD') < #{currentDate.endDate}
+  		  	        AND
+  		  	        TO_CHAR( SCHEDULE_COMPLETION_DATE, 'YYYYMMDD') > #{currentDate.startDate})
+  		  	   OR ( TO_CHAR( SCHEDULE_START_DATE, 'YYYYMMDD') < #{currentDate.startDate}
+  		  	 		AND 
+  		  	 		TO_CHAR( SCHEDULE_COMPLETION_DATE, 'YYYYMMDD') > #{currentDate.endDate})
+  	]]>		
+	</delete>
+		  	   
+
+</mapper>

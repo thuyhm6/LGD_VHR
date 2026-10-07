@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT60010">
+
+	<select id="retrieveWeekAttSummary" parameterType="LGCOMData" resultType="LGCOMData">
+	    <![CDATA[
+	   SELECT substr(EM.Assignment_Category,INSTR(EM.Assignment_Category,'_')+1,LENGTH(EM.Assignment_Category)-INSTR(EM.Assignment_Category,'_')+1) AS "emp_cat"
+            ,SUBSTR(EM.Email, 1, INSTR(EM.Email,'@')-1) AS "USER_ID"
+            ,EM.Full_Name_Local
+            ,EM.EMPLOYEE_NUMBER
+            ,lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', EM.grade_title) AS "grade_title"
+            ,EM.Attribute10 AS SHIFT_CODE
+             --MON
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'MON', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS mon_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.work_hours,0),NULL))                       
+             - (SUM(DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.going_out_hours,0),null)))                AS mon_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', NVL(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', NVL(taso.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', NVL(taso.public_holiday_overtime_hours,0),null))   AS mon_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.public_holiday_night_ot_hours,0),null)
+             +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(taso.public_holiday_night_ot_hours,0),null))   AS mon_night_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.normal_night_overtime_hours,0),null))      AS mon_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'MON', nvl(tar.going_out_hours,0),null))                 AS mon_deduction
+             --TUE
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'TUE', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS tue_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.work_hours,0),NULL))                       
+             -(SUM(DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.going_out_hours,0),null)))                AS tue_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.public_holiday_overtime_hours,0),null))   AS tue_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.public_holiday_night_ot_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(taso.public_holiday_night_ot_hours,0),null))   AS tue_night_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.normal_night_overtime_hours,0),null))      AS tue_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'TUE', nvl(tar.going_out_hours,0),null))                 AS tue_deduction
+             --WED
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'WED', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS wed_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.work_hours,0),NULL))                       
+             -(SUM(DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.going_out_hours,0),null)))                AS wed_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.public_holiday_overtime_hours,0),null))   AS wed_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.public_holiday_night_ot_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(taso.public_holiday_night_ot_hours,0),null))   AS wed_night_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.normal_night_overtime_hours,0),null))      AS wed_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'WED', nvl(tar.going_out_hours,0),null))                 AS wed_deduction
+             --THU
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'THU', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS thu_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.work_hours,0),NULL))                       
+             -(SUM(DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.going_out_hours,0),null)))                AS thu_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.public_holiday_overtime_hours,0),null))   AS thu_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.public_holiday_night_ot_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(taso.public_holiday_night_ot_hours,0),null))   AS thu_night_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.normal_night_overtime_hours,0),null))      AS thu_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'THU', nvl(tar.going_out_hours,0),null))                 AS thu_deduction
+             --FRI
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'FRI', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS fri_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.work_hours,0),NULL))
+             -(SUM(DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.going_out_hours,0),null)))                AS fri_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.public_holiday_overtime_hours,0),null))   AS fri_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.public_holiday_night_ot_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(taso.public_holiday_night_ot_hours,0),null))   AS fri_night_time 
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.normal_night_overtime_hours,0),null))      AS fri_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'FRI', nvl(tar.going_out_hours,0),null))                 AS fri_deduction
+             --SAT
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'SAT', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS sat_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.work_hours,0),NULL))                       
+             -(SUM(DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.going_out_hours,0),null)))                AS sat_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.public_holiday_overtime_hours,0),null))   AS sat_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.public_holiday_night_ot_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(taso.public_holiday_night_ot_hours,0),null))   AS sat_night_time 
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.normal_night_overtime_hours,0),null))      AS sat_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SAT', nvl(tar.going_out_hours,0),null))                 AS sat_deduction
+             --SUN
+            ,MAX(DECODE(tar.a_day_of_the_week_code, 'SUN', lgvatt_common_pkg.get_att_code_info('LGDVN',tar.time_and_attendance_code),NULL))         AS sun_att_code
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.work_hours,0),NULL))                       
+             -(SUM(DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.going_out_hours,0),null)))                AS sun_nomal_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.public_holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.weekday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.holiday_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.public_holiday_overtime_hours,0),null))   AS sun_ot_time
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.public_holiday_night_ot_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.weekday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.weekday_ot_af_night_work_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.holiday_night_overtime_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(taso.public_holiday_night_ot_hours,0),null))   AS sun_night_time 
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.normal_night_overtime_hours,0),null))      AS sun_ot_at_night
+            ,SUM(DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.tardy_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.early_leave_hours,0),null)
+                 +DECODE(tar.a_day_of_the_week_code, 'SUN', nvl(tar.going_out_hours,0),null))                 AS sun_deduction
+      FROM  EMP_MASTER      EM
+           ,TB_ATT_RESULT_N TAR
+           ,TB_ATT_SPECIAL_OT_RESULT_N TASO
+      where 1=1
+      AND   EM.FSE_YN  = 'N'
+      AND   EM.FLSA_YN = 'N'
+      ]]>
+      <if test="shiftCode != null and shiftCode != ''">
+      AND EM.Attribute10 = #{shiftCode}
+    </if>
+    <if test="orgName != null and orgName != ''">
+      AND EM.organization_id = #{orgName}
+    </if> 
+      AND   EM.EMPLOYEE_NUMBER = TAR.EMPLOYEE_NO
+      AND   TAR.Employee_No = TASO.Employee_No(+)
+      AND   TAR.TIME_AND_ATTENDANCE_DATE = TASO.TIME_AND_ATTENDANCE_DATE(+)
+      AND   'Y' = TASO.CONFIRM_FLAG(+)
+      AND   TAR.Time_And_Attendance_Date BETWEEN to_date(#{dateFrom},'DD/MM/RRRR') AND to_date(#{dateTo},'DD/MM/RRRR')
+      GROUP BY EM.Assignment_Category
+              ,SUBSTR(EM.Email, 1, INSTR(EM.Email,'@')-1)
+              ,EM.Full_Name_Local
+              ,EM.EMPLOYEE_NUMBER
+              ,EM.Grade_Title
+              ,EM.Attribute10
+	</select>
+	
+	<select id="retrieveWeekDateFromTo" parameterType="LGCOMData" resultType="LGCOMData">
+	    <![CDATA[
+	     SELECT MS_WEEK_1JAN AS MS_WEEK,
+		        MS_MONTH,
+		        MS_START_DATE AS MS_START_DATE,
+		        MS_END_DATE AS MS_END_DATE
+		 FROM   NV_TB_ATT_WEEK_MON_TO_SUN
+		 /*WHERE  MS_MONTH BETWEEN to_char(add_months(sysdate, -2),'rrrrmm') AND to_char(TRUNC(sysdate), 'rrrrmm')  -- 2018.01.31 박귀희 : ValueSet 과 조건 맞춤 */
+		 WHERE  MS_MONTH >= TO_CHAR(ADD_MONTHS(SYSDATE, -1),'RRRRMM')
+		 AND    TO_CHAR(TO_DATE(MS_START_DATE, 'DD/MM/YYYY'), 'YYYYMM') <= TO_CHAR(SYSDATE, 'YYYYMM')
+		 and    MS_WEEK_1JAN = #{msWeek1jan}
+	    ]]>
+	</select>
+	
+	<select id="retrieveOrgList" parameterType="LGCOMData" resultType="LGCOMData">
+	    <![CDATA[
+	     SELECT om.organization_id as code, om.org_name_local as name
+		 FROM tb_att_contract_n tac, org_master om
+		 WHERE tac.time_attend_contact_user_id = #{employeeNum}
+		 and tac.subsidiary_code = #{subsidiaryCode}
+		 and tac.organization_id = om.organization_id
+		 UNION
+		 SELECT OM.ORGANIZATION_ID AS code ,OM.ORG_NAME_LOCAL AS NAME
+		 FROM  ORG_MASTER OM
+		 WHERE om.org_end_date is NULL
+		 START  WITH om.organization_id =  #{organizationId}
+		 CONNECT BY PRIOR om.organization_id = om.parent_org_id
+		 ORDER BY NAME
+	    ]]>
+	</select>
+	
+	
+	
+</mapper>

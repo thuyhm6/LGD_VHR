@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT50010">
+	<!-- 근태마감일 조회 HMT_20210720 Add unpaid_period_date and unpaid_apply_date column -->
+	<select id="retrieveAttendanceClose" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT50010.retrieveAttendanceClose*/
+				   TO_CHAR(TO_DATE(time_and_attendance_yyyymm, 'YYYYMM'), 'MM/YYYY') as time_and_attendance_yyyymm
+				  ,TO_CHAR(period_from_date, 'dd/mm/yyyy') as period_from_date
+				  ,TO_CHAR(period_to_date, 'dd/mm/yyyy') as period_to_date
+				  ,perfect_attendance_days
+				  ,TO_CHAR(unpaid_period_date, 'dd/mm/yyyy') as unpaid_period_date
+				  ,TO_CHAR(unpaid_apply_date, 'dd/mm/yyyy') as unpaid_apply_date
+				  ,TO_CHAR(period_close_date, 'dd/mm/yyyy HH24:MI') as period_close_date
+				  ,confirm_flag
+			FROM TB_ATT_CLOSE_N 
+			WHERE subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode} -- Session Parameter로 셋팅
+			AND time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+	</select>
+	
+	<!-- 근태마감일 등록 HMT_20210720 Add unpaid_period_date and unpaid_apply_date column -->
+	<update id="mergeAttendanceClose" parameterType="LGCOMData">
+		/*LGVATT50010.insertAttendanceClose*/
+		MERGE INTO TB_ATT_CLOSE_N a
+		     USING (
+		            SELECT #{subsidiaryCode} AS subsidiary_code
+		                 , #{timeAndAttendanceYyyymm} AS time_and_attendance_yyyymm
+		                 , TO_DATE(#{periodFromDate},'YYYY-MM-DD') AS period_from_date
+		                 , TO_DATE(#{periodToDate},'YYYY-MM-DD') AS period_to_date
+		                 , TO_DATE(#{periodCloseDate},'YYYY-MM-DD HH24:MI') AS period_close_date
+		                 , #{perfectAttendanceDays, jdbcType=NUMERIC} AS perfect_attendance_days
+		                 , #{confirmFlag} AS confirm_flag
+		                 , TO_DATE(#{unpaidPeriodDate},'DD/MM/YYYY') AS unpaid_period_date
+		                 , TO_DATE(#{unpaidApplyDate},'DD/MM/YYYY') AS unpaid_apply_date 
+		                 , #{applicationUserId} AS user_id
+		              FROM DUAL
+		           ) b
+		        ON (a.time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm})
+		WHEN MATCHED THEN
+		     UPDATE SET period_from_date  	 			= b.period_from_date
+		     		  , period_to_date		 			= b.period_to_date
+		     		  , period_close_date		 		= b.period_close_date
+		     		  , perfect_attendance_days 		= b.perfect_attendance_days
+		              , confirm_flag   = b.confirm_flag
+		              , unpaid_period_date   = b.unpaid_period_date
+		              , unpaid_apply_date    = b.unpaid_apply_date
+		              , last_update_user_id  = b.user_id
+		              , last_update_date = SYSDATE
+		WHEN NOT MATCHED THEN
+		     INSERT(subsidiary_code,time_and_attendance_yyyymm,period_from_date,period_to_date,period_close_date,perfect_attendance_days,confirm_flag,unpaid_period_date, unpaid_apply_date,creation_user_id,creation_date,last_update_user_id,last_update_date)
+		     VALUES(b.subsidiary_code,b.time_and_attendance_yyyymm,b.period_from_date,b.period_to_date,b.period_close_date,b.perfect_attendance_days,b.confirm_flag,b.unpaid_period_date, b.unpaid_apply_date,b.user_id,SYSDATE,b.user_id,SYSDATE)
+	</update>
+	
+	<!-- 근태마감일 등록 -->
+	<update id="saveConfirmAttendanceClose" parameterType="LGCOMData">
+		UPDATE /*LGVATT50010.insertAttendanceClose*/ TB_ATT_CLOSE_N
+			SET confirm_flag   = 'Y'
+		        , last_update_user_id  = #{USER_SESSION.applicationUserId}
+		        , last_update_date = SYSDATE
+		WHERE time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+	</update>
+</mapper>

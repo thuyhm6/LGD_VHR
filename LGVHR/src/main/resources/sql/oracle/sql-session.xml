@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="Session">
+
+    <!-- ######################## -->
+    <!-- 프로젝트에서 사용할 세션 정보 조회  -->
+    <!-- ######################## -->
+    <select id="retrieveProjectSessionData" resultType="LGCOMData">
+        SELECT /* SESSION.retrieveProjectSessionData */
+               em.subsidiary_code                    /* 법인코드 */
+             , em.employee_number     AS employee_no /* 로그인 사용자 사번 */
+             , em.organization_id                    /* 로그인 사용자 조직ID */
+             , em.assignment_category AS employment_category_code /* 재량권 조회시 사용 */
+             , cv.organization_id     AS operating_unit_id
+             , em.attribute10         AS shift_type_code
+             , em.fse_yn  /* FSE 여부 */
+             , em.flsa_yn /* 단기파견자 여부 */
+        FROM   emp_master em
+             , lgcom_user_m um
+             , lgcom_company_v cv
+        WHERE  um.application_user_id = #{USER_SESSION.applicationUserId, jdbcType=NUMERIC}
+        AND    em.employee_number = um.user_name
+        AND    cv.short_code = em.subsidiary_code
+        UNION ALL
+        SELECT
+               cv.short_code AS subsidiary_code                    /* 법인코드 */
+             , um.user_name     AS employee_no /* 로그인 사용자 사번 */
+             , NULL AS organization_id                    /* 로그인 사용자 조직ID */
+             , NULL AS employment_category_code /* 재량권 조회시 사용 */
+             , um.default_org_id     AS operating_unit_id
+             , NULL         AS shift_type_code
+             , 'Y' AS fse_yn  /* FSE 여부 */
+             , 'Y' AS flsa_yn /* 단기파견자 여부 */
+        FROM   lgcom_user_m um
+             , lgcom_company_v CV
+             , lgcom_common_code_c cc
+        WHERE  um.application_user_id = #{USER_SESSION.applicationUserId, jdbcType=NUMERIC}
+        AND    cv.organization_id = um.default_org_id
+        AND    cc.code_type_code = 'LGVCOM_SYSTEM_ADMIN_ID' /* system admin */
+        AND    cc.common_code = um.user_name
+        AND    cc.use_flag = 'Y'
+        AND    trunc(SYSDATE) BETWEEN cc.apply_start_date AND NVL(cc.apply_end_date, trunc(SYSDATE))
+    </select>
+
+</mapper>

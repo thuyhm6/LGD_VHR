@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00004">
+
+    <!-- 개인별 급여항목을 조회 -->
+    <select id="retrieveIndividualPayItemList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00004.retrieveIndividualPayItemList */
+               d.payroll_item_id
+             , d.payroll_item_name
+             , d.inquiry_name
+             , b.employee_no
+             , lum.full_name_local as employee_name
+             , lum.organization_name_eng as organization
+             , to_char(b.apply_start_date, 'dd/mm/yyyy') as apply_start_date
+             , to_char(b.apply_end_date, 'dd/mm/yyyy') as apply_end_date
+             , NVL(b.retroactive_flag, 'N') as retroactive_flag
+             , b.payroll_item_payment_plan_id
+             ,(select a.payroll_apply_flag from  tb_pay_calc_mthd_n a where a.payroll_item_id = d.payroll_item_id and a.payroll_calc_method_code = 'RECURRING_FLAG') as payroll_apply_flag
+             , to_char(em.date_retire, 'dd/mm/yyyy') as date_retire
+             , max(CASE WHEN e.sort_order_no = 1 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id1
+             , max(CASE WHEN e.sort_order_no = 1 THEN e.additional_input_value ELSE NULL END ) input_name1
+             , max(CASE WHEN e.sort_order_no = 1 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type1
+               /* 숫자 값인 경우 sum, 아닌 경우 max. 숫자 값 아닌 경우 null 로 값 치환. */
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 1 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 1 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value1 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 1 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 1 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt1 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 2 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id2
+             , max(CASE WHEN e.sort_order_no = 2 THEN e.additional_input_value ELSE NULL END ) input_name2
+             , max(CASE WHEN e.sort_order_no = 2 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type2
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 2 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 2 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value2 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 2 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 2 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt2 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 3 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id3
+             , max(CASE WHEN e.sort_order_no = 3 THEN e.additional_input_value ELSE NULL END ) input_name3
+             , max(CASE WHEN e.sort_order_no = 3 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type3
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 3 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 3 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value3 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 3 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 3 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt3 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 4 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id4
+             , max(CASE WHEN e.sort_order_no = 4 THEN e.additional_input_value ELSE NULL END ) input_name4
+             , max(CASE WHEN e.sort_order_no = 4 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type4
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 4 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 4 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value4 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 4 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 4 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt4 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 5 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id5
+             , max(CASE WHEN e.sort_order_no = 5 THEN e.additional_input_value ELSE NULL END ) input_name5
+             , max(CASE WHEN e.sort_order_no = 5 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type5
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 5 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 5 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value5 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 5 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 5 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt5 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 6 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id6
+             , max(CASE WHEN e.sort_order_no = 6 THEN e.additional_input_value ELSE NULL END ) input_name6
+             , max(CASE WHEN e.sort_order_no = 6 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type6
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 6 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 6 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value6 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 6 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 6 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt6 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 7 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id7
+             , max(CASE WHEN e.sort_order_no = 7 THEN e.additional_input_value ELSE NULL END ) input_name7
+             , max(CASE WHEN e.sort_order_no = 7 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type7
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 7 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 7 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value7 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 7 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 7 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt7 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 8 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id8
+             , max(CASE WHEN e.sort_order_no = 8 THEN e.additional_input_value ELSE NULL END ) input_name8
+             , max(CASE WHEN e.sort_order_no = 8 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type8
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 8 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 8 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value8 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 8 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 8 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt8 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 9 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id9
+             , max(CASE WHEN e.sort_order_no = 9 THEN e.additional_input_value ELSE NULL END ) input_name9
+             , max(CASE WHEN e.sort_order_no = 9 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type9
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 9 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 9 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value9 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 9 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 9 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt9 /* 문자값 */
+             , max(CASE WHEN e.sort_order_no = 10 THEN e.payroll_item_detail_detail_id ELSE NULL END ) input_value_id10
+             , max(CASE WHEN e.sort_order_no = 10 THEN e.additional_input_value ELSE NULL END ) input_name10
+             , max(CASE WHEN e.sort_order_no = 10 THEN e.pay_calc_rslt_detail_type_code ELSE NULL END ) input_type10
+             , CASE WHEN max(CASE WHEN e.sort_order_no = 10 THEN e.numeric_flag ELSE NULL END ) = 'Y' THEN
+                         SUM(CASE WHEN e.sort_order_no = 10 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END  ELSE NULL END )
+               END AS input_value10 /* 숫자값 */
+             , CASE WHEN NVL(max(CASE WHEN e.sort_order_no = 10 THEN e.numeric_flag ELSE NULL END ), 'N') = 'N' THEN
+                         MAX(CASE WHEN e.sort_order_no = 10 THEN c.apply_target_value  ELSE NULL END )
+               END AS input_value_txt10 /* 문자값 */
+        FROM   tb_pay_calc_period_basis_n a
+             , tb_pay_item_payment_plan_n b
+             , tb_pay_payment_plan_detail_n c
+             , tb_pay_payroll_item_m d
+             , lgcom_user_m_v lum
+             , emp_master em
+             ,( SELECT  row_number() OVER (PARTITION BY pid.payroll_item_id ORDER BY pid.sort_order_no) sort_order_no
+                      , payroll_item_detail_detail_id
+                      , payroll_item_id
+                      , pay_calc_rslt_detail_type_code
+                      , pid.additional_input_value
+                      , CASE WHEN pay_calc_rslt_detail_type_code IN ('A', 'N') THEN 'Y' ELSE 'N' END AS numeric_flag /* 숫자값 여부 */
+                FROM    tb_pay_item_detail_n pid
+                <if test="payrollItemId != null and payrollItemId != ''">
+                WHERE   pid.payroll_item_id = #{payrollItemId}
+                </if>
+               )  e
+        WHERE  1=1
+        AND  ( to_date(a.end_yyyymmdd,'yyyymmdd') BETWEEN b.apply_start_date AND b.apply_end_date OR
+               to_char(b.apply_end_date,'yyyymmdd') BETWEEN a.start_yyyymmdd AND a.end_yyyymmdd )
+        AND    c.payroll_item_payment_plan_id = b.payroll_item_payment_plan_id
+        AND    d.payroll_item_id = b.payroll_item_id
+        AND    e.payroll_item_id = d.payroll_item_id
+        AND    e.payroll_item_detail_detail_id = c.payroll_item_detail_detail_id
+        AND    b.employee_no = lum.user_name
+        AND    b.employee_no = em.employee_number
+        AND    a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    a.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+        AND   (em.date_retire IS NULL OR em.date_retire >= to_date(a.start_yyyymmdd, 'yyyy-mm-dd'))
+
+        <if test="payrollItemId != null and payrollItemId != ''">
+        AND    d.payroll_item_id = #{payrollItemId}
+        </if>
+        <if test="employeeNo != null and employeeNo != ''">
+        AND    b.employee_no = #{employeeNo}
+        </if>
+        <if test="employeeName != null and employeeName != ''">
+        AND    UPPER(lum.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+        </if>
+        GROUP BY
+              b.payroll_item_payment_plan_id
+             ,d.payroll_item_id
+             ,d.payroll_item_name
+             ,d.inquiry_name
+             ,b.employee_no
+             ,d.payroll_item_calc_prrt_value
+             ,b.apply_start_date
+             ,b.apply_end_date
+             ,b.retroactive_flag
+             ,lum.organization_name_eng
+             ,lum.full_name_local
+             ,em.date_retire
+        ORDER by b.employee_no
+    </select>
+
+    <!-- 개인별 급여항목 수정 -->
+    <update id="updateIndividualPayItem" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00004.updateIndividualPayItem */
+                tb_pay_item_payment_plan_n
+        SET     apply_end_date = to_date(#{applyEndDate}, 'yyyy-mm-dd') /* 적용종료일 */
+        WHERE   employee_no = #{employeeNo} /* 사번 */
+        AND     payroll_item_payment_plan_id = #{payrollItemPaymentPlanId}  /* 급여항목지급계획내역아이디 */
+        AND     payroll_item_id = #{payrollItemId}  /* 급여항목상세내역아이디 */
+    </update>
+
+    <!-- 개인별 급여항목 Master, Detail 삭제 -->
+    <update id="deleteIndividualPayItem" parameterType="LGCOMData">
+        DECLARE
+        BEGIN
+            DELETE /*LGVPAY00004.deleteIndividualPayItem*/ FROM tb_pay_item_payment_plan_n
+            WHERE payroll_item_payment_plan_id = #{payrollItemPaymentPlanId};
+
+            DELETE /*LGVPAY00004.deleteDetailIndividualPayItem*/ FROM tb_pay_payment_plan_detail_n
+            WHERE payroll_item_payment_plan_id = #{payrollItemPaymentPlanId};
+
+        END;
+    </update>
+
+    <!-- 개인별 급여항목을 전체삭제를 위한 날짜 조회 -->
+    <select id="retrieveStartEndDate" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00004.retrieveStartEndDate */
+               start_yyyymmdd
+             , end_yyyymmdd
+        FROM   tb_pay_calc_period_basis_n
+        WHERE  subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+    </select>
+    <!-- 개인별 급여항목 Master, Detail 삭제 -->
+    <update id="deleteAllIndividualPayItem" parameterType="LGCOMData">
+    <![CDATA[
+        DECLARE
+        BEGIN
+            DELETE /*LGVPAY00004.deleteAllDetail*/ FROM tb_pay_payment_plan_detail_n
+            WHERE payroll_item_payment_plan_id IN ( SELECT payroll_item_payment_plan_id
+                                                    FROM   tb_pay_item_payment_plan_n a
+                                                    WHERE  a.payroll_item_id = #{payrollItemId}
+                                                    AND    a.apply_start_date  >=  to_date(#{startYyyymmdd},'yyyymmdd')
+                                                    AND    a.apply_end_date    <=  to_date(#{endYyyymmdd},'yyyymmdd')
+                                                  );
+
+            DELETE /*LGVPAY00004.deleteAllMaster*/ FROM tb_pay_item_payment_plan_n
+            WHERE payroll_item_id = #{payrollItemId}
+            AND   apply_start_date  >=  to_date(#{startYyyymmdd},'yyyymmdd')
+            AND   apply_end_date    <=  to_date(#{endYyyymmdd},'yyyymmdd');
+
+        END;
+        ]]>
+    </update>
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+        INSERT INTO  /* LGVPAY00004.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+                                     , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+                                     , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15)
+        SELECT AA.*
+        FROM
+        (
+            SELECT
+                    #{sessionId}
+                  , #{USER_SESSION.applicationUserId}
+                  , SYSDATE
+                  , 1 AS ORDER_BY
+                  , 'KO16KSC5601'
+                  , 'employee no' AS employee_no
+                  , 'employee name' AS employee_name
+                  , 'organization' AS organization
+                  , 'apply start date' AS apply_start_date
+                  , 'apply end date' AS apply_end_date
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 1 THEN e.additional_input_value ELSE NULL END ))) input_value1
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 2 THEN e.additional_input_value ELSE NULL END ))) input_value2
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 3 THEN e.additional_input_value ELSE NULL END ))) input_value3
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 4 THEN e.additional_input_value ELSE NULL END ))) input_value4
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 5 THEN e.additional_input_value ELSE NULL END ))) input_value5
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 6 THEN e.additional_input_value ELSE NULL END ))) input_value6
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 7 THEN e.additional_input_value ELSE NULL END ))) input_value7
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 8 THEN e.additional_input_value ELSE NULL END ))) input_value8
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 9 THEN e.additional_input_value ELSE NULL END ))) input_value9
+                  , lower(to_char(max(CASE WHEN e.sort_order_no = 10 THEN e.additional_input_value ELSE NULL END ))) input_value10
+            FROM    tb_pay_calc_period_basis_n a
+                  , tb_pay_item_payment_plan_n b
+                  , tb_pay_payment_plan_detail_n c
+                  , tb_pay_payroll_item_m d
+                  , lgcom_user_m_v lum
+                  , emp_master em
+                  ,( SELECT  row_number() OVER (PARTITION BY pid.payroll_item_id ORDER BY pid.sort_order_no) sort_order_no, payroll_item_detail_detail_id, payroll_item_id,pay_calc_rslt_detail_type_code, pid.additional_input_value
+                     FROM tb_pay_item_detail_n pid )  e
+            WHERE  1=1
+            AND  ( to_date(a.end_yyyymmdd,'yyyymmdd') BETWEEN b.apply_start_date AND b.apply_end_date OR
+                   to_char(b.apply_end_date,'yyyymmdd') BETWEEN a.start_yyyymmdd AND a.end_yyyymmdd )
+            AND    c.payroll_item_payment_plan_id = b.payroll_item_payment_plan_id
+            AND    d.payroll_item_id = b.payroll_item_id
+            AND    e.payroll_item_id = d.payroll_item_id
+            AND    e.payroll_item_detail_detail_id = c.payroll_item_detail_detail_id
+            AND    b.employee_no = lum.user_name
+            AND    b.employee_no = em.employee_number
+            AND    a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    a.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+            AND   (em.date_retire IS NULL OR em.date_retire >= to_date(a.start_yyyymmdd, 'yyyy-mm-dd'))
+            <if test="payrollItemId != null and payrollItemId != ''">
+            AND    d.payroll_item_id = #{payrollItemId}
+            </if>
+            <if test="employeeNo != null and employeeNo != ''">
+            AND    b.employee_no = #{employeeNo}
+            </if>
+            <if test="employeeName != null and employeeName != ''">
+            AND    UPPER(lum.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+            </if>
+
+            GROUP BY
+                b.payroll_item_payment_plan_id
+               ,d.payroll_item_id
+               ,d.payroll_item_name
+               ,d.inquiry_name
+               ,b.employee_no
+               ,d.payroll_item_calc_prrt_value
+               ,b.apply_start_date
+               ,b.apply_end_date
+               ,lum.organization_name_eng
+               ,lum.full_name_local
+               ,em.date_retire
+            UNION
+            SELECT
+                    #{sessionId}
+                  , #{USER_SESSION.applicationUserId}
+                  , SYSDATE
+                  , 2 AS ORDER_BY
+                  , 'KO16KSC5601'
+                  , b.employee_no
+                  , lum.full_name_local as employee_name
+                  , lum.organization_name_eng as organization
+                  , to_char(b.apply_start_date, 'dd/mm/yyyy') as apply_start_date
+                  , to_char(b.apply_end_date, 'dd/mm/yyyy') as apply_end_date
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 1 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 1 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 1 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value1
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 2 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 2 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 2 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value2
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 3 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 3 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 3 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value3
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 4 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 4 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 4 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value4
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 5 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 5 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 5 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value5
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 6 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 6 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 6 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value6
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 7 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 7 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 7 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value7
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 8 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 8 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 8 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value8
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 9 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 9 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 9 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value9
+                  , CASE WHEN MAX(CASE WHEN e.sort_order_no = 10 THEN e.numeric_flag  ELSE NULL END ) = 'Y' THEN /* 숫자컬럼인 경우 SUM */
+                              to_char(SUM(CASE WHEN e.sort_order_no = 10 THEN CASE WHEN e.numeric_flag = 'Y' THEN c.apply_target_value ELSE NULL END ELSE NULL END ))
+                         ELSE MAX(CASE WHEN e.sort_order_no = 10 THEN c.apply_target_value  ELSE NULL END ) /* 문자컬럼인 경우 MAX */
+                    END AS input_value10
+            FROM    tb_pay_calc_period_basis_n a
+                  , tb_pay_item_payment_plan_n b
+                  , tb_pay_payment_plan_detail_n c
+                  , tb_pay_payroll_item_m d
+                  , lgcom_user_m_v lum
+                  , emp_master em
+                  ,( SELECT  row_number() OVER (PARTITION BY pid.payroll_item_id ORDER BY pid.sort_order_no) sort_order_no, payroll_item_detail_detail_id, payroll_item_id,pay_calc_rslt_detail_type_code, pid.additional_input_value
+                           , CASE WHEN pid.pay_calc_rslt_detail_type_code IN ('A', 'N') THEN 'Y' ELSE 'N' END AS numeric_flag
+                     FROM   tb_pay_item_detail_n pid
+                     <if test="payrollItemId != null and payrollItemId != ''">
+                     WHERE  pid.payroll_item_id = #{payrollItemId}
+                     </if>
+                    )  e
+            WHERE  1=1
+            AND  ( to_date(a.end_yyyymmdd,'yyyymmdd') BETWEEN b.apply_start_date AND b.apply_end_date OR
+                   to_char(b.apply_end_date,'yyyymmdd') BETWEEN a.start_yyyymmdd AND a.end_yyyymmdd )
+            AND    c.payroll_item_payment_plan_id = b.payroll_item_payment_plan_id
+            AND    d.payroll_item_id = b.payroll_item_id
+            AND    e.payroll_item_id = d.payroll_item_id
+            AND    e.payroll_item_detail_detail_id = c.payroll_item_detail_detail_id
+            AND    b.employee_no = lum.user_name
+            AND    b.employee_no = em.employee_number
+            AND    a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    a.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+            AND    (em.date_retire IS NULL OR em.date_retire >= to_date(a.start_yyyymmdd, 'yyyy-mm-dd'))
+            <if test="payrollItemId != null and payrollItemId != ''">
+            AND    d.payroll_item_id = #{payrollItemId}
+            </if>
+            <if test="employeeNo != null and employeeNo != ''">
+            AND    b.employee_no = #{employeeNo}
+            </if>
+            <if test="employeeName != null and employeeName != ''">
+            AND    UPPER(lum.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+            </if>
+            GROUP BY
+                  b.payroll_item_payment_plan_id
+                 ,d.payroll_item_id
+                 ,d.payroll_item_name
+                 ,d.inquiry_name
+                 ,b.employee_no
+                 ,d.payroll_item_calc_prrt_value
+                 ,b.apply_start_date
+                 ,b.apply_end_date
+                 ,lum.organization_name_eng
+                 ,lum.full_name_local
+                 ,em.date_retire
+        ) AA
+        ORDER by AA.employee_no
+    </insert>
+
+    <select id="retrieveDownloadCount" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00004.retrieveDownloadCount */
+                 count(*)over() as cnt
+        FROM(
+              SELECT
+                      'employee no' AS employee_no
+                    , 'employee name' AS employee_name
+                    , 'organization' AS organization
+                    , 'apply start date' AS apply_start_date
+                    , 'apply end date' AS apply_end_date
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 1  THEN e.additional_input_value ELSE NULL END ))) input_value1
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 2  THEN e.additional_input_value ELSE NULL END ))) input_value2
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 3  THEN e.additional_input_value ELSE NULL END ))) input_value3
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 4  THEN e.additional_input_value ELSE NULL END ))) input_value4
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 5  THEN e.additional_input_value ELSE NULL END ))) input_value5
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 6  THEN e.additional_input_value ELSE NULL END ))) input_value6
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 7  THEN e.additional_input_value ELSE NULL END ))) input_value7
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 8  THEN e.additional_input_value ELSE NULL END ))) input_value8
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 9  THEN e.additional_input_value ELSE NULL END ))) input_value9
+                    , lower(to_char(max(CASE WHEN e.sort_order_no = 10 THEN e.additional_input_value ELSE NULL END ))) input_value10
+               FROM   tb_pay_calc_period_basis_n a
+                    , tb_pay_item_payment_plan_n b
+                    , tb_pay_payment_plan_detail_n c
+                    , tb_pay_payroll_item_m d
+                    , lgcom_user_m_v lum
+                    , emp_master em
+                    ,( SELECT  row_number() OVER (PARTITION BY pid.payroll_item_id ORDER BY pid.sort_order_no) sort_order_no, payroll_item_detail_detail_id, payroll_item_id,pay_calc_rslt_detail_type_code, pid.additional_input_value
+                       FROM tb_pay_item_detail_n pid )  e
+              WHERE   to_date(a.end_yyyymmdd,'yyyymmdd') BETWEEN b.apply_start_date AND b.apply_end_date
+              AND     c.payroll_item_payment_plan_id = b.payroll_item_payment_plan_id
+              AND     d.payroll_item_id = b.payroll_item_id
+              AND     e.payroll_item_id = d.payroll_item_id
+              AND     e.payroll_item_detail_detail_id = c.payroll_item_detail_detail_id
+              AND     b.employee_no = lum.user_name
+              AND     b.employee_no = em.employee_number
+              AND     a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+              AND    (em.date_retire IS NULL OR em.date_retire >= to_date(a.start_yyyymmdd, 'yyyy-mm-dd'))
+              AND     d.payroll_item_id = #{payrollItemId}
+              GROUP BY
+                    b.payroll_item_payment_plan_id
+                   ,d.payroll_item_id
+                   ,d.payroll_item_name
+                   ,d.inquiry_name
+                   ,b.employee_no
+                   ,d.payroll_item_calc_prrt_value
+                   ,b.apply_start_date
+                   ,b.apply_end_date
+                   ,lum.organization_name_eng
+                   ,lum.full_name_local
+                   ,em.date_retire
+              ORDER by b.employee_no
+        ) aa
+        group by aa.employee_no
+                ,aa.employee_name
+                ,aa.organization
+                ,aa.apply_start_date
+                ,aa.apply_end_date
+                ,aa.input_value1
+                ,aa.input_value2
+                ,aa.input_value3
+                ,aa.input_value4
+                ,aa.input_value5
+                ,aa.input_value6
+                ,aa.input_value7
+                ,aa.input_value8
+                ,aa.input_value9
+                ,aa.input_value10
+    </select>
+    <!-- CSV 다운로드 -->
+    <insert id="createExcelDownloadHeadData" parameterType="java.util.HashMap">
+        INSERT INTO  /* LGVPAY00004.createExcelDownloadHeadData */
+                  XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+                                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+                                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15)
+
+        SELECT
+                  #{sessionId}
+                , #{USER_SESSION.applicationUserId}
+                , SYSDATE
+                , 1 AS ORDER_BY
+                , 'KO16KSC5601'
+                , aa.employee_no
+                , aa.employee_name
+                , aa.organization
+                , aa.apply_start_date
+                , aa.apply_end_date
+                , aa.input_value1
+                , aa.input_value2
+                , aa.input_value3
+                , aa.input_value4
+                , aa.input_value5
+                , aa.input_value6
+                , aa.input_value7
+                , aa.input_value8
+                , aa.input_value9
+                , aa.input_value10
+        FROM(
+               SELECT
+                       'employee no' as employee_no
+                     , 'employee name' as employee_name
+                     , 'organization' as organization
+                     , 'apply start date' as apply_start_date
+                     , 'apply end date' as apply_end_date
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 1  THEN e.additional_input_value ELSE NULL END ))) as input_value1
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 2  THEN e.additional_input_value ELSE NULL END ))) as input_value2
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 3  THEN e.additional_input_value ELSE NULL END ))) as input_value3
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 4  THEN e.additional_input_value ELSE NULL END ))) as input_value4
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 5  THEN e.additional_input_value ELSE NULL END ))) as input_value5
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 6  THEN e.additional_input_value ELSE NULL END ))) as input_value6
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 7  THEN e.additional_input_value ELSE NULL END ))) as input_value7
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 8  THEN e.additional_input_value ELSE NULL END ))) as input_value8
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 9  THEN e.additional_input_value ELSE NULL END ))) as input_value9
+                     , lower(to_char(max(CASE WHEN e.sort_order_no = 10 THEN e.additional_input_value ELSE NULL END ))) as input_value10
+               FROM   ( SELECT  row_number() OVER (PARTITION BY pid.payroll_item_id ORDER BY pid.sort_order_no) sort_order_no, payroll_item_detail_detail_id, payroll_item_id,pay_calc_rslt_detail_type_code, pid.additional_input_value
+                        FROM tb_pay_item_detail_n pid )  e
+               WHERE e.payroll_item_id = #{payrollItemId}
+        ) aa
+    </insert>
+
+    <!-- 엑셀업로드를 위한 조회 -->
+    <select id="retrievePayrollCalculationPeriodId" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00004.retrievePayrollCalculationPeriodId */
+                payroll_calculation_period_id
+        FROM    tb_pay_calc_period_basis_n
+        WHERE   subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND     payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+
+    </select>
+
+    <!-- Excel Upload 후속 처리 -->
+    <select id="createIndividualPayItemUpload" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00004.createIndividualPayItemUpload */
+              lgvpay_upload_pkg.entry_payroll_item_by_item(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},                       /* p_errcode */
+                                                           #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},                      /* p_errbuf */
+                                                           #{sessionId, mode=IN , jdbcType=NUMERIC, javaType=string},                      /* Session Id : 엑셀 업로드용 */
+                                                           #{payrollItemId, mode=IN , jdbcType=NUMERIC, javaType=string},                  /* 급여항목 Id */
+                                                           #{payrollCalculationPeriodId, mode=IN , jdbcType=NUMERIC, javaType=string},     /* 급여기산기간 Id */
+                                                           #{applicationUserId, mode=IN , jdbcType=NUMERIC, javaType=string}               /* 사용자 Id */
+                                                         )}
+    </select>
+
+</mapper>

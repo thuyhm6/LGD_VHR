@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context
+		http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/mvc
+		http://www.springframework.org/schema/mvc/spring-mvc-4.0.xsd
+		http://www.springframework.org/schema/aop
+		http://www.springframework.org/schema/aop/spring-aop.xsd">
+
+	<mvc:annotation-driven />
+	<mvc:default-servlet-handler default-servlet-name="WorkerServlet"/>
+
+	<context:component-scan base-package="com.lgd.lgcom">
+		<context:include-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+	</context:component-scan>
+
+	<!-- XML based Transaction -->
+	<aop:config proxy-target-class="true">
+		<aop:pointcut id="supportedExcel" expression="execution(* *..LGCOMStreamingController.*(..))" />
+		<aop:advisor advice-ref="excelTxAdvice" pointcut-ref="supportedExcel" />
+	</aop:config>
+
+	<bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="locations" value="classpath:config/project.properties" />
+		<property name="fileEncoding" value="UTF-8" />
+	</bean>
+
+	<bean id="pagingPolicyResolver" class="devonframe.paging.policy.PagingPolicyResolver">
+	    <property name="globalPolicy" ref="globalPolicy"/>
+	</bean>
+
+	<bean id="globalPolicy" class="devonframe.paging.policy.DefaultPagingPolicy">
+	    <property name="rowSize" value="50" />
+	    <property name="pageSize" value="5" />
+	</bean>
+
+	<bean id="viewResolver" class="org.springframework.web.servlet.view.UrlBasedViewResolver">
+		<property name="viewClass" value="org.springframework.web.servlet.view.JstlView" />
+		<property name="prefix" value="/WEB-INF/views/" />
+		<property name="suffix" value=".jsp" />
+	</bean>
+
+	<bean id="lgcomView" class="com.lgd.lgcom.common.view.LGCOMView"/>
+
+	<bean class="org.springframework.web.servlet.handler.SimpleMappingExceptionResolver">
+		<property name="warnLogCategory" value="errorLogger" />
+		<property name="exceptionMappings">
+			<props>
+				<prop key="com.lgd.lgcom.framework.exception.LGCOMException">lgcomView</prop>
+				<prop key="com.lgd.lgcom.framework.exception.AuthenticationException">common/error/error400</prop>
+				<prop key="com.lgd.lgcom.framework.exception.AuthenticationActionException">lgcomView</prop>
+				<prop key="com.lgd.lgcom.framework.exception.AuthorizationException">common/error/error420</prop>
+				<prop key="com.lgd.lgcom.framework.exception.AuthorizationActionException">lgcomView</prop>
+				<prop key="com.lgd.lgcom.framework.exception.SecurityException">lgcomView</prop>
+				<prop key="com.lgd.lgcom.framework.exception.ServiceSecurityException">common/error/error</prop>
+				<prop key="devonframe.exception.SystemException">lgcomView</prop>
+			</props>
+		</property>
+		<property name="defaultErrorView" value="common/error/error" />
+	</bean>
+
+	<mvc:interceptors>
+		<mvc:interceptor>
+			<mvc:mapping path="/action/**"/>
+			<mvc:mapping path="/service/**"/>
+			<mvc:mapping path="/download/**"/>
+			<mvc:mapping path="/upload/**"/>
+			<mvc:mapping path="/container"/>
+			<mvc:mapping path="/approval"/>
+			<mvc:mapping path="/approvalRequest"/>
+			<mvc:mapping path="/export/**"/>
+			<bean id="authenticationInterceptor" class="com.lgd.lgcom.framework.interceptor.AuthenticationInterceptor">
+				<property name="skipUrls">
+					<list>
+						<value>/action/login</value>
+						<value>/action/region/*</value>
+						<value>/action/sample/*</value>
+						<value>/service/login</value>
+						<value>/service/ssologin</value>
+						<value>/service/logout</value>
+						<value>/service/intro</value>
+						<value>/service/region</value>
+						<value>/service/sample</value>
+						<value>/service/sample/*</value>
+						<value>/reportDownload/common/*</value>
+						<value>/download/common/mobile</value>
+						<value>/websocket</value>
+					</list>
+				</property>
+			</bean>
+		</mvc:interceptor>
+		<mvc:interceptor>
+			<mvc:mapping path="/action/**"/>
+			<mvc:mapping path="/service/**"/>
+			<mvc:mapping path="/download/**"/>
+			<mvc:mapping path="/upload/**"/>
+			<mvc:mapping path="/container"/>
+			<mvc:mapping path="/approval"/>
+			<mvc:mapping path="/approvalRequest"/>
+			<mvc:mapping path="/export/**"/>
+			<bean id="projectSessionInterceptor" class="com.lgd.lgcom.framework.interceptor.ProjectSessionInterceptor">
+				<property name="skipUrls">
+					<list>
+						<value>/action/login</value>
+						<value>/action/region/*</value>
+						<value>/action/sample/*</value>
+						<value>/service/login</value>
+						<value>/service/ssologin</value>
+						<value>/service/logout</value>
+						<value>/service/intro</value>
+						<value>/service/region</value>
+						<value>/service/sample</value>
+						<value>/service/sample/*</value>
+						<value>/reportDownload/common/*</value>
+						<value>/download/common/mobile</value>
+						<value>/websocket</value>
+					</list>
+				</property>
+			</bean>
+		</mvc:interceptor>
+		<mvc:interceptor>
+			<mvc:mapping path="/service/**"/>
+			<mvc:mapping path="/container"/>
+			<mvc:mapping path="/approval"/>
+			<mvc:mapping path="/approvalRequest"/>
+			<bean id="accessLogInterceptor" class="com.lgd.lgcom.framework.interceptor.AccessLogInterceptor">
+				<property name="skipUrls">
+					<list>
+						<value>/service/intro</value>
+						<value>/service/login</value>
+						<value>/service/ssologin</value>
+						<value>/service/logout</value>
+						<value>/service/main</value>
+						<value>/service/userProfile</value>
+						<value>/service/userMenu</value>
+						<value>/service/board</value>
+						<value>/service/region</value>
+						<value>/service/sample</value>
+						<value>/service/sample/*</value>
+						<value>/download/common/mobile</value>
+						<value>/websocket</value>
+					</list>
+				</property>
+			</bean>
+		</mvc:interceptor>
+		<mvc:interceptor>
+			<mvc:mapping path="/action/**"/>
+			<mvc:mapping path="/service/**"/>
+			<mvc:mapping path="/container"/>
+			<bean id="authorizationInterceptor" class="com.lgd.lgcom.framework.interceptor.AuthorizationInterceptor">
+				<property name="skipUrls">
+					<list>
+						<value>/action/login</value>
+						<value>/action/region/*</value>
+						<value>/action/sample/*</value>
+						<value>/service/intro</value>
+						<value>/service/login</value>
+						<value>/service/ssologin</value>
+						<value>/service/logout</value>
+						<value>/service/main</value>
+						<value>/service/userProfile</value>
+						<value>/service/userMenu</value>
+						<value>/service/board</value>
+						<value>/service/region</value>
+						<value>/service/sample</value>
+						<value>/service/sample/*</value>
+						<value>/reportDownload/common/*</value>
+						<value>/download/common/mobile</value>
+						<value>/websocket</value>
+					</list>
+				</property>
+			</bean>
+		</mvc:interceptor>
+		<mvc:interceptor>
+			<mvc:mapping path="/action/**"/>
+			<bean id="serviceLogInterceptor" class="com.lgd.lgcom.framework.interceptor.ServiceTimeLogInterceptor">
+				<property name="skipUrls">
+					<list>
+						<value>/action/login</value>
+						<value>/action/region/*</value>
+						<value>/action/sample/*</value>
+					</list>
+				</property>
+			</bean>
+		</mvc:interceptor>
+		<mvc:interceptor>
+			<mvc:mapping path="/action/**"/>
+			<mvc:mapping path="/service/**"/>
+			<bean id="securtiyInterceptor" class="com.lgd.lgcom.framework.interceptor.SecurityInterceptor"/>
+		</mvc:interceptor>
+	</mvc:interceptors>
+
+	<bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver"/>
+
+	<bean id="beanNameViewResolver" class="org.springframework.web.servlet.view.BeanNameViewResolver" p:order="1" />
+
+</beans>

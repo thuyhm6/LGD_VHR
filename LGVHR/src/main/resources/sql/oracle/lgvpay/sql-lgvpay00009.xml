@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00009">
+
+    <!-- 임직원 급여관련 정보 조회 -->
+    <select id="retrievePaymentMasterList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /*LGVPAY00009.retrievePaymentMasterList*/
+               rs.employee_no
+             , rs.employee_name
+             , rs.emp_category_name
+             , rs.job_title_name
+             , rs.hire_date
+             , rs.resignation_date
+             , rs.organization_id
+             , rs.organization_name
+             , rs.probation_start_date
+             , rs.probation_end_date
+             , rs.probation_base_salary
+             , rs.base_salary
+             , rs.position_allowance
+             , rs.job_allowance
+             , rs.qualification_allowance
+             , rs.adjustment1_allowance
+             , rs.adjustment2_allowance
+             , rs.adjustment3_allowance
+             , NVL(rs.probation_base_salary, 0) + NVL(rs.base_salary, 0) + NVL(rs.position_allowance, 0)
+             + NVL(rs.job_allowance, 0) + NVL(rs.qualification_allowance, 0)
+             + NVL(rs.adjustment1_allowance, 0) + NVL(rs.adjustment2_allowance, 0) + NVL(rs.adjustment3_allowance, 0) AS total
+
+        FROM   (
+                SELECT em.employee_number     AS employee_no
+                     , em.full_name_local     AS employee_name
+                     , cccm.common_code_name  AS emp_category_name
+                     , cccm1.common_code_name AS job_title_name
+                     , NVl(ccc1.sort_order_no, 10000) AS job_title_order_no
+                     , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS hire_date
+                     , TO_CHAR(em.date_retire         , 'DD/MM/YYYY') AS resignation_date
+                     , ea.organization_id
+                     , om.org_name_local      AS organization_name
+                     , TO_CHAR(em.probation_start_date, 'DD/MM/YYYY') AS probation_start_date
+                     , TO_CHAR(em.probation_end_date  , 'DD/MM/YYYY') AS probation_end_date
+                     , CASE WHEN TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY') BETWEEN probation_start_date AND probation_end_date THEN
+                                 lgvpay_info_pkg.get_base_pay(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'), #{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'A')
+                            ELSE NULL
+                       END AS probation_base_salary
+                     , lgvpay_info_pkg.get_base_pay(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'), #{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'B') AS base_salary
+                     , lgvpay_info_pkg.get_position_allowance(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'))                                     AS position_allowance
+                     , lgvpay_info_pkg.get_job_allowance(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'))                                          AS job_allowance
+                     , lgvpay_info_pkg.get_qualification_allowance(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'), #{LGVHR_PROJECT_SESSION.subsidiaryCode}) AS qualification_allowance
+                     , NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'ADJ_ALLOWANCE1','BASE_AMOUNT', #{LGVHR_PROJECT_SESSION.subsidiaryCode}),0) AS adjustment1_allowance
+                     , NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'ADJ_ALLOWANCE2','BASE_AMOUNT', #{LGVHR_PROJECT_SESSION.subsidiaryCode}),0) AS adjustment2_allowance
+                     , NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'ADJ_ALLOWANCE3','BASE_AMOUNT', #{LGVHR_PROJECT_SESSION.subsidiaryCode}),0) AS adjustment3_allowance
+
+                FROM  emp_assig ea
+                     ,emp_master em
+                     ,lgcom_common_code_multi_lang_c cccm /* emp_cat */
+                     ,lgcom_common_code_multi_lang_c cccm1 /* grade_title */
+                     ,lgcom_common_code_c            ccc1 /* grade_title */
+                     ,org_master om
+
+                WHERE TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD') BETWEEN to_char(ea.assignment_start_date,'yyyymmdd') AND ea.attribute1
+                AND   em.employee_number    = ea.employee_number
+                AND   em.flsa_yn            = 'N' /* 단기파견 제외 */
+                AND   em.fse_yn             = 'N' /* FSE 제외 */
+                AND   cccm.code_type_code   = 'IF_EMP_CAT'
+                AND   cccm.common_code      = ea.assignment_category
+                AND   cccm.language_code    = #{USER_SESSION.languageCode}
+                AND   ccc1.code_type_code   = 'IF_VIETNAM_GRADE_TITLE'
+                AND   ccc1.common_code      = ea.grade_title
+                AND   cccm1.code_type_code  = ccc1.code_type_code
+                AND   cccm1.common_code     = ccc1.common_code
+                AND   cccm1.language_code   = #{USER_SESSION.languageCode}
+                AND   om.organization_id(+) = ea.organization_id
+                <if test="employeeNo != null and employeeNo != ''">
+                AND   em.employee_number    = #{employeeNo}
+                </if>
+               ) rs
+
+    </select>
+
+    <!-- 임직원 급여관련 정보 조회(CSV다운로드용) -->
+    <select id="createCSVDownloadData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /*LGVPAY00009.createCSVDownloadData*/
+               employee_no
+             , employee_name
+             , emp_category_name
+             , job_title_name
+             , hire_date
+             , resignation_date
+             , organization_name
+             , probation_start_date
+             , probation_end_date
+             , probation_base_salary
+             , base_salary
+             , position_allowance
+             , job_allowance
+             , qualification_allowance
+             , adjustment1_allowance
+             , adjustment2_allowance
+             , adjustment3_allowance
+             , total
+        FROM   (
+                SELECT '1' AS gubun
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeNo'             AND lslm.language_code = #{languageCode}) AS employee_no
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeName'           AND lslm.language_code = #{languageCode}) AS employee_name
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.empCategory'            AND lslm.language_code = #{languageCode}) AS emp_category_name
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobTitle'               AND lslm.language_code = #{languageCode}) AS job_title_name
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.hireDate'               AND lslm.language_code = #{languageCode}) AS hire_date
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.resignationDate'        AND lslm.language_code = #{languageCode}) AS resignation_date
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.organization'           AND lslm.language_code = #{languageCode}) AS organization_name
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationStartDate'     AND lslm.language_code = #{languageCode}) AS probation_start_date
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationEndDate'       AND lslm.language_code = #{languageCode}) AS probation_end_date
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationBaseSalary'    AND lslm.language_code = #{languageCode}) AS probation_base_salary
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.baseSalary'             AND lslm.language_code = #{languageCode}) AS base_salary
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.positionAllowance'      AND lslm.language_code = #{languageCode}) AS position_allowance
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobAllowance'           AND lslm.language_code = #{languageCode}) AS job_allowance
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.qualificationAllowance' AND lslm.language_code = #{languageCode}) AS qualification_allowance
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment1Allowance'   AND lslm.language_code = #{languageCode}) AS adjustment1_allowance
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment2Allowance'   AND lslm.language_code = #{languageCode}) AS adjustment2_allowance
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment3Allowance'   AND lslm.language_code = #{languageCode}) AS adjustment3_allowance
+                     ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.total'                  AND lslm.language_code = #{languageCode}) AS total
+                     ,-1 AS job_title_order_no
+                FROM   dual
+                UNION ALL
+                SELECT '2' AS gubun
+                     , rs.employee_no
+                     , rs.employee_name
+                     , rs.emp_category_name
+                     , rs.job_title_name
+                     , rs.hire_date
+                     , rs.resignation_date
+                     , rs.organization_name
+                     , rs.probation_start_date
+                     , rs.probation_end_date
+                     , TO_CHAR(rs.probation_base_salary  , 'FM999,999,999,999,990') AS probation_base_salary
+                     , TO_CHAR(rs.base_salary            , 'FM999,999,999,999,990') AS base_salary
+                     , TO_CHAR(rs.position_allowance     , 'FM999,999,999,999,990') AS position_allowance
+                     , TO_CHAR(rs.job_allowance          , 'FM999,999,999,999,990') AS job_allowance
+                     , TO_CHAR(rs.qualification_allowance, 'FM999,999,999,999,990') AS qualification_allowance
+                     , TO_CHAR(rs.adjustment1_allowance  , 'FM999,999,999,999,990') AS adjustment1_allowance
+                     , TO_CHAR(rs.adjustment2_allowance  , 'FM999,999,999,999,990') AS adjustment2_allowance
+                     , TO_CHAR(rs.adjustment3_allowance  , 'FM999,999,999,999,990') AS adjustment3_allowance
+                     , TO_CHAR(NVL(rs.probation_base_salary, 0) + NVL(rs.base_salary, 0) + NVL(rs.position_allowance, 0)
+                             + NVL(rs.job_allowance, 0) + NVL(rs.qualification_allowance, 0)
+                             + NVL(rs.adjustment1_allowance, 0) + NVL(rs.adjustment2_allowance, 0) + NVL(rs.adjustment3_allowance, 0), 'FM999,999,999,999,990') AS total
+                     , rs.job_title_order_no
+
+                FROM   (
+                        SELECT em.employee_number                             AS employee_no
+                             , em.full_name_local                             AS employee_name
+                             , cccm.common_code_name                          AS emp_category_name
+                             , cccm1.common_code_name                         AS job_title_name
+                             , NVl(ccc1.sort_order_no, 10000)                 AS job_title_order_no
+                             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS hire_date
+                             , TO_CHAR(em.date_retire         , 'DD/MM/YYYY') AS resignation_date
+                             , om.org_name_local                              AS organization_name
+                             , TO_CHAR(em.probation_start_date, 'DD/MM/YYYY') AS probation_start_date
+                             , TO_CHAR(em.probation_end_date  , 'DD/MM/YYYY') AS probation_end_date
+                             , CASE WHEN TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY') BETWEEN probation_start_date AND probation_end_date THEN
+                                         lgvpay_info_pkg.get_base_pay(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'), #{subsidiaryCode}, 'A')
+                                    ELSE NULL
+                               END AS probation_base_salary
+                             , lgvpay_info_pkg.get_base_pay(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'), #{subsidiaryCode}, 'B') AS base_salary
+                             , lgvpay_info_pkg.get_position_allowance(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'))                                     AS position_allowance
+                             , lgvpay_info_pkg.get_job_allowance(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'))                                          AS job_allowance
+                             , lgvpay_info_pkg.get_qualification_allowance(em.employee_number, TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD'), #{subsidiaryCode}) AS qualification_allowance
+                             , NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'ADJ_ALLOWANCE1','BASE_AMOUNT', #{subsidiaryCode}),0) AS adjustment1_allowance
+                             , NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'ADJ_ALLOWANCE2','BASE_AMOUNT', #{subsidiaryCode}),0) AS adjustment2_allowance
+                             , NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'ADJ_ALLOWANCE3','BASE_AMOUNT', #{subsidiaryCode}),0) AS adjustment3_allowance
+
+                        FROM  emp_assig ea
+                             ,emp_master em
+                             ,lgcom_common_code_multi_lang_c cccm  /* emp_cat */
+                             ,lgcom_common_code_multi_lang_c cccm1 /* grade_title */
+                             ,lgcom_common_code_c            ccc1  /* grade_title */
+                             ,org_master om
+
+                        WHERE TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD') BETWEEN to_char(ea.assignment_start_date,'yyyymmdd') AND ea.attribute1
+                        AND   em.employee_number    = ea.employee_number
+                        AND   em.flsa_yn            = 'N' /* 단기파견 제외 */
+                        AND   em.fse_yn             = 'N' /* FSE 제외 */
+                        AND   cccm.code_type_code   = 'IF_EMP_CAT'
+                        AND   cccm.common_code      = ea.assignment_category
+                        AND   cccm.language_code    = #{languageCode}
+                        AND   ccc1.code_type_code   = 'IF_VIETNAM_GRADE_TITLE'
+                        AND   ccc1.common_code      = ea.grade_title
+                        AND   cccm1.code_type_code  = ccc1.code_type_code
+                        AND   cccm1.common_code     = ccc1.common_code
+                        AND   cccm1.language_code   = #{languageCode}
+                        AND   om.organization_id(+) = ea.organization_id
+                        <if test="employeeNo != null and employeeNo != ''">
+                        AND   em.employee_number    = #{employeeNo}
+                        </if>
+                       ) rs
+               )
+    </select>
+
+</mapper>

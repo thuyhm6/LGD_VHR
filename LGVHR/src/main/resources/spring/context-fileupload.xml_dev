@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- File Upload -->
+    <bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+        <property name="uploadTempDir" value="file:#{project['sorcHome_dev']}/temp" />
+        <property name="maxInMemorySize" value="20000"/>
+        <property name="defaultEncoding" value="UTF-8" />
+    </bean>
+
+    <bean id="fileUpload" class="devonframe.fileupload.FileUpload">
+        <property name="globalPolicy" ref="globalPolicy"/>
+        <property name="optionalPolicyMap">
+            <map>
+                <entry key="crossEditorPolicy" value-ref="crossEditorPolicy"></entry>
+                <entry key="crossEditorPolicy2" value-ref="crossEditorPolicy2"></entry>
+                <entry key="ckEditorPolicy" value-ref="ckEditorPolicy"></entry>
+                <entry key="ckEditorPolicy2" value-ref="ckEditorPolicy2"></entry>
+                <entry key="bizwebPolicy" value-ref="bizwebPolicy"></entry>
+                <entry key="bizwebHRMPolicy" value-ref="bizwebHRMPolicy"></entry>
+                <entry key="bizwebManualPolicy" value-ref="bizwebManualPolicy"></entry>
+                <entry key="excelPolicy" value-ref="excelPolicy"></entry>
+                <entry key="csvPolicy" value-ref="csvPolicy"></entry>
+            </map>
+        </property>
+    </bean>
+
+    <bean id="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_dev']}" />
+        <property name="allowPattern" value="*"/>
+        <property name="denyPattern" value="*.jsp;*.java;*.class;*.bat;*.sh;*.exe;*.rpm;*.asp;*.aspx;*.asa;*.phtml;*.php;*.php3;*.php4;*.php5;*.inc;*.htm;*.jspx;*.jsw;*.jsv;*.jspf;*.war;*.pl;*.pm;*.cgi;*.lib;*.cfm;*.cfml;*.cfc;*.dbm"/>
+        <property name="renamePattern" value="{prefix}.{ext}" />
+        <property name="maxTotalFileSize" value="30MB"/>
+        <property name="maxFileSize" value="30MB" />
+        <property name="sequenceAllow" value="true"/>
+        <property name="zeroSizeAllow" value="false"/>
+    </bean>
+
+    <bean id="crossEditorPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_dev']}crosseditor/" />
+        <property name="allowPattern" value="*.gif;*.jpg;*.jpeg;*.png"/>
+        <property name="denyPattern" value="*"/>
+    </bean>
+    <bean id="crossEditorPolicy2" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_dev']}crosseditor/" />
+        <property name="renamePattern" value="{prefix}.jpg" />
+    </bean>
+
+    <bean id="ckEditorPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_dev']}ckeditor/" />
+        <property name="allowPattern" value="*.gif;*.jpg;*.jpeg;*.png"/>
+        <property name="denyPattern" value="*"/>
+    </bean>
+    <bean id="ckEditorPolicy2" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_dev']}ckeditor/" />
+        <property name="renamePattern" value="{prefix}.jpg" />
+        <property name="allowPattern" value="*.gif;*.jpg;*.jpeg;*.png"/>
+        <property name="denyPattern" value="*"/>
+    </bean>
+
+    <!-- 첨부파일 전체가 저장되는 루트 디렉토리 -->
+    <bean id="bizwebPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_dev']}" />
+    </bean>
+
+
+    <bean id="bizwebHRMPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['common_directory_hrm_dev']}" />
+    </bean>
+
+    <!-- BizWeb Manual Upload 용 정책 -->
+    <bean id="bizwebManualPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['sorcHome_local']}/fileupload/" />
+        <property name="allowPattern" value="*.ppt;*.pptx"/>
+        <property name="denyPattern" value="*"/>
+        <property name="renamePattern" value="{prefix}.{ext}" />
+    </bean>
+
+    <bean id="excelPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['sorcHome_dev']}/fileupload/temp/" />
+        <property name="maxFileSize" value="1MB" />
+        <property name="allowPattern" value="*.xlsx"/>
+        <property name="denyPattern" value="*"/>
+    </bean>
+
+    <bean id="csvPolicy" parent="globalPolicy" class="com.lgd.lgcom.framework.fileupload.policy.LGCOMFileUploadPolicy">
+        <property name="uploadTargetDir" value="file:#{project['sorcHome_dev']}/fileupload/temp/" />
+        <property name="maxFileSize" value="30MB" />
+        <property name="allowPattern" value="*.csv"/>
+        <property name="denyPattern" value="*"/>
+    </bean>
+</beans>

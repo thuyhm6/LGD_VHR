@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00013">
+
+    <!-- 급여 항목 조회 -->
+    <select id="retrievePayrollItemList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /*LGVPAY00013.retrievePayrollItemList*/
+               ppi.payroll_item_id
+             , ppi.payroll_item_name
+             , ppi.inquiry_name
+             , ppi.detail_desc
+             , ppi.pay_item_classification_code   AS pay_item_classification_code
+             , cccm.common_code_name              AS pay_item_classification_name
+             , ppi.payroll_item_calc_prrt_value   AS priority
+             , ppi.payroll_calculation_formula_id
+             , pcf.payroll_calc_formula_value
+             -- Vanaa 02/11/2025 Add Check for LGD, OUS
+             --, ppi.payroll_cal_formula_os_id
+             --, pcfOs.payroll_calc_formula_value as payroll_calc_formula_value_os
+             , ppi.is_lgd
+             , ppi.is_os
+             -- end
+             , ppi.payroll_item_inq_class_code    AS pay_slip_display_type_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE', ppi.payroll_item_inq_class_code, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS pay_slip_display_type_name
+             , ppi.sort_order_no                  AS pay_slip_sort_order_no
+             , ppi.parent_payroll_item_id
+             , ppi1.inquiry_name                  AS parent_payroll_item_name
+             , NVL(ppi.retroactive_flag, 'N')     AS retroactive_flag
+             , ppi.aggr_retroactive_pay_item_id AS retro_pay_aggr_item_code
+             , ppi.ofc_wrk_pay_account_class_code AS ow_account_group_code
+             , ppi.tech_wrk_pay_acct_class_code   AS lw_account_group_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGDVH_PAY_ITEM_ACC_GROUP_CODE', ppi.ofc_wrk_pay_account_class_code, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS ow_account_group_name
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGDVH_PAY_ITEM_ACC_GROUP_CODE', ppi.tech_wrk_pay_acct_class_code  , NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS lw_account_group_name
+             , to_char(to_date(ppi.start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS start_date
+             , to_char(to_date(ppi.end_yyyymmdd  ,'yyyymmdd'),'dd/mm/yyyy') AS end_date
+             , NVL(( SELECT 'N'
+                     FROM DUAL
+                     WHERE EXISTS ( SELECT /*+ INDEX ( PCR TB_PAY_CALC_RESULT_N_N3 ) */ 1
+                                    FROM  tb_pay_calc_result_n pcr
+                                    WHERE pcr.payroll_item_id = ppi.payroll_item_id)),'Y') del_upt_possible_flag
+        FROM   tb_pay_payroll_item_m ppi
+             , lgcom_common_code_multi_lang_c cccm
+             , tb_pay_calc_formula_n pcf
+             , tb_pay_calc_formula_n pcfOs -- vanaa 03/11/2025
+             , tb_pay_payroll_item_m ppi1 /* parent payroll item */
+
+        WHERE  ppi.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        <choose>
+          <when test="srchPayrollItemId != null and srchPayrollItemId !=''">
+        AND    ppi.payroll_item_id = #{srchPayrollItemId, jdbcType=NUMERIC}
+        AND    cccm.code_type_code = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+        AND    cccm.common_code    = ppi.pay_item_classification_code
+        AND    cccm.language_code  = #{USER_SESSION.languageCode}
+        AND    pcf.payroll_calculation_formula_id(+) = ppi.payroll_calculation_formula_id
+        AND    pcfOs.payroll_calculation_formula_id(+) = ppi.PAYROLL_CAL_FORMULA_OS_ID  -- vanaa 03/11/2025
+        AND    ppi1.payroll_item_id(+) = ppi.payroll_item_id
+          </when>
+          <otherwise>
+        AND    TO_CHAR(TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD') BETWEEN ppi.start_yyyymmdd AND ppi.end_yyyymmdd
+        AND    cccm.code_type_code = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+        AND    cccm.common_code    = ppi.pay_item_classification_code
+        AND    cccm.language_code  = #{USER_SESSION.languageCode}
+        AND    pcf.payroll_calculation_formula_id(+) = ppi.payroll_calculation_formula_id
+        AND    pcfOs.payroll_calculation_formula_id(+) = ppi.PAYROLL_CAL_FORMULA_OS_ID	 -- vanaa 03/11/2025
+        AND    ppi1.payroll_item_id(+) = ppi.parent_payroll_item_id
+        AND    ppi.payroll_item_name LIKE #{payrollItemName}||'%'
+        AND    ppi.inquiry_name LIKE #{inquiryName}||'%'
+        AND    ppi.pay_item_classification_code = NVL(#{payItemClassificationCode}, ppi.pay_item_classification_code)
+          </otherwise>
+        </choose>
+        ORDER BY ppi.payroll_item_id
+
+    </select>
+
+    <!-- 급여항목 중복 체크(등록된 테이블에서 체크) -->
+    <select id="retrieveDupCheckPayrollItemName" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00013.retrieveDupCheckPayrollItemName */
+               CASE WHEN COUNT(1) > 0 THEN 'Y' ELSE 'N' END AS duplicate_flag
+        FROM   tb_pay_payroll_item_m ppi
+        WHERE  ppi.subsidiary_code   = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    ppi.payroll_item_name = #{payrollItemName}
+    </select>
+
+    <!-- 급여항목 저장 전 유효성 체크 -->
+    <select id="retireveValidatePayrollItemData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00013.retireveValidatePayrollItemData */
+                   payroll_item_id
+                 , payroll_item_name
+            FROM   tb_pay_payroll_item_m
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            WHERE  payroll_item_id NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                   #{deleted[${idx}].payrollItemId, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS payroll_item_id
+                     , #{created[${idx}].payrollItemName} AS payroll_item_name
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.payroll_item_id
+                      , NVL(update_list.payroll_item_name, detail_list.payroll_item_name) AS payroll_item_name
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{updated[${idx}].payrollItemId, jdbcType=NUMERIC} AS payroll_item_id
+                                 , #{updated[${idx}].payrollItemName} AS payroll_item_name
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_item_id = update_list.payroll_item_id(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_item_id
+                      , detail_list.payroll_item_name
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.payroll_item_name, ',') WITHIN GROUP (ORDER BY rs.payroll_item_name) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.payroll_item_name
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 payroll item 항목명 */
+
+             <![CDATA[
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payrollItemName' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- Payroll Item Class정보 조회 -->
+    <select id="retrievePayrollItemClassData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00013.retrievePayrollItemClassData */
+               ppi.pay_item_classification_code AS class_code
+             , ccm.common_code_name             AS class_name
+             , ccc.code_data2_value             AS pay_value_code
+        FROM   tb_pay_payroll_item_m ppi
+             , lgcom_common_code_c   ccc
+             , lgcom_common_code_multi_lang_c ccm
+        WHERE  ppi.payroll_item_id   = #{payrollItemId, jdbcType=NUMERIC}
+        AND    ccc.code_type_code    = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+        AND    ccc.common_code       = ppi.pay_item_classification_code
+        AND    ccm.code_type_code(+) = ccc.code_type_code
+        AND    ccm.common_code(+)    = ccc.common_code
+        AND    ccm.language_code(+)  = #{USER_SESSION.languageCode}
+    </select>
+
+    <!-- 급여항목아이디 시퀀스 값 조회 -->
+    <select id="retrievePayrollItemId" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00013.retrievePayrollItemId */
+               sq_tb_pay_payroll_item_m.nextval     AS payroll_item_id
+        FROM   dual
+    </select>
+
+    <!-- 급여항목 등록 -->
+    <insert id="insertPayrollItem" parameterType="LGCOMData">
+        INSERT /* LGVPAY00013.insertPayrollItem */
+        INTO   tb_pay_payroll_item_m(
+               payroll_item_id                                   /* 급여항목아이디 */
+             , subsidiary_code                                   /* 해외법인코드 */
+             , payroll_item_name                                 /* 급여항목명 */
+             , inquiry_name                                      /* 조회명 */
+             , detail_desc                                       /* 상세설명 */
+             , pay_item_classification_code                      /* 급여항목분류코드 */
+             , payroll_item_calc_prrt_value                      /* 급여항목계산우선순위숫자값 */
+             , payroll_calculation_formula_id                    /* 급여산출산식아이디 */
+             , start_yyyymmdd                                    /* 시작년월일 */
+             , end_yyyymmdd                                      /* 종료년월일 */
+             , parent_payroll_item_id                            /* 모급여항목아이디 */
+             , sort_order_no                                     /* 정렬순서번호 */
+             , payroll_item_inq_class_code                       /* 급여항목조회분류코드 */
+             , tech_wrk_pay_acct_class_code                      /* 기능직급여계정분류코드 */
+             , ofc_wrk_pay_account_class_code                    /* 사무직급여계정분류코드 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+             , retroactive_flag                                  /* 소급여부 */
+             , aggr_retroactive_pay_item_id                      /* 소급집계코드 */
+             , is_lgd                                              -- vanaa 03/11/2025
+             , is_os                                              -- vanaa 03/11/2025
+        ) VALUES (
+               #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* subsidiary_code => 해외법인코드 */
+             , #{payrollItemName}                               /* payroll_item_name => 급여항목명 */
+             , #{inquiryName}                                   /* inquiry_name => 조회명 */
+             , #{detailDesc}                                    /* detail_desc => 상세설명 */
+             , #{payItemClassificationCode}                     /* pay_item_classification_code => 급여항목분류코드 */
+             , #{priority, jdbcType=NUMERIC}                    /* payroll_item_calc_prrt_value => 급여항목계산우선순위숫자값 */
+             , #{payrollCalculationFormulaId, jdbcType=NUMERIC} /* payroll_calculation_formula_id => 급여산출산식아이디 */
+             , TO_CHAR(TO_DATE(#{startDate}, 'DD/MM/YYYY'), 'YYYYMMDD') /* start_yyyymmdd => 시작년월일 */
+             , TO_CHAR(TO_DATE(#{endDate}  , 'DD/MM/YYYY'), 'YYYYMMDD') /* end_yyyymmdd => 종료년월일 */
+             , #{parentPayrollItemId, jdbcType=NUMERIC}         /* parent_payroll_item_id => 모급여항목아이디 */
+             , #{paySlipSortOrderNo, jdbcType=NUMERIC}          /* sort_order_no => 정렬순서번호 */
+             , #{paySlipDisplayTypeCode}                        /* payroll_item_inq_class_code => 급여항목조회분류코드 */
+             , #{lwAccountGroupCode}                            /* tech_wrk_pay_acct_class_code => 기능직급여계정분류코드 */
+             , #{owAccountGroupCode}                            /* ofc_wrk_pay_account_class_code => 사무직급여계정분류코드 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+             , #{retroactiveFlag}                               /* retroactive_flag => 소급여부 */
+             , #{retroPayAggrItemCode}                          /* aggr_retroactive_pay_item_id => 소급집계코드 */
+             , #{isLgd}                                          -- vanaa 03/11/2025
+             , #{isOs}                                           -- vanaa 03/11/2025
+        )
+    </insert>
+
+    <!-- 급여항목 수정 -->
+    <update id="updatePayrollItem" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00013.updatePayrollItem */
+               tb_pay_payroll_item_m
+        SET    payroll_item_name                      = #{payrollItemName}                                /* 급여항목명 */
+             , inquiry_name                           = #{inquiryName}                                    /* 조회명 */
+             , detail_desc                            = #{detailDesc}                                     /* 상세설명 */
+             , pay_item_classification_code           = #{payItemClassificationCode}                      /* 급여항목분류코드 */
+             , payroll_item_calc_prrt_value           = #{priority, jdbcType=NUMERIC}     /* 급여항목계산우선순위숫자값. priority */
+             , payroll_calculation_formula_id         = #{payrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+             , start_yyyymmdd                         = TO_CHAR(TO_DATE(#{startDate}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 시작년월일 */
+             , end_yyyymmdd                           = TO_CHAR(TO_DATE(#{endDate}  , 'DD/MM/YYYY'), 'YYYYMMDD') /* 종료년월일 */
+             , parent_payroll_item_id                 = #{parentPayrollItemId, jdbcType=NUMERIC}          /* 모급여항목아이디 */
+             , sort_order_no                          = #{payrSlipSortOrderNo, jdbcType=NUMERIC}          /* 정렬순서번호 */
+             , payroll_item_inq_class_code            = #{paySlipDisplayTypeCode }                        /* 급여항목조회분류코드 */
+             , tech_wrk_pay_acct_class_code           = #{lwAccountGroupCode}                        /* 기능직급여계정분류코드 */
+             , ofc_wrk_pay_account_class_code         = #{owAccountGroupCode}                      /* 사무직급여계정분류코드 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+             , retroactive_flag                       = #{retroactiveFlag}                                /* 소급여부 */
+             , aggr_retroactive_pay_item_id           = #{retroPayAggrItemCode}                           /* 소급집계코드 */
+             , is_lgd           					  = #{isLgd}                                           -- vanaa 03/11/2025
+             , is_os					              = #{isOs}                                             -- vanaa 03/11/2025
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+    </update>
+
+    <!-- 급여항목 삭제 -->
+    <delete id="deletePayrollItem" parameterType="LGCOMData">
+        DELETE /* LGVPAY00013.deletePayrollItem */
+        FROM   tb_pay_payroll_item_m
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+    </delete>
+
+    <!-- 급여항목 Detail 등록 -->
+    <insert id="insertPayrollItemDetail" parameterType="LGCOMData">
+        INSERT /* LGVPAY00013.insertPayrollItemDetail */
+        INTO   tb_pay_item_detail_n(
+               payroll_item_detail_detail_id                     /* 급여항목상세내역아이디 */
+             , payroll_item_id                                   /* 급여항목아이디 */
+             , additional_input_value                            /* 추가입력문자값 */
+             , pay_calc_rslt_detail_type_code                    /* 급여산출실적상세구분코드 */
+             , sort_order_no                                     /* 정렬순서번호 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        )
+        SELECT
+               sq_tb_pay_item_detail_n.nextval                  /* payroll_item_detail_detail_id => 급여항목상세내역아이디 */
+             , #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , ccc.code_data2_value                             /* additional_input_value => 추가입력문자값 */
+             , 'A'                                              /* pay_calc_rslt_detail_type_code => 급여산출실적상세구분코드 */
+             , 10                                               /* sort_order_no => 정렬순서번호 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        FROM   lgcom_common_code_c   ccc
+        WHERE  ccc.code_type_code    = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+        AND    ccc.common_code       = #{payItemClassificationCode}
+        AND    ccc.code_data2_value IS NOT NULL
+        AND    NOT EXISTS (/* PAY_VALUE가 이미 등록된건이 아닌 경우만 등록함 */
+                           SELECT 'x'
+                           FROM   tb_pay_item_detail_n pid
+                           WHERE  pid.payroll_item_id = #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+                           AND    pid.additional_input_value = ccc.code_data2_value
+                           )
+    </insert>
+
+    <!-- 급여항목 Detail PAY_VALUE 삭제 -->
+    <delete id="deletePayrollItemDetail" parameterType="LGCOMData">
+        DELETE /* LGVPAY00013.deletePayrollItemDetail */
+        FROM   tb_pay_item_detail_n
+        WHERE  payroll_item_id = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+        AND    payroll_item_detail_detail_id = (SELECT pid.payroll_item_detail_detail_id
+                                                FROM   tb_pay_item_detail_n pid
+                                                WHERE  pid.payroll_item_id = #{payrollItemId, jdbcType=NUMERIC} /* 급여항목아이디 */
+                                                AND    pid.additional_input_value = 'PAY_VALUE')
+    </delete>
+
+    <!-- 급여항목 Property 등록 -->
+    <insert id="insertPayrollItemCalcProperty" parameterType="LGCOMData">
+        INSERT /* LGVPAY00013.insertPayrollItemCalcProperty */
+        INTO   tb_pay_calc_mthd_n(
+               payroll_item_id                                   /* 급여항목아이디 */
+             , payroll_calc_method_code                          /* 급여산출방법코드 */
+             , payroll_apply_flag                                /* 급여적용여부 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        )
+        SELECT
+               #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , a.common_code                                    /* payroll_calc_method_code => 급여산출방법코드 */
+             , 'N'                                              /* payroll_apply_flag => 급여적용여부 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        FROM   lgcom_common_code_c a
+        WHERE  a.code_type_code = 'LGDVH_PAY_ITEM_METHOD_CODE'
+        AND    a.use_flag = 'Y'
+    </insert>
+
+    <!-- 급여항목 전체 Detail 삭제 -->
+    <delete id="deletePayrollItemDetailAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00013.deletePayrollItemDetail */
+        FROM   tb_pay_item_detail_n
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+    </delete>
+
+    <!-- 급여항목 전체 Property 삭제 -->
+    <delete id="deletePayrollItemCalcPropertyAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00013.deletePayrollItemCalcProperty */
+        FROM   tb_pay_calc_mthd_n
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+    </delete>
+
+    <!-- 급여항목 전체 use 삭제 -->
+    <delete id="deletePayrollItemUseAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00013.deletePayrollItemUse */
+        FROM   tb_pay_payroll_item_use_n
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+    </delete>
+
+    <!-- Payroll Item Class정보 조회 -->
+    <select id="retrieveAggrItemList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00013.retrieveAggrItemList */
+               tppi.payroll_item_id AS CODE
+             , tppi.payroll_item_name AS NAME
+        FROM   tb_pay_payroll_item_m tppi
+        WHERE  EXISTS (SELECT 1
+                         FROM lgcom_common_code_c lccc
+                        WHERE lccc.code_type_code         = 'LGDVH_RETRO_PAY_AGGR_CODE'
+                          AND lccc.use_flag               = 'Y'
+                          AND TRUNC(SYSDATE) BETWEEN lccc.apply_start_date AND NVL(lccc.apply_end_date, TRUNC(SYSDATE))
+                          AND TO_NUMBER(lccc.common_code) = tppi.payroll_item_id)
+        ORDER BY tppi.payroll_item_id
+    </select>
+
+</mapper>

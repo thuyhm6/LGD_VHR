@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00014">
+
+    <!-- 급여 계산식(Formula) 프로그램명 리스트 조회 -->
+    <select id="retrieveFormulaList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00014.retrieveFormulaList */
+               pcf.payroll_calculation_formula_id                    /* 급여산출산식아이디 */
+             , pcf.payroll_calc_formula_value                        /* 급여산출산식문자값 */
+             ,(SELECT CASE WHEN COUNT(1) > 0 THEN 'N' ELSE 'Y' END
+               FROM   tb_pay_payroll_item_m ppi
+               WHERE  ppi.payroll_calculation_formula_id = pcf.payroll_calculation_formula_id
+               AND    ppi.subsidiary_code= #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+              ) AS delete_enable_flag /* 1이상인 경우  삭제 불가 */
+        FROM   tb_pay_calc_formula_n pcf
+        WHERE  1=1
+        <choose>
+        <when test="srchPayrollCalculationFormulaId != null and srchPayrollCalculationFormulaId != ''">
+        AND    pcf.payroll_calculation_formula_id = #{srchPayrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+        </when>
+        <otherwise>
+        AND    pcf.payroll_calc_formula_value LIKE '%'||#{payrollCalcFormulaValue}||'%'
+        </otherwise>
+        </choose>
+        ORDER BY pcf.payroll_calc_formula_value
+    </select>
+
+    <!-- Formula Program 저장 전 유효성 체크 -->
+    <select id="retireveValidateFormulaData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00014.retireveValidateFormulaData */
+                   payroll_calculation_formula_id
+                 , payroll_calc_formula_value
+            FROM   tb_pay_calc_formula_n
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            WHERE  payroll_calculation_formula_id NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                #{deleted[${idx}].payrollCalculationFormulaId, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS payroll_calculation_formula_id
+                     , #{created[${idx}].payrollCalcFormulaValue} AS payroll_calc_formula_value
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.payroll_calculation_formula_id
+                      , NVL(update_list.payroll_calc_formula_value, detail_list.payroll_calc_formula_value) AS payroll_calc_formula_value
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{updated[${idx}].payrollCalculationFormulaId, jdbcType=NUMERIC} AS payroll_calculation_formula_id
+                                 , #{updated[${idx}].payrollCalcFormulaValue} AS payroll_calc_formula_value
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_calculation_formula_id = update_list.payroll_calculation_formula_id(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_calculation_formula_id
+                      , detail_list.payroll_calc_formula_value
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.payroll_calc_formula_value, ',') WITHIN GROUP (ORDER BY rs.payroll_calc_formula_value) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.payroll_calc_formula_value
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 Formula 항목명 */
+
+             ,(SELECT CASE WHEN COUNT(1) > 0 THEN 'Y' ELSE 'N' END
+               FROM   rs
+               WHERE  rs.payroll_calc_formula_value IS NULL) AS name_empty_flag /* Formula명 없는 경우 */
+
+             <![CDATA[
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.formulaProgram' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- Formula Program 명 등록 -->
+    <insert id="insertFormula" parameterType="LGCOMData">
+        INSERT /* LGVPAY00014.insertFormula */
+        INTO   tb_pay_calc_formula_n(
+               payroll_calculation_formula_id                    /* 급여산출산식아이디 */
+             , payroll_calc_formula_value                        /* 급여산출산식문자값 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_calc_formula_n.nextval                 /* payroll_calculation_formula_id => 급여산출산식아이디 */
+             , #{payrollCalcFormulaValue}                       /* payroll_calc_formula_value => 급여산출산식문자값 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- Formula Program 수정 -->
+    <update id="updateFormula" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00014.updateFormula */
+               tb_pay_calc_formula_n
+        SET    payroll_calc_formula_value             = #{payrollCalcFormulaValue}                        /* 급여산출산식문자값 */
+        WHERE  payroll_calculation_formula_id         = #{payrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+    </update>
+
+    <!-- Formula Program 삭제 -->
+    <delete id="deleteFormula" parameterType="LGCOMData">
+        DELETE /* LGVPAY00014.deleteFormula */
+        FROM   tb_pay_calc_formula_n
+        WHERE  payroll_calculation_formula_id         = #{payrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+    </delete>
+
+    <!-- Formula Detail 리스트 조회 -->
+    <select id="retrieveFormulaDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00014.retrieveFormulaDetailList */
+               a.payroll_calculation_formula_id
+             , a.sort_order_no
+             , a.sort_order_no AS ori_sort_order_no
+             , a.parameter_io_type_code
+             , cccm1.common_code_name      AS parameter_io_type_name
+             , a.parameter_value
+             , a.data_type_code
+             , cccm.common_code_name       AS data_type_name
+             , pid.payroll_item_id
+             , ppi.inquiry_name            AS payroll_item_name
+             , a.payroll_item_detail_detail_id
+             , pid.additional_input_value  AS payroll_item_detail_name
+             , pid.pay_calc_rslt_detail_type_code
+        FROM   tb_pay_calc_formula_param_n a
+             , lgcom_common_code_multi_lang_c cccm
+             , lgcom_common_code_multi_lang_c cccm1
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi
+        WHERE  a.payroll_calculation_formula_id     = #{payrollCalculationFormulaId, jdbcType=NUMERIC}
+        AND    cccm.code_type_code                  = 'LGDVHR_PAY_DATA_TYPE_CODE'
+        AND    cccm.common_code                     = a.data_type_code
+        AND    cccm.language_code                   = #{USER_SESSION.languageCode}
+        AND    cccm1.code_type_code                 = 'LGDVHR_PAY_PARAMETER_TYPE_CODE'
+        AND    cccm1.common_code                    = a.parameter_io_type_code
+        AND    cccm1.language_code                  = #{USER_SESSION.languageCode}
+        AND    pid.payroll_item_detail_detail_id(+) = a.payroll_item_detail_detail_id
+        AND    ppi.payroll_item_id(+)               = pid.payroll_item_id
+        ORDER BY a.sort_order_no
+    </select>
+
+    <!-- Formula Detail 저장 전 유효성 체크 -->
+    <select id="retireveValidateFormulaDetailData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00014.retireveValidateFormulaDetailData */
+                   payroll_calculation_formula_id
+                 , sort_order_no
+                 , parameter_value
+            FROM   tb_pay_calc_formula_param_n
+            WHERE  payroll_calculation_formula_id = #{parameter.payrollCalculationFormulaId, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND   sort_order_no NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                #{deleted[${idx}].sortOrderNo, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS payroll_calculation_formula_id
+                     , #{created[${idx}].sortOrderNo} AS sort_order_no
+                     , #{created[${idx}].parameterValue} AS parameter_value
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.payroll_calculation_formula_id
+                      , NVL(update_list.sort_order_no, detail_list.sort_order_no) AS sort_order_no
+                      , NVL(update_list.parameter_value, detail_list.parameter_value) AS parameter_value
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{parameter.payrollCalculationFormulaId, jdbcType=NUMERIC} AS payroll_calculation_formula_id
+                                 , #{updated[${idx}].sortOrderNo} AS sort_order_no
+                                 , #{updated[${idx}].parameterValue} AS parameter_value
+                                 , #{updated[${idx}].oriSortOrderNo} AS ori_sort_order_no
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_calculation_formula_id = update_list.payroll_calculation_formula_id(+)
+                AND     detail_list.sort_order_no = update_list.ori_sort_order_no(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_calculation_formula_id
+                      , detail_list.sort_order_no
+                      , detail_list.parameter_value
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.sort_order_no, ',') WITHIN GROUP (ORDER BY rs.sort_order_no) OVER (PARTITION BY 1) AS dup_sort_order
+               FROM   rs
+               GROUP BY rs.sort_order_no
+               HAVING COUNT(1) > 1               ) AS dup_sort_orders /* 중복된 정렬순서번호 */
+
+             ,(SELECT DISTINCT
+                      listagg(rs.parameter_value, ',') WITHIN GROUP (ORDER BY rs.parameter_value) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.parameter_value
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 Parameter명 */
+
+             <![CDATA[
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'SortOrder'     AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_sort_orders_title
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'ParameterName' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- Formula Detail 등록 -->
+    <insert id="insertFormulaDetail" parameterType="LGCOMData">
+        INSERT /* LGVPAY00014.insertFormulaDetail */
+        INTO   tb_pay_calc_formula_param_n(
+               payroll_calculation_formula_id                    /* 급여산출산식아이디 */
+             , sort_order_no                                     /* 정렬순서번호 */
+             , parameter_io_type_code                            /* 매개변수IO구분코드 */
+             , parameter_value                                   /* 매개변수문자값 */
+             , data_type_code                                    /* 데이터유형코드 */
+             , payroll_item_id                                   /* 급여항목아이디 */
+             , payroll_item_detail_detail_id                     /* 급여항목상세내역아이디 */
+             , pay_calc_rslt_detail_type_code                    /* 급여산출실적상세구분코드 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               #{payrollCalculationFormulaId, jdbcType=NUMERIC} /* payroll_calculation_formula_id => 급여산출산식아이디 */
+             , #{sortOrderNo, jdbcType=NUMERIC}                 /* sort_order_no => 정렬순서번호 */
+             , #{parameterIoTypeCode}                           /* parameter_io_type_code => 매개변수IO구분코드 */
+             , #{parameterValue}                                /* parameter_value => 매개변수문자값 */
+             , #{dataTypeCode}                                  /* data_type_code => 데이터유형코드 */
+             , #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , #{payrollItemDetailDetailId, jdbcType=NUMERIC}   /* payroll_item_detail_detail_id => 급여항목상세내역아이디 */
+             , #{payCalcRsltDetailTypeCode}                     /* pay_calc_rslt_detail_type_code => 급여산출실적상세구분코드 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- Formula Detail 수정 -->
+    <update id="updateFormulaDetail" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00014.updateFormulaDetail */
+               tb_pay_calc_formula_param_n
+        SET    sort_order_no                          = #{sortOrderNo, jdbcType=NUMERIC}                  /* 정렬순서번호 */
+             , parameter_io_type_code                 = #{parameterIoTypeCode}                            /* 매개변수IO구분코드 */
+             , parameter_value                        = #{parameterValue}                                 /* 매개변수문자값 */
+             , data_type_code                         = #{dataTypeCode}                                   /* 데이터유형코드 */
+             , payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+             , payroll_item_detail_detail_id          = #{payrollItemDetailDetailId, jdbcType=NUMERIC}    /* 급여항목상세내역아이디 */
+             , pay_calc_rslt_detail_type_code         = #{payCalcRsltDetailTypeCode}                      /* 급여산출실적상세구분코드 */
+        WHERE  payroll_calculation_formula_id         = #{payrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+        AND    sort_order_no                          = #{oriSortOrderNo, jdbcType=NUMERIC}                  /* 정렬순서번호 */
+    </update>
+
+    <!-- Formula Detail 삭제 -->
+    <delete id="deleteFormulaDetail" parameterType="LGCOMData">
+        DELETE /* LGVPAY00014.deleteFormulaDetail */
+        FROM   tb_pay_calc_formula_param_n
+        WHERE  payroll_calculation_formula_id         = #{payrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+        AND    sort_order_no                          = #{oriSortOrderNo, jdbcType=NUMERIC}                  /* 정렬순서번호 */
+    </delete>
+
+    <!-- Formula Detail 전체 삭제 -->
+    <delete id="deleteFormulaDetailAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00014.deleteFormulaDetail */
+        FROM   tb_pay_calc_formula_param_n
+        WHERE  payroll_calculation_formula_id         = #{payrollCalculationFormulaId, jdbcType=NUMERIC}  /* 급여산출산식아이디 */
+    </delete>
+
+</mapper>

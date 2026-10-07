@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY10001">
+
+    <!-- Global Value 리스트 조회(마스터) -->
+    <select id="retrieveGlobalValueList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY10001.retrieveGlobalValueList */
+               cvn.payroll_calc_variable_id     /* 급여산출변수아이디 */
+             , cvn.payroll_calc_variable_name   /* 급여산출변수명 */
+             , cvn.detail_desc                  /* 상세설명 */
+             , '' AS insert_update_code /* insert , update 구분코드, I=insert, U=update */
+        FROM   tb_pay_calc_var_n cvn
+        WHERE  cvn.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}  /* 해외법인코드 */
+        <if test="payrollCalcVariableName != null and payrollCalcVariableName != ''">
+        AND    cvn.payroll_calc_variable_name LIKE '%' || #{payrollCalcVariableName} || '%'
+        </if>
+        ORDER BY cvn.payroll_calc_variable_name
+    </select>
+
+    <!-- Global Value 중복 여부 조회 -->
+    <select id="retrieveGlobalValueDupChk" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY10001.retrieveGlobalValueDupChk */
+               count(payroll_calc_variable_id) as cnt
+        FROM   tb_pay_calc_var_n
+        WHERE  payroll_calc_variable_name             = #{payrollCalcVariableName}        /* 급여산출변수명 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}  /* 해외법인코드 */
+    </select>
+
+    <!-- Global Value 등록 -->
+    <insert id="insertGlobalValueList" parameterType="LGCOMData">
+        INSERT /* LGVPAY10001.insertGlobalValueList */
+        INTO   tb_pay_calc_var_n(
+               payroll_calc_variable_id                          /* 급여산출변수아이디 */
+             , payroll_calc_variable_name                        /* 급여산출변수명 */
+             , detail_desc                                       /* 상세설명 */
+             , subsidiary_code                                   /* 해외법인코드 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_calc_var_n.nextval              		/* payroll_calc_variable_id => 급여산출변수아이디 */
+             , #{payrollCalcVariableName}                       /* payroll_calc_variable_name => 급여산출변수명 */
+             , #{detailDesc}                                    /* detail_desc => 상세설명 */
+             , #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* subsidiary_code => 해외법인코드 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+        )
+    </insert>
+
+    <!-- Global Value 수정 -->
+    <update id="updateGlobalValueList" parameterType="LGCOMData">
+        UPDATE /* LGVPAY10001.updateGlobalValuelist */
+               tb_pay_calc_var_n
+        SET    payroll_calc_variable_name             = #{payrollCalcVariableName}                        /* 급여산출변수명 */
+             , detail_desc                            = #{detailDesc}                                     /* 상세설명 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+        WHERE  payroll_calc_variable_id               = #{payrollCalcVariableId, jdbcType=NUMERIC}        /* 급여산출변수아이디 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}                                 /* 해외법인코드 */
+    </update>
+
+    <!-- Global Value 삭제 -->
+    <delete id="deleteGlobalValueList" parameterType="LGCOMData">
+        DELETE /* LGVPAY10001.deleteGlobalValuelist */
+        FROM   tb_pay_calc_var_n
+        WHERE  payroll_calc_variable_id               = #{payrollCalcVariableId, jdbcType=NUMERIC}        /* 급여산출변수아이디 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}                                 /* 해외법인코드 */
+    </delete>
+
+    <!-- Global Value 이력 리스트 조회 -->
+    <select id="retrieveGlobalValueHistoryList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY10001.retrieveGlobalValueHistoryList */
+               cvn.payroll_calc_variable_id     /* 급여산출변수아이디 */
+             , TO_CHAR(TO_DATE(cvh.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_start_yyyymmdd  /* 유효시작일자 */
+             , TO_CHAR(TO_DATE(cvh.effective_end_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_end_yyyymmdd  /* 유효종료일자 */
+             , cvh.result_value  /* 결과문자값 */
+             , cvh.effective_start_yyyymmdd AS ori_effective_start_yyyymmdd /* 유효시작일자(원본값) */
+
+        FROM   tb_pay_calc_var_n cvn
+             , tb_pay_calc_var_value_n cvh
+        WHERE  cvn.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}  /* 해외법인코드 */
+        AND    cvn.payroll_calc_variable_id = #{payrollCalcVariableId, jdbcType=NUMERIC}
+        AND    cvn.payroll_calc_variable_id = cvh.payroll_calc_variable_id
+        ORDER BY cvh.effective_end_yyyymmdd DESC
+    </select>
+
+    <!-- Global Value 이력 저장 전 유효성 체크 -->
+    <select id="retireveValidateGlobalValueHistoryData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY10001.retireveValidateGlobalValueHistoryData */
+	               payroll_calc_variable_id                          /* 급여산출변수아이디 */
+	             , result_value                                      /* 결과문자값 */
+	             , effective_start_yyyymmdd                          /* 유효시작년월일 */
+	             , effective_end_yyyymmdd                            /* 유효종료년월일 */
+            FROM   tb_pay_calc_var_value_n
+            WHERE  payroll_calc_variable_id = #{parameter.payrollCalcVariableId, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND    effective_start_yyyymmdd NOT IN
+            <foreach collection="deleted" item="deleteItem" open="(" close=")" separator=",">
+                   #{deleteItem.oriEffectiveStartYyyymmdd}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="createItem" open="(" close=")" separator="UNION ALL">
+               SELECT  TO_NUMBER(#{parameter.payrollCalcVariableId})        AS payroll_calc_variable_id
+                     , #{createItem.resultValue}         AS result_value
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  NVL(update_list.payroll_calc_variable_id, detail_list.payroll_calc_variable_id) AS payroll_calc_variable_id
+                      , NVL(update_list.result_value            , detail_list.result_value            ) AS result_value
+                      , NVL(update_list.effective_start_yyyymmdd, detail_list.effective_start_yyyymmdd) AS effective_start_yyyymmdd
+                      , NVL(update_list.effective_end_yyyymmdd  , detail_list.effective_end_yyyymmdd  ) AS effective_end_yyyymmdd
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  TO_NUMBER(#{parameter.payrollCalcVariableId})        AS payroll_calc_variable_id
+                                 , #{updated[${idx}].resultValue}                       AS result_value
+                                 , #{updated[${idx}].oriEffectiveStartYyyymmdd}         AS ori_effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_calc_variable_id = update_list.payroll_calc_variable_id(+)
+                AND     detail_list.effective_start_yyyymmdd = update_list.ori_effective_start_yyyymmdd(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_calc_variable_id
+                      , detail_list.result_value
+                      , detail_list.effective_start_yyyymmdd
+                      , detail_list.effective_end_yyyymmdd
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT (SELECT DISTINCT
+                       listagg(TO_CHAR(TO_DATE(rs.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY'), ', ') WITHIN GROUP (ORDER BY rs.effective_start_yyyymmdd) OVER (PARTITION BY 1)
+                FROM   rs
+                GROUP BY rs.effective_start_yyyymmdd
+                HAVING COUNT(1) > 1) AS dup_start_date /* Effective Start Date 중복 */
+
+              ,(SELECT DISTINCT
+                       listagg(TO_CHAR(TO_DATE(rs.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY'), ', ') WITHIN GROUP (ORDER BY rs.effective_start_yyyymmdd) OVER (PARTITION BY 1)
+                FROM   rs
+                WHERE  EXISTS (SELECT 'x'
+                               FROM   rs rs0
+                               WHERE  rs0.payroll_calc_variable_id = rs.payroll_calc_variable_id
+                               /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                               AND   (rs0.effective_start_yyyymmdd BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd
+                               OR     rs0.effective_end_yyyymmdd   BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd)
+                               GROUP BY rs0.payroll_calc_variable_id
+                               HAVING COUNT(1) > 1
+                              )
+                GROUP BY rs.effective_start_yyyymmdd) AS dup_period /* Effective Start Date, Effective End Date 기간 중복 */
+                
+              ,(SELECT  CASE WHEN COUNT(rs.payroll_calc_variable_id) > 0 THEN
+                                  MAX((SELECT lsmm.message_detail_content FROM   lgcom_system_message_m lsmm WHERE  lsmm.system_message_id = 'error.DataRangePickerFromDate' AND    lsmm.language_code = #{USER_SESSION.languageCode}))
+                        END
+                FROM    rs
+                WHERE   rs.effective_start_yyyymmdd > rs.effective_end_yyyymmdd) AS invalid_period /* 종료일이 시작일 이전인 경우 */
+
+             <![CDATA[
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'EffectiveStartDate' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_start_date_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- Global Value 이력 시작일 중복 조회 -->
+    <select id="retrieveGlobalValueHistoryDupChk" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY10001.retrieveGlobalValueHistoryDupChk */
+               COUNT(1) AS cnt
+        FROM   tb_pay_calc_var_value_n cvh
+        WHERE  payroll_calc_variable_id = #{payrollCalcVariableId, jdbcType=NUMERIC}
+        AND    effective_start_yyyymmdd = TO_CHAR(TO_DATE(REPLACE(#{effectiveStartYyyymmdd}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD')
+    </select>
+
+    <!-- Global Value 이력 등록 -->
+    <insert id="insertGlobalValueHistoryList" parameterType="LGCOMData">
+        INSERT /* LGVPAY10001.insertGlobalValueHistoryList */
+        INTO   tb_pay_calc_var_value_n(
+               payroll_calc_variable_id                          /* 급여산출변수아이디 */
+             , effective_start_yyyymmdd                          /* 유효시작년월일 */
+             , effective_end_yyyymmdd                            /* 유효종료년월일 */
+             , result_value                                      /* 결과문자값 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+        ) VALUES (
+               #{payrollCalcVariableId, jdbcType=NUMERIC}       /* payroll_calc_variable_id => 급여산출변수아이디 */
+             , TO_CHAR(TO_DATE(REPLACE(#{effectiveStartYyyymmdd}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD')    /* effective_start_yyyymmdd => 유효시작년월일 */
+             , TO_CHAR(TO_DATE(REPLACE(#{effectiveEndYyyymmdd}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD')    /* effective_end_yyyymmdd => 유효종료년월일 */
+             , #{resultValue}                                   /* result_value => 결과문자값 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+        )
+    </insert>
+
+    <!-- Global Value 이력 수정 -->
+    <update id="updateGlobalValueHistoryList" parameterType="LGCOMData">
+        UPDATE /* LGVPAY10001.updateGlobalValueHistoryList */
+               tb_pay_calc_var_value_n
+        SET    effective_start_yyyymmdd               = TO_CHAR(TO_DATE(REPLACE(#{effectiveStartYyyymmdd}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD')                /* 유효종료년월일 */
+             , effective_end_yyyymmdd                 = TO_CHAR(TO_DATE(REPLACE(#{effectiveEndYyyymmdd}, '/', ''), 'DDMMYYYY'), 'YYYYMMDD') /* 유효종료년월일 */
+             , result_value                           = #{resultValue}                                    /* 결과문자값 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+        WHERE  payroll_calc_variable_id               = #{payrollCalcVariableId, jdbcType=NUMERIC}        /* 급여산출변수아이디 */
+        AND    effective_start_yyyymmdd               = #{oriEffectiveStartYyyymmdd}                      /* 유효시작년월일 */
+    </update>
+
+    <!-- Global Value 이력 삭제 -->
+    <delete id="deleteGlobalValueHistoryList" parameterType="LGCOMData">
+        DELETE /* LGVPAY10001.deleteGlobalValueHistoryList */
+        FROM   tb_pay_calc_var_value_n
+        WHERE  payroll_calc_variable_id               = #{payrollCalcVariableId, jdbcType=NUMERIC}        /* 급여산출변수아이디 */
+        AND    effective_start_yyyymmdd               = #{oriEffectiveStartYyyymmdd}                      /* 유효시작년월일 */
+    </delete>
+
+    <!-- Global Value 전체 이력 삭제 -->
+    <delete id="deleteGlobalValueAllHistoryList" parameterType="LGCOMData">
+        DELETE /* LGVPAY10001.deleteGlobalValueAllHistoryList */
+        FROM   tb_pay_calc_var_value_n
+        WHERE  payroll_calc_variable_id               = #{payrollCalcVariableId, jdbcType=NUMERIC}        /* 급여산출변수아이디 */
+    </delete>
+
+</mapper>

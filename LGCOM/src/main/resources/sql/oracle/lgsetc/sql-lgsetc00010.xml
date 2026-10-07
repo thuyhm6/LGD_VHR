@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSETC00010">
+	<!-- 코드 타입 목록 조회 -->
+	<select id="retrieveCodeTypeList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT  a.system_code
+              , a.module_code
+              , a.code_type_code
+              , a.code_type_code_desc
+              , a.control_level_code
+              , a.access_level_code
+              , a.use_flag       	                   
+		FROM 	lgcom_code_type_code_c a	
+		WHERE 1=1
+		AND	  UPPER(a.code_type_code) like UPPER(#{codeType}) || '%'   
+	]]>		
+	<if test="systemCode != null and systemCode != ''">
+		AND a.system_code = #{systemCode}
+	</if>
+	<if test="moduleCode != null and moduleCode != ''">
+		AND a.module_code = #{moduleCode}
+	</if>	
+	<if test="useFlag != null and useFlag != ''">
+		AND a.use_flag = #{useFlag}
+	</if>
+	<![CDATA[	
+		ORDER  BY a.system_code, a.module_code, a.code_type_code	
+	]]>						   
+	</select>
+	
+	<!-- code type code 중복 조회 -->
+	<select id="retrieveCodeTypeCode" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT 	COUNT(a.code_type_code) AS cnt
+		FROM 	lgcom_code_type_code_c a
+		WHERE   a.code_type_code = #{codeTypeCode}	   
+	]]>
+	</select>
+	
+	<!-- role code by code type code 중복 조회 -->
+	<select id="retrieveRoleByCodeTypeCode" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT 	COUNT(a.code_type_code) AS cnt
+		FROM 	lgcom_code_type_code_access_n a
+		WHERE   a.code_type_code = #{codeTypeCode}	
+		AND		a.role_code = #{roleCode}   
+	]]>
+	</select>
+	
+	<!-- 코드타입에 대한 role 목록 조회 -->
+	<select id="retrieveCodeTypeRoleList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT  a.code_type_code
+              , a.role_code
+              , ( SELECT role_name
+              	  FROM 	 lgcom_role_m
+              	  WHERE  role_code = a.role_code
+              	) AS role_name
+              , a.update_enable_flag                   
+		FROM 	lgcom_code_type_code_access_n a	
+		WHERE a.code_type_code = #{codeType}
+		ORDER  BY a.role_code		   
+	]]>										   
+	</select>
+	
+	<!-- 코드타입 정보 등록 -->
+	<insert id="insertCodeTypeList" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_CODE_TYPE_CODE_C
+		(  CODE_TYPE_CODE
+ 		 , SYSTEM_CODE
+ 		 , MODULE_CODE
+ 		 , CODE_TYPE_CODE_DESC
+ 		 , CONTROL_LEVEL_CODE
+ 		 , ACCESS_LEVEL_CODE
+ 		 , USE_FLAG
+ 		 , CREATED_BY
+ 		 , CREATION_DATE
+ 		 , LAST_UPDATED_BY
+ 		 , LAST_UPDATE_DATE
+		) values
+		(  #{codeTypeCode}
+		 , #{systemCode}
+		 , #{moduleCode}
+		 , #{codeTypeCodeDesc}
+		 , #{controlLevelCode}
+		 , #{accessLevelCode}
+		 , #{useFlag}
+		 , #{sessionUserId}
+		 , SYSDATE
+		 , #{sessionUserId}
+		 , SYSDATE
+		)
+	</insert>
+	
+		<!-- 코드타입 정보 수정 -->
+	<update id="updateCodeTypeList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_CODE_TYPE_CODE_C
+		   SET SYSTEM_CODE      	= #{systemCode}
+		     , MODULE_CODE   		= #{moduleCode}
+		     , CODE_TYPE_CODE_DESC 	= #{codeTypeCodeDesc}
+		     , CONTROL_LEVEL_CODE 	= #{controlLevelCode}
+		     , ACCESS_LEVEL_CODE 	= #{accessLevelCode}
+		     , USE_FLAG 			= #{useFlag}		   
+		     , LAST_UPDATED_BY    	= #{sessionUserId}
+		     , LAST_UPDATE_DATE    	= SYSDATE
+		 WHERE CODE_TYPE_CODE 	= #{codeTypeCode}
+	</update>	
+	
+	<!-- 코드타입 role 정보 등록 -->
+	<insert id="insertCodeTypeRoleList" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_CODE_TYPE_CODE_ACCESS_N
+		( CODE_TYPE_CODE
+ 		 ,ROLE_CODE
+ 		 ,UPDATE_ENABLE_FLAG
+ 		 ,CREATED_BY
+ 		 ,CREATION_DATE
+ 		 ,LAST_UPDATED_BY
+ 		 ,LAST_UPDATE_DATE
+		) values
+		( #{codeTypeCode}
+		 ,#{roleCode}
+		 ,#{updateEnableFlag}
+		 ,#{sessionUserId}
+		 ,SYSDATE
+		 ,#{sessionUserId}
+		 ,SYSDATE
+		)
+	</insert>
+	
+		<!-- 코드타입 role 정보 수정 -->
+	<update id="updateCodeTypeRoleList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_CODE_TYPE_CODE_ACCESS_N
+		   SET UPDATE_ENABLE_FLAG	= #{updateEnableFlag}
+		     , LAST_UPDATED_BY    	= #{sessionUserId}
+		     , LAST_UPDATE_DATE    	= SYSDATE
+		 WHERE CODE_TYPE_CODE 		= #{codeTypeCode}
+		   AND ROLE_CODE 			= #{roleCode}
+	</update>
+	
+	<!-- 코드타입 role 정보 삭제 -->
+	<update id="deleteCodeTypeRoleList" parameterType="java.util.HashMap">
+		DELETE LGCOM_CODE_TYPE_CODE_ACCESS_N
+		 WHERE CODE_TYPE_CODE = #{codeTypeCode}
+		   AND ROLE_CODE 	  = #{roleCode}
+	</update>	
+
+</mapper>

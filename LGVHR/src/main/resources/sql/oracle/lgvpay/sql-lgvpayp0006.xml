@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0006">
+
+    <!-- Payroll Item Detail List 조회 -->
+    <select id="retrievePayrollItemDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0006.retrievePayrollItemDetailList */
+               pid.payroll_item_detail_detail_id  AS detail_id
+             , pid.additional_input_value         AS detail_name
+             , pid.pay_calc_rslt_detail_type_code AS detail_type_code
+             , cccm.common_code_name              AS detail_Type_name
+             , pid.sort_order_no
+             /* PAY_VALUE 행은 수정/삭제 불가능 처리 */
+             ,(SELECT CASE WHEN NVL(class_c.code_data2_value, 'X') = pid.additional_input_value THEN 'N' ELSE 'Y' END
+               FROM   lgcom_common_code_c  class_c
+               WHERE  class_c.code_type_code = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+               AND    class_c.common_code    = ppi.pay_item_classification_code
+              ) AS edit_enable_flag /* 수정 가능여부 */
+        FROM   tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n pid
+             , lgcom_common_code_c ccc
+             , lgcom_common_code_multi_lang_c cccm
+        WHERE  ppi.payroll_item_id    = #{payrollItemId, jdbcType=NUMERIC}
+        AND    pid.payroll_item_id    = ppi.payroll_item_id
+        AND    ccc.code_type_code     = 'LGDVH_PAY_ITEM_DETAIL_TYPE_CODE'
+        AND    cccm.code_type_code    = ccc.code_type_code
+        AND    cccm.common_code       = ccc.common_code
+        AND    cccm.language_code     = #{USER_SESSION.languageCode}
+        AND    ccc.common_code        = pid.pay_calc_rslt_detail_type_code
+        ORDER BY pid.sort_order_no
+    </select>
+
+    <!-- 저장 전 유효성 체크 -->
+    <select id="retireveValidateData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 Detail 항목 리스트 조회 */
+            SELECT /* LGVPAYP0006.retireveValidateData */
+                   pid.payroll_item_detail_detail_id  AS detail_id
+                 , pid.additional_input_value         AS detail_name
+                 , pid.pay_calc_rslt_detail_type_code AS detail_type_code
+                 , pid.sort_order_no
+            FROM   tb_pay_item_detail_n pid
+            WHERE  pid.payroll_item_id    = #{parameter.payrollItemId, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND    pid.payroll_item_detail_detail_id NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                #{deleted[${idx}].detailId, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS detail_id
+                     , #{created[${idx}].detailName}     AS detail_name
+                     , #{created[${idx}].detailTypeCode} AS detail_type_code
+                     , #{created[${idx}].sortOrderNo, jdbcType=NUMERIC}    AS sort_order_no
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.detail_id
+                      , NVL(update_list.detail_name     , detail_list.detail_name     ) AS detail_name
+                      , NVL(update_list.detail_type_code, detail_list.detail_type_code) AS detail_type_code
+                      , NVL(update_list.sort_order_no   , detail_list.sort_order_no   ) AS sort_order_no
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{updated[${idx}].detailId, jdbcType=NUMERIC} AS detail_id
+                                 , #{updated[${idx}].detailName}     AS detail_name
+                                 , #{updated[${idx}].detailTypeCode} AS detail_type_code
+                                 , #{updated[${idx}].sortOrderNo, jdbcType=NUMERIC}    AS sort_order_no
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.detail_id = update_list.detail_id(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.detail_id
+                      , detail_list.detail_name
+                      , detail_list.detail_type_code
+                      , detail_list.sort_order_no
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.detail_name, ',') WITHIN GROUP (ORDER BY rs.detail_name) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.detail_name
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 Detail 항목명 */
+
+             <![CDATA[
+             ,(SELECT DISTINCT
+                      listagg(rs.sort_order_no, ',') WITHIN GROUP (ORDER BY rs.sort_order_no) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.sort_order_no
+               HAVING COUNT(1) > 1               ) AS dup_sort_names /* 중복된 정렬순서번호 */
+
+             ,(SELECT CASE WHEN COUNT(1) > a.limit_row THEN 'Y' ELSE 'N' END
+               FROM   rs                         ) AS limit_row_over_flag /* Detail 항목 10건 초과인지 여부 */
+
+             , a.limit_row /* 등록 가능한 최대 건수 */
+
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.detailName' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'SortOrder'            AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_sort_names_title
+             ]]>
+        FROM   (SELECT 10 as limit_row /* 등록 가능한 최대 건수 */ FROM dual) a
+    </select>
+
+    <!-- Detail 등록 -->
+    <insert id="insertPayrollItemDetail" parameterType="LGCOMData">
+        INSERT /* LGVPAYP0006.insertPayrollItemDetail */
+        INTO   tb_pay_item_detail_n(
+               payroll_item_detail_detail_id                     /* 급여항목상세내역아이디 */
+             , payroll_item_id                                   /* 급여항목아이디 */
+             , additional_input_value                            /* 추가입력문자값 */
+             , pay_calc_rslt_detail_type_code                    /* 급여산출실적상세구분코드 */
+             , sort_order_no                                     /* 정렬순서번호 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_item_detail_n.nextval                  /* payroll_item_detail_detail_id => 급여항목상세내역아이디 */
+             , #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , #{detailName}                                    /* additional_input_value => 추가입력문자값 */
+             , #{detailTypeCode}                                /* pay_calc_rslt_detail_type_code => 급여산출실적상세구분코드 */
+             , #{sortOrderNo, jdbcType=NUMERIC}                 /* sort_order_no => 정렬순서번호 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- Detail 수정 -->
+    <update id="updatePayrollItemDetail" parameterType="LGCOMData">
+        UPDATE /* LGVPAYP0006.updatePayrollItemDetail */
+               tb_pay_item_detail_n
+        SET    additional_input_value                 = #{detailName}                    /* 추가입력문자값 */
+             , pay_calc_rslt_detail_type_code         = #{detailTypeCode}                /* 급여산출실적상세구분코드 */
+             , sort_order_no                          = #{sortOrderNo, jdbcType=NUMERIC} /* 정렬순서번호 */
+        WHERE  payroll_item_detail_detail_id          = #{detailId, jdbcType=NUMERIC}    /* 급여항목상세내역아이디 */
+    </update>
+
+    <!-- Detail 삭제 -->
+    <delete id="deletePayrollItemDetail" parameterType="LGCOMData">
+        DELETE /* LGVPAYP0006.deletePayrollItemDetail */
+        FROM   tb_pay_item_detail_n
+        WHERE  payroll_item_detail_detail_id          = #{detailId, jdbcType=NUMERIC}    /* 급여항목상세내역아이디 */
+    </delete>
+
+</mapper>

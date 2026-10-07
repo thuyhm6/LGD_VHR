@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00040">
+	<!-- 게시판 목록 조회 -->
+	<select id="retrieveBoardList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT src.bulletin_board_id
+		       , src.bulletin_board_no
+		       , src.system_code
+		       , CASE WHEN src.bb_reply_level_depth = 0 THEN src.bulletin_board_title
+		              ELSE src.bulletin_board_title || ' (' || src.bb_reply_level_depth || ')' END AS bulletin_board_title
+		       , src.period_from_date
+		       , src.period_to_date
+		       , src.bb_top_post_flag
+		       , src.notice_type_code
+		       , code.common_code_name AS notice_type_name
+		       , src.pop_up_alarm_flag
+		       , src.hit_count
+		       , src.wrie_date
+		       , src.writer_id
+		       , src.writer_name
+		       , src.attach_flag
+		       , src.bulletin_board_level_seqs
+		    FROM (
+		                     SELECT a.bulletin_board_no
+		                          , a.bulletin_board_id
+		                          , a.system_code
+		                          , a.bulletin_board_title
+		                          , a.bulletin_board_level_seqs
+		                          , TO_CHAR(a.period_from_date,'YYYY-MM-DD') AS period_from_date
+		                          , TO_CHAR(a.period_to_date,'YYYY-MM-DD') AS period_to_date
+		                          , a.bb_reply_level_depth
+		                          , a.bulletin_board_parent_id
+		                          , a.bb_top_post_flag
+		                          , a.notice_type_code
+		                          , a.pop_up_alarm_flag
+		                          , a.bulletin_board_inquiry_count AS hit_count
+		                          , a.created_by AS writer_id
+		                          , NVL(b.full_name_local,b.english_full_name) AS writer_name
+		                          , TO_CHAR(a.creation_date,'YYYY-MM-DD') AS wrie_date
+		                          , CASE WHEN a.attach_file1_id IS NULL AND a.attach_file2_id IS NULL AND a.attach_file3_id IS NULL THEN 'N' ELSE 'Y' END attach_flag
+		                          , ROWNUM as row_num
+		                       FROM LGCOM_BOARD_N a
+		                          , LGCOM_USER_M_V      b
+		                      WHERE a.bulletin_board_id = #{bulletinBoardId}
+		                        AND a.delete_flag       = 'N'
+		                        AND a.created_by        = b.application_user_id(+)
+			<if test="systemCode != null and systemCode != ''">
+				AND a.system_code = #{systemCode}
+			</if>
+			<if test="noticeTypeCode != null and noticeTypeCode != ''">
+				AND a.notice_type_code = #{noticeTypeCode}
+			</if>
+			<if test="searchKeyword != null and searchKeyword != ''">
+				<choose>
+					<when test="searchTypeCode eq 'title'.toString()">
+						AND a.bulletin_board_title LIKE #{searchKeyword} || '%'
+					</when>
+					<when test="searchTypeCode eq 'contents'.toString()">
+					<![CDATA[
+						AND DBMS_LOB.INSTR(a.bb_body_content,#{searchKeyword}) > 0
+					]]>
+					</when>
+				</choose>
+			</if>
+			<if test="topPostFlag != null and topPostFlag != ''">
+				AND a.bb_top_post_flag = #{topPostFlag}
+			</if>
+			<if test="popupAlarmFlag != null and popupAlarmFlag != ''">
+				AND a.pop_up_alarm_flag = #{popupAlarmFlag}
+			</if>
+		                 START WITH a.bulletin_board_parent_id = 0
+		           CONNECT BY PRIOR a.bulletin_board_no = a.bulletin_board_parent_id
+		          ORDER SIBLINGS BY NVL(a.bb_top_post_flag,'N') DESC, a.bulletin_board_parent_id DESC, a.bulletin_board_no DESC
+		         ) src
+		       , (
+		          SELECT lc.common_code
+		               , lcm.common_code_name
+		            FROM lgcom_common_code_c            lc
+		               , lgcom_common_code_multi_lang_c lcm
+		           WHERE lc.code_type_code            = lcm.code_type_code
+		             AND lc.company_id                = lcm.company_id
+		             AND lc.inventory_organization_id = lcm.inventory_organization_id
+		             AND lc.common_code               = lcm.common_code
+		             AND lc.code_type_code            = 'LGCOM_NOTICE_TYPE_CODE'
+		             AND lcm.language_code            = #{USER_SESSION.languageCode}
+		             AND (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		             AND (apply_end_date IS NULL OR apply_end_date &gt;= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59','YYYY-MM-DD HH24:MI:SS'))
+		             AND lc.use_flag                  = 'Y'
+		         ) code
+		   WHERE src.notice_type_code = code.common_code(+)
+		ORDER BY src.row_num
+	</select>
+
+	<!-- 게시글 등록 -->
+	<insert id="insertBoardData" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_BOARD_N (
+		    bulletin_board_no,bulletin_board_id,system_code,bulletin_board_title,bb_body_content,
+		    bulletin_board_level_seqs,bulletin_board_inquiry_count,period_from_date,period_to_date,bb_reply_level_depth,
+		    bulletin_board_parent_id,delete_flag,bb_top_post_flag,notice_type_code,pop_up_alarm_flag,
+		    created_by,creation_date,last_updated_by,last_update_date
+		) VALUES (
+		    #{bulletinBoardNo},#{bulletinBoardId},#{systemCode},#{bulletinBoardTitle},#{bbBodyContent,jdbcType=CLOB},
+		    #{bulletinBoardLevelSeqs},0,TO_DATE(#{periodFromDate},'YYYY-MM-DD'),TO_DATE(#{periodToDate},'YYYY-MM-DD'),#{bbReplyLevelDepth},
+		    NVL(#{bulletinBoardParentId},0),'N',#{bbTopPostFlag},#{noticeTypeCode},#{popUpAlarmFlag},
+		    #{USER_SESSION.applicationUserId},SYSDATE,#{USER_SESSION.applicationUserId},SYSDATE
+		)
+	</insert>
+
+	<!-- 게시글 수정 -->
+	<update id="updateBoardData" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		   SET bulletin_board_title = #{bulletinBoardTitle}
+		     , bb_body_content      = #{bbBodyContent,jdbcType=CLOB}
+		     , period_from_date     = TO_DATE(#{periodFromDate},'YYYY-MM-DD')
+		     , period_to_date       = TO_DATE(#{periodToDate},'YYYY-MM-DD')
+		     , bb_top_post_flag     = #{bbTopPostFlag}
+		     , notice_type_code     = #{noticeTypeCode}
+		     , pop_up_alarm_flag    = #{popUpAlarmFlag}
+		     , last_updated_by      = #{USER_SESSION.applicationUserId}
+		     , last_update_date     = SYSDATE
+		 WHERE bulletin_board_no    = #{bulletinBoardNo}
+		   AND bulletin_board_id    = #{bulletinBoardId}
+	</update>
+
+	<!-- Intro 공지사항 목록 조회 -->
+	<select id="retrieveIntroNoticeList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		           SELECT a.bulletin_board_no
+		                , a.bulletin_board_id
+		                , a.system_code
+		                , a.bulletin_board_title
+		                , a.bulletin_board_level_seqs
+		                , TO_CHAR(a.period_from_date,'YYYY-MM-DD') AS period_from_date
+		                , TO_CHAR(a.period_to_date,'YYYY-MM-DD') AS period_to_date
+		                , a.bb_reply_level_depth
+		                , a.bulletin_board_parent_id
+		                , a.bb_top_post_flag
+		                , a.notice_type_code
+		                , c.common_code_name AS notice_type_name
+		                , a.pop_up_alarm_flag
+		                , a.bulletin_board_inquiry_count AS hit_count
+		                , a.created_by AS writer_id
+		                , NVL(b.full_name_local,b.english_full_name) AS writer_name
+		                , TO_CHAR(a.creation_date,'YYYY-MM-DD') AS wrie_date
+		                , CASE WHEN a.attach_file1_id IS NULL AND a.attach_file2_id IS NULL AND a.attach_file3_id IS NULL THEN 'N' ELSE 'Y' END attach_flag
+		             FROM LGCOM_BOARD_N   a
+		                , LGCOM_USER_M_V  b
+		                , (
+		                   SELECT lc.common_code
+		                        , lcm.common_code_name
+		                     FROM lgcom_common_code_c            lc
+		                        , lgcom_common_code_multi_lang_c lcm
+		                    WHERE lc.code_type_code            = lcm.code_type_code
+		                      AND lc.company_id                = lcm.company_id
+		                      AND lc.inventory_organization_id = lcm.inventory_organization_id
+		                      AND lc.common_code               = lcm.common_code
+		                      AND lc.code_type_code            = 'LGCOM_NOTICE_TYPE_CODE'
+		                      AND lcm.language_code            = #{USER_SESSION.languageCode}
+		                      AND (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		                      AND (apply_end_date IS NULL OR apply_end_date &gt;= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59','YYYY-MM-DD HH24:MI:SS'))
+		                      AND lc.use_flag                  = 'Y'
+		                  ) c
+		            WHERE a.system_code       = 'LGCOM'
+		              AND a.bulletin_board_id = 'LGCOM_NOTICE'
+		              AND a.delete_flag       = 'N'
+		              AND a.created_by        = b.application_user_id(+)
+		              AND a.notice_type_code  = c.common_code(+)
+		              AND (a.period_from_date IS NULL OR a.period_from_date &lt;= TRUNC(SYSDATE))
+		              AND (a.period_to_date IS NULL OR a.period_to_date &gt;= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59','YYYY-MM-DD HH24:MI:SS'))
+		       START WITH a.bulletin_board_parent_id = 0
+		 CONNECT BY PRIOR a.bulletin_board_no = a.bulletin_board_parent_id
+		ORDER SIBLINGS BY a.bulletin_board_parent_id DESC, a.bulletin_board_no DESC
+	</select>
+
+	<!-- Intro Popup 공지사항 목록 조회 -->
+	<select id="retrievePopupNoticeList" parameterType="LGCOMData" resultType="LGCOMData">
+		  SELECT bn.bulletin_board_no
+		       , bn.bulletin_board_id
+		       , bn.bulletin_board_title
+		       , bn.bb_body_content
+		       , TO_CHAR(bn.creation_date,'YYYY-MM-DD HH24:MI') AS creation_date
+		    FROM LGCOM_BOARD_N bn
+		   WHERE bn.bulletin_board_id IN (SELECT bulletin_board_id
+		                                 FROM LGCOM_BOARD_MASTER_M
+		                                WHERE system_code              = UPPER(#{USER_SESSION.systemCode})
+		                                  AND bulletin_board_type_code = 'NB'
+		                                  AND bb_use_flag              = 'Y')
+		     AND bn.system_code       = UPPER(#{USER_SESSION.systemCode})
+		     AND bn.delete_flag       = 'N'
+		     AND bn.pop_up_alarm_flag = 'Y'
+		     AND (bn.period_from_date IS NULL OR bn.period_from_date &lt;= TRUNC(SYSDATE))
+		     AND (bn.period_to_date IS NULL OR bn.period_to_date &gt;= TRUNC(SYSDATE))
+		     AND NOT EXISTS (SELECT 1
+		                       FROM LGCOM_USER_BB_READ_LOG_N
+		                      WHERE application_user_id = #{USER_SESSION.applicationUserId}
+		                        AND bulletin_board_no = bn.bulletin_board_no)
+		ORDER BY bn.bulletin_board_id, bn.bulletin_board_no DESC
+	</select>
+</mapper>

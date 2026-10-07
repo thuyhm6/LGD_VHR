@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT00011">
+	<!-- Retrieve OS Employee ID Card Info -->
+	<select id="retrieveOSEmpIdCard" parameterType="LGCOMData"
+		resultType="LGCOMData">
+	<![CDATA[
+		/*LGVATT00011.retrieveOSEmpIdCard*/
+        SELECT car.employee_no                                    AS employee_no
+              ,em.full_name_local                                 AS employee_name
+              ,em.org_name_local                                  AS emp_org_name
+              ,car.id_card_no                                     AS id_card_no
+              ,to_char(car.effective_start_date, 'DD/MM/YYYY')    AS effective_start_date
+              ,to_char(car.effective_end_date, 'DD/MM/YYYY')      AS effective_end_date
+              ,to_char(car.creation_date, 'DD/MM/YYYY')           AS creation_date
+              ,car.vendor_code                                    AS vendor_code
+        FROM   tb_att_emp_idcard_m car
+              ,emp_master          em
+        WHERE  em.employee_number = car.employee_no
+        AND    em.grade IN (SELECT lcc.common_code
+                            FROM   lgcom_common_code_c lcc
+                            WHERE  lcc.code_type_code = 'LGVHR_ATT_OS_EMP_GRADE'
+                            AND    lcc.use_flag = 'Y')
+    ]]>
+		<if test="employeeNo != null and employeeNo != ''">
+			AND em.employee_number = #{employeeNo}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND em.full_name_local = #{employeeName}
+		</if>
+		<if test="orgName != null and orgName != ''">
+			AND em.organization_id = #{orgName}
+		</if>
+		<if test="fromDate != null and fromDate != ''">
+			AND car.effective_start_date BETWEEN to_date(#{fromDate}, 'DD/MM/YYYY')
+			AND nvl(to_date(#{toDate}, 'DD/MM/YYYY'), trunc(sysdate))
+		</if>
+		ORDER BY car.employee_no
+	</select>
+
+	<insert id="excelDownData" parameterType="java.util.HashMap">
+		/*LGVATT00011.excelDownData*/
+		INSERT INTO xxlge_export_info (SESSION_ID, CREATED_BY, CREATION_DATE,
+		SEQ_NO, CHARACTER_SET_NAME
+		, ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5,
+		ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8)
+		SELECT AI.* FROM (SELECT #{sessionId}
+		,#{USER_SESSION.applicationUserId}
+		,SYSDATE
+		,1
+		,'KO16KSC5601'
+		,'Employee No' AS employee_no
+		,'Employee Name' AS employee_name
+		,'Organization' AS emp_org_name
+		,'ID Card No' AS id_card_no
+		,'Effective Start Date' AS effective_start_date
+		,'Effective End Date' AS effective_end_date
+		,'Vendor Code' AS vendor_code
+		,'Vendor Name' AS vendor_name
+		FROM DUAL
+		UNION ALL
+		SELECT #{sessionId}
+		,#{USER_SESSION.applicationUserId}
+		,sysdate
+		,2
+		,'KO16KSC5601'
+		,car.employee_no AS employee_no
+		,em.full_name_local AS employee_name
+		,em.org_name_local AS emp_org_name
+		,to_char(car.id_card_no) AS id_card_no
+		,to_char(car.effective_start_date, 'DD/MM/YYYY') AS effective_start_date
+		,to_char(car.effective_end_date, 'DD/MM/YYYY') AS effective_end_date
+		,car.vendor_code AS vendor_code
+		,(SELECT vm.vendor_name
+		    FROM tb_vendor_master vm
+		   WHERE vm.vendor_code = car.vendor_code
+		     AND ROWNUM = 1) AS vendor_name
+		FROM tb_att_emp_idcard_m car
+		,emp_master em
+		WHERE em.employee_number = car.employee_no
+		AND em.grade IN (SELECT lcc.common_code
+		FROM lgcom_common_code_c lcc
+		WHERE lcc.code_type_code = 'LGVHR_ATT_OS_EMP_GRADE'
+		AND lcc.use_flag = 'Y')
+		<if test="employeeNo != null and employeeNo != ''">
+			AND em.employee_number = #{employeeNo}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND em.full_name_local = #{employeeName}
+		</if>
+		<if test="orgName != null and orgName != ''">
+			AND em.organization_id = #{orgName}
+		</if>
+		<if test="fromDate != null and fromDate != ''">
+			AND car.effective_start_date BETWEEN to_date(#{fromDate}, 'DD/MM/YYYY')
+			AND nvl(to_date(#{toDate}, 'DD/MM/YYYY'), trunc(sysdate))
+		</if>
+		ORDER BY employee_no
+		) AI
+	</insert>
+
+	<update id="mergeOSEmpIdCard" parameterType="LGCOMData">
+		/*LGVATT00011.mergeOSEmpIdCard*/
+		MERGE INTO tb_att_emp_idcard_m a
+		USING
+		dual b
+		ON (a.employee_no = #{employeeNo}
+		AND a.id_card_no = #{idCardNo})
+		WHEN MATCHED THEN
+		UPDATE
+		SET effective_start_date = to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+		,effective_end_date = to_date(#{effectiveEndDate}, 'DD/MM/YYYY')
+		,vendor_code = #{vendorCode}
+		,last_update_user_id = #{applicationUserId}
+		,last_update_date = SYSDATE
+		WHEN NOT MATCHED THEN
+		INSERT
+		(employee_no
+		,id_card_no
+		,effective_start_date
+		,effective_end_date
+		,vendor_code
+		,creation_user_id
+		,creation_date
+		,last_update_user_id
+		,last_update_date)
+		VALUES
+		(#{employeeNo}
+		,#{idCardNo}
+		,to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+		,to_date(#{effectiveEndDate}, 'DD/MM/YYYY')
+		,#{vendorCode}
+		,#{applicationUserId}
+		,SYSDATE
+		,#{applicationUserId}
+		,SYSDATE)
+	</update>
+
+	<insert id="UploadExcelFile" parameterType="java.util.HashMap">
+
+		INSERT INTO TB_ATT_EMP_IDCARD_M (ID_CARD_NO, EMPLOYEE_NO,
+		EFFECTIVE_START_DATE, EFFECTIVE_END_DATE, VENDOR_CODE, CREATION_USER_ID,
+		CREATION_DATE)
+		select
+		trim(li.attribute1) in_card_no
+		,trim(li.attribute2) employee_no
+		,TO_DATE(trim(li.attribute3), 'DD/MM/YYYY') effective_start_date
+		,TO_DATE(trim(li.attribute4), 'DD/MM/YYYY') effective_end_date
+		,trim(li.attribute5) vendor_code
+		,#{applicationUserId} AS CREATION_USER_ID
+		,SYSDATE
+
+		from lgcom_import_n li
+
+		where li.session_id = #{sessionId}
+
+		and li.seq_no > 1
+
+		and not exists
+		(select 'Y'
+
+		from tb_att_emp_idcard_m ei
+
+		where ei.id_card_no = trim(li.attribute4)
+		)
+	</insert>
+
+	<!-- Vendor 목록 조회 (TB_VENDOR_MASTER) -->
+	<select id="retrieveVendorList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*LGVATT00011.retrieveVendorList*/
+		       vm.vendor_code AS code
+		      ,vm.vendor_name AS name
+		FROM   tb_vendor_master vm
+		ORDER BY vm.vendor_name
+	</select>
+
+</mapper>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:batch="http://www.springframework.org/schema/batch"
+    xmlns:p="http://www.springframework.org/schema/p"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+		http://www.springframework.org/schema/beans/spring-beans.xsd
+       	http://www.springframework.org/schema/batch
+       	http://www.springframework.org/schema/batch/spring-batch.xml
+       	http://www.springframework.org/schema/context
+       	http://www.springframework.org/schema/context/spring-context.xsd">
+	
+  	<!-- AccessLog : URL /service  -->
+	<bean name="accessLogJob" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+		<property name="jobClass" value="com.lgd.lgcom.common.scheduler.AccessLogJob" />
+		<property name="durability" value="true" />
+  	</bean>
+
+  	<bean id="accessLogTrigger" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+  		<property name="jobDetail" ref="accessLogJob" />
+  		<property name="startDelay" value="1000" />
+  		<!-- <property name="cronExpression" value="0 * 0/6 * * ?" /> -->
+  		<property name="cronExpression" value="0 0/2 * * * ?" />
+  	</bean>
+  		
+  	<!-- ServiceTime : URL /action  -->
+	<bean name="serviceTimeLogJob" class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+		<property name="jobClass" value="com.lgd.lgcom.common.scheduler.ServiceTimeLogJob" />
+		<property name="durability" value="true" />
+  	</bean>
+
+  	<bean id="serviceTimeLogTrigger" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+  		<property name="jobDetail" ref="serviceTimeLogJob" />
+  		<property name="startDelay" value="1000" />
+  		<property name="cronExpression" value="30 0/2 * * * ?" />
+  	</bean>
+  		
+  	<bean id="schedulerFactoryBean" class="org.springframework.scheduling.quartz.SchedulerFactoryBean" scope="singleton">
+    	<property name="autoStartup" value="true" />
+    	<property name="configLocation" value="classpath:/config/quartz.properties" />
+    	<property name="applicationContextSchedulerContextKey" value="applicationContext" />
+    	<property name="transactionManager" ref="txManager" />
+    	<property name="triggers">
+      		<list>
+		        <ref bean="accessLogTrigger" />
+		        <ref bean="serviceTimeLogTrigger" />
+      		</list>
+    	</property>
+  	</bean>
+</beans>

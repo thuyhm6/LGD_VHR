@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00080">
+	<!-- Condition 목록 조회 -->
+	<select id="retrieveConditionList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT a.application_user_id AS user_id
+		       , b.user_name AS employee_no
+		       , NVL(b.full_name_local,b.english_full_name) AS employee_name
+		       , c.system_code
+		       , c.module_code
+		       , a.program_id
+		       , c.program_name
+		       , a.html_inq_condition_object_id
+		       , a.html_inq_cond_object_type_code
+		       , a.initial_value1_text
+		    FROM LGCOM_USER_INQUIRY_CONDITION_N a
+		       , LGCOM_USER_M_V                       b
+		       , LGCOM_PROGRAM_M                c
+		   WHERE a.application_user_id = b.application_user_id
+		     AND a.program_id          = c.program_id
+		<if test="userId != null and userId != ''">
+			AND a.application_user_id = #{userId}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND (b.full_name_local LIKE #{employeeName} || '%' OR b.english_full_name LIKE #{employeeName} || '%') 
+		</if>
+		<if test="programId != null and programId != ''">
+		     AND a.program_id = #{programId}
+		</if>
+		<if test="programName != null and programName != ''">
+		     AND UPPER(c.program_name) LIKE UPPER(#{programName}) || '%'
+		</if>
+		ORDER BY a.application_user_id, a.program_id, a.html_inq_condition_object_id
+	</select>
+
+	<!-- Condition 목록 삭제 -->
+	<delete id="deleteConditionList" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_USER_INQUIRY_CONDITION_N
+		      WHERE application_user_id          = #{userId}
+		        AND program_id                   = #{programId}
+		        AND html_inq_condition_object_id = #{htmlInqConditionObjectId}
+	</delete>
+</mapper>

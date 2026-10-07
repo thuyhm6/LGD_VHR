@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT00014">
+	<!-- Search Bonus KPI for OS -->
+	<select id="retrieveBonusKpiForOs" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT00014.retrieveBonusKpiForOs*/
+				  kbo.PAY_ROLL_KPI_BONUS_ID
+				  ,kbo.NO
+				  ,kbo.TIME_AND_ATTENDANCE_YYYYMM
+				  ,kbo.STATUS
+				  ,kbo.VENDOR_CODE
+				  ,kbo.RECUITIMENT_TAGET
+				  ,kbo.RECUITIMENT_ACTUAL
+				  ,kbo.KPI_RATE
+				  ,kbo.KPI_BONUS
+		          ,(select local_language_full_name from lgcom_user_m where application_user_id = kbo.creation_user_id) as creation_user_id /* 등록자ID */
+		          ,TO_CHAR(kbo.creation_date, 'DD/MM/YYYY') as creation_date	/* 등록일자 */
+		    FROM TB_PAY_KPI_BONUS_OS kbo
+		    WHERE 1 = 1
+		    <if test="vendorName != null and vendorName != ''">
+	          AND (UPPER(kbo.VENDOR_NAME) LIKE '%' || UPPER(#{vendorName}) || '%')
+	        </if>
+	        <if test="timeAndAttendanceYyyymm != null and timeAndAttendanceYyyymm != ''">
+	          AND (kbo.TIME_AND_ATTENDANCE_YYYYMM) = #{timeAndAttendanceYyyymm}
+	        </if>
+			ORDER BY kbo.VENDOR_CODE asc
+	</select>
+	
+	<!-- 휴일 등록 -->
+	<insert id="insertBonusKpiForOs" parameterType="java.util.HashMap">
+		INSERT /*LGVATT00014.insertBonusKpiForOs*/ INTO TB_PAY_KPI_BONUS_OS
+		( pay_roll_kpi_bonus_id
+		  ,no
+		  ,time_and_attendance_yyyymm
+		  ,status
+		  ,vendor_code
+		  ,recuitiment_taget
+		  ,recuitiment_actual
+		  ,kpi_rate
+		  ,kpi_bonus
+		 ,creation_user_id 					/* 사용자ID */
+		 ,creation_date 					/* 등록일자 */
+		 ,last_update_user_id 				/* 최종수정자ID */
+		 ,last_update_date 					/* 수정일자 */
+		) values
+		( SQ_TB_PAY_BONUS_KPI_OS.NEXTVAL
+		 ,#{no}
+		 ,#{timeAndAttendanceYyyymm}
+		 ,#{status}
+		 ,#{vendorCode}
+		 ,#{recuitimentTaget}
+		 ,#{recuitimentActual}
+		 ,#{kpiRate}
+		 ,#{kpiBonus}
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		)
+	</insert> 
+	
+	<!-- 휴일 수정 -->
+    <update id="updateBonusKpiForOs" parameterType="LGCOMData">
+        UPDATE /*LGVATT00014.updateBonusKpiForOs*/
+               TB_PAY_KPI_BONUS_OS 
+       SET    time_and_attendance_yyyymm    #{timeAndAttendanceYyyymm}
+             ,status    #{status}
+             ,vendor_code    #{vendorCode}
+             ,recuitiment_taget    #{recuitimentTaget}
+             ,recuitiment_actual    #{recuitimentActual}
+             ,kpi_rate    #{kpiRate}
+             ,kpi_bonus    #{kpiBonus}
+             ,last_update_user_id              = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             ,last_update_date                 = trunc(sysdate)                 							/* 최종수정일자 */
+        WHERE  pay_roll_kpi_bonus_id               = #{payRollKpiBonusId}              
+    </update>
+    
+    <!-- 휴일 삭제 -->
+	<delete id="deleteBonusKpiForOs" parameterType="LGCOMData">
+		 DELETE FROM TB_PAY_KPI_BONUS_OS
+		 WHERE pay_roll_kpi_bonus_id = #{payRollKpiBonusId}
+	</delete>
+    
+</mapper>

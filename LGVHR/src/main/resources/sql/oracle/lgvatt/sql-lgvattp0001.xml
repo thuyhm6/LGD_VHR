@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTP0001">
+
+	<select id="retrieveOrgList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  <![CDATA[
+		    SELECT SUBSIDIARY_CODE
+			      ,ORGANIZATION_ID
+			      ,HEADER
+			      ,ORG_NAME_ENG
+			      ,ORG_NAME_LOCAL AS ORGANIZATION_NAME
+			      ,ORG_START_DATE
+			      ,ORG_END_DATE
+			      ,ORG_TYPE
+			      ,PARENT_ORG_ID
+			      ,PARENT_ORG_NAME
+			      ,ORG_MANAGER_NUMBER
+			      ,MISSION
+			      ,ROLE
+			      ,ACC_DIV_CODE
+			      ,ACC_ORG_CODE   AS ORGANIZATION_CODE
+			      ,ACC_ORG_USE_YN
+			      ,ACC_ORG_TYPE
+			      ,ACC_ORG_DIRTLY_STYLE
+			      ,ACC_ORG_EXP_TYPE
+			      ,ACC_FA_EXP_TYPE
+			      ,LOCATION_NAME
+			      ,ADDRESS_COUNTRY
+			      ,ADDRESS_CITY
+			      ,ADDRESS_LINE
+			      ,ADDRESS_POSTAL
+			      ,VERSION_ID
+			FROM   ORG_MASTER OM
+			WHERE  OM.ORG_END_DATE IS NULL
+		  ]]>
+		  <if test="organizationCode != null and organizationCode != ''">
+	        AND OM.ACC_ORG_CODE = #{organizationCode}
+	      </if>
+	      <if test="organizationName != null and organizationName != ''">
+	        AND UPPER(OM.ORG_NAME_LOCAL) LIKE '%'|| UPPER(#{organizationName}) ||'%'
+	      </if>
+	</select>
+	
+</mapper>

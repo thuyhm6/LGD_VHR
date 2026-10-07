@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:cache="http://www.springframework.org/schema/cache"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan base-package="com.lgd.lgcom, com.lgd.lgvhr">
+		<context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+	</context:component-scan>
+	
+	<!-- <aop:aspectj-autoproxy/> -->
+    
+    <task:executor id="executor" pool-size="10" />
+    <task:annotation-driven executor="executor" proxy-target-class="true" mode="proxy" />
+
+	<util:properties id="project" location="classpath:/config/project.properties" />
+	
+	<bean id="messageSource" class="devonframe.message.database.DatabaseMessageSource">
+	    <property name="dataSource" ref="dataSource" />
+	    <property name="defaultQuery" value="SELECT COMMON_CODE, LANGUAGE_CODE, COMMON_CODE_NAME FROM LGCOM_MESSAGE_LABEL_V"/>
+	    <property name="loadType" value="preLoad" />
+	    <property name="tableName" value="LGCOM_MESSAGE_LABEL_V"/>
+	    <property name="messageColumn" value="COMMON_CODE_NAME"/>
+	    <property name="codeColumn" value="COMMON_CODE"/>
+	    <property name="localeColumn" value="LANGUAGE_CODE"/>
+	</bean>
+
+	<bean id="messageSourceAccessor" class="org.springframework.context.support.MessageSourceAccessor">
+		<constructor-arg>
+			<ref bean="messageSource"/>
+		</constructor-arg>
+	</bean>
+
+	<bean id="cacheManager" class="org.springframework.cache.ehcache.EhCacheCacheManager">
+	    <property name="cacheManager" ref="ehcache" />
+	</bean>
+
+	<bean id="ehcache" class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean">
+	    <property name="configLocation" value="classpath:/cache/ehcache.xml" />
+	</bean>
+	
+	<!-- <bean id="pushService" class="com.lgd.lgcom.common.service.PushService" >
+	   <property name="cacheManager" ref="cacheManager"></property>
+	   <property name="ehcache" ref="ehcache"></property>
+	</bean> -->
+
+
+	<!-- AOP Sample -->
+	<!-- Advice -->
+	<!-- <bean id="loggingAdvice" class="com.lgd.lgcom.framework.aop.SampleLoggingAdvice"/>
+	
+	<bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator"></bean>
+	
+	<bean id="advisor" class="org.springframework.aop.aspectj.AspectJExpressionPointcutAdvisor">
+		<property name="advice" ref="loggingAdvice"/>
+		<property name="expression" value="execution(* *..*Service.*(..))"/>return 타입 *, 메소드이름 *, 인자뭐가 와도 상관없음.
+	</bean> -->
+	
+</beans>

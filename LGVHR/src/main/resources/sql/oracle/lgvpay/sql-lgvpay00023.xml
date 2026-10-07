@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00023">
+
+    <!-- 확정 건 유무 조회. payMonth, payType에 대한 확정건이 있는 경우 연차수정불가 체크하기 위한 값 -->
+    <select id="retrieveConfirmExistsData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT  /* LGVPAY00023.retrieveConfirmExistsData */
+                CASE WHEN COUNT(pce.payroll_calculation_exec_id) > 0 THEN 'Y' ELSE 'N' END AS confirm_exists_flag /* 확정건 존재유무. payMonth, payType에 대한 확정건이 있는 경우 연차수정불가 체크하기 위한 값 */
+        FROM    tb_pay_calc_period_basis_n pcpb
+             ,  tb_pay_calc_exec_n         pce
+        WHERE   pcpb.subsidiary_code           = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND     pcpb.payroll_calc_period_value IN (SELECT TO_CHAR(pce1.basis_date, 'YYYYMM') /* 급여인 경우 BASIS_DATE 의 년월이 PAY MONTH 와 일치함 */
+                                                   FROM   tb_pay_calc_exec_n pce1
+                                                   WHERE  pce1.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+                                                   AND    pce1.payroll_type_code          IN ('MTH', 'MTH_RS')
+                                                  )
+        AND     pce.basis_date BETWEEN TO_DATE(pcpb.start_yyyymmdd, 'yyyymmdd') AND TO_DATE(pcpb.end_yyyymmdd, 'yyyymmdd')
+        AND     pce.payroll_type_code          = #{payrollTypeCode}
+        AND     NVL(pce.confirm_flag, 'N')     = 'Y' /* 확정건 */
+    </select>
+
+    <!-- 급여 대상자 중 퇴직자의 연차 정보 조회 -->
+    <select id="retrieveRetireeAnnualLeaveList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00023.retrieveRetireeAnnualLeaveList */
+               main.employee_no
+              ,main.full_name   AS employee_name
+              ,TO_CHAR(main.date_hire_subsidiary, 'DD/MM/YYYY')      AS start_date
+              ,TO_CHAR(main.attendance_start_date, 'DD/MM/YYYY')     AS calc_start_date
+              ,TO_CHAR(main.attendance_end_date, 'DD/MM/YYYY')       AS resignation_date
+              ,NVL(( SELECT ata.residual_annual_leave_days
+                     FROM tb_att_annual_leave_n ata
+                     WHERE ata.time_and_attendance_yyyymm = to_char(add_months(TRUNC(to_date(SUBSTR(main.time_and_attendance_yyyymm,1,4),'yyyy'),'year'),-1),'yyyymm')
+                     AND   ata.employee_no = main.employee_no
+                    ),0)                        AS accumulation_last_year /*"Accumulation from Last Year(1)"--전년도 잔여년차 */
+              ,main.yearly_annual_leave_days    AS creation_this_year     /*"Creation from This Year(2)"  -- 개인별 연간 발생 연차일수  */
+              ,al.occur_basic_annual_leave_days AS creation_fifth_year    /* Creation from 5 Year -- 5년주기로 생성되는 연차 */
+              ,main.yearly_annual_used_days     AS used_al_this_year      /*"Used AL at This Year(4)"  -- 개인별 연간 사용 연차일수 "Used Annual Leave at This Year(4)" */
+              ,main.full_days                   AS full_days              /*"Full Days"*/
+              ,main.working_days                AS working_days           /*"Working Days"*/
+              ,main.unpaid_days                 AS unpaid_days            /*"Unpaid Days"*/
+              ,al.annual_calibration_days       AS adj_days               /*"Adj days"*/
+              ,al.annual_compensation_days      AS pay_days               /*"Pay days" */
+              ,al.residual_annual_leave_days    AS remain_days            /*"Remain Days"*/
+
+              ,ROUND((main.working_days - main.unpaid_days) / main.full_days * 12, 0) AS calc_adj_days          -- 개인별 연간 보정 연차일수(계산할떄 사용)
+              ,GREATEST(0, (ROUND((main.working_days - main.unpaid_days) / main.full_days * 12, 0) - main.yearly_annual_leave_days)) AS calc_diffdays  -- 개인별 차이 연차일수(계산할때 사용)
+
+              ,main.time_and_attendance_yyyymm
+        FROM  (
+                SELECT ar.employee_no
+                      ,ar.full_name
+                      ,ar.full_days
+                      ,ar.working_days
+                      ,ar.unpaid_days
+                      ,ar.date_hire_subsidiary
+                      ,ar.attendance_start_date
+                      ,ar.attendance_end_date
+                      ,NVL(SUM(aa.occur_monthly_ann_lv_days), 0) AS yearly_annual_leave_days  -- 개인별 연간 발생 연차일수
+                      ,NVL(SUM(aa.use_annual_leave_days), 0)     AS yearly_annual_used_days  -- 개인별 연간 사용 연차일수
+                      ,MAX(aa.time_and_attendance_yyyymm)        AS time_and_attendance_yyyymm  -- 최종 년월
+
+                FROM   (
+                        SELECT ar.subsidiary_code
+                              ,ar.employee_no
+                              ,em.full_name
+                              ,em.date_hire_subsidiary
+                              ,em.attendance_start_date
+                              ,em.attendance_end_date
+                              ,em.full_days                                                             -- 1년 만근일수
+                              ,(em.attendance_end_date - em.attendance_start_date + 1) AS working_days  -- 개인별 만근일수
+                              ,NVL(SUM(ac.unpaid_days), 0)                             AS unpaid_days   -- 개인별 무급일수
+                        FROM   (
+                                SELECT em.subsidiary_code      AS subsidiary_code
+                                      ,em.employee_number      AS employee_number
+                                      ,em.full_name_local      AS full_name
+                                      ,(TO_DATE(TO_CHAR(em.date_retire, 'YYYY') || '1231', 'YYYYMMDD') - TO_DATE(TO_CHAR(em.date_retire, 'YYYY') || '0101', 'YYYYMMDD') + 1) AS full_days  -- 1년 만근일수
+                                      ,GREATEST(em.date_hire_subsidiary, TO_DATE(TO_CHAR(em.date_retire, 'YYYY') || '0101', 'YYYYMMDD'))                                     AS attendance_start_date  -- 개인별 기산시작일
+                                      ,em.date_retire                                                                                                                        AS attendance_end_date    -- 개인별 기산종료일
+                                      ,em.date_hire_subsidiary
+                                FROM   tb_pay_calc_set_target_per_n ps
+                                      ,emp_master                   em
+                                WHERE  ps.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+                                AND    ps.employee_no                = em.employee_number
+                                AND    em.subsidiary_code            = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                                AND    em.date_retire               IS NOT NULL  -- 퇴직자만
+                                <![CDATA[
+                                AND    em.date_retire               <= ( SELECT last_day(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy')) FROM dual)
+                                ]]>
+                               ) em,
+                               tb_att_result_n ar,
+                               tb_att_code_c   ac
+                        WHERE  em.subsidiary_code                = ar.subsidiary_code
+                        AND    em.employee_number                = ar.employee_no
+                        AND    ar.time_and_attendance_date BETWEEN em.attendance_start_date AND em.attendance_end_date
+                        AND    ar.subsidiary_code                = ac.subsidiary_code
+                        AND    ar.time_and_attendance_code       = ac.time_and_attendance_code
+                        GROUP BY ar.subsidiary_code, ar.employee_no, em.attendance_start_date, em.attendance_end_date, full_days,date_hire_subsidiary,em.full_name
+                       ) ar,
+                       tb_att_annual_leave_n aa
+                WHERE  ar.subsidiary_code                  = aa.subsidiary_code
+                AND    ar.employee_no                      = aa.employee_no
+                AND    aa.time_and_attendance_yyyymm BETWEEN TO_CHAR(ar.attendance_start_date, 'YYYYMM') AND TO_CHAR(ar.attendance_end_date, 'YYYYMM')
+                GROUP BY ar.employee_no,ar.full_name, ar.full_days, ar.working_days, ar.unpaid_days,ar.date_hire_subsidiary,ar.attendance_start_date,ar.attendance_end_date
+              ) main
+             , tb_att_annual_leave_n al
+        WHERE al.employee_no = main.employee_no
+        AND   al.time_and_attendance_yyyymm = main.time_and_attendance_yyyymm
+        ORDER BY main.employee_no
+    </select>
+
+    <!-- 급여 대상자 중 퇴직자의 연차 정보 조회(CSV다운로드용) -->
+    <select id="createCSVDownloadData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT  /* LGVPAY00023.createCSVDownloadData */
+                employee_no
+              , employee_name
+              , start_date
+              , calc_start_date
+              , resignation_date
+              , accumulation_last_year
+              , creation_this_year
+              , total_al_this_year
+              , used_al_this_year
+              , full_days
+              , working_days
+              , unpaid_days
+              , adj_days
+              , pay_days
+              , remain_days
+        FROM   (
+                SELECT
+                       '1' AS gubun
+                      ,(SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeNo'                 AND lslm.language_code = #{languageCode}) AS employee_no
+                      ,(SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeName'               AND lslm.language_code = #{languageCode}) AS employee_name
+                      ,(SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'StartDate'                            AND lslm.language_code = #{languageCode}) AS start_date
+                      ,(SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calcStartDate'              AND lslm.language_code = #{languageCode}) AS calc_start_date
+                      ,(SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.resignationDate'            AND lslm.language_code = #{languageCode}) AS resignation_date
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.accmulationFromLastYear'    AND lslm.language_code = #{languageCode}) AS accumulation_last_year /*"Accumulation from Last Year(1)"--전년도 잔여년차 */
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.creationFromThisYear'       AND lslm.language_code = #{languageCode}) AS creation_this_year     /*"Creation from This Year(2)"  -- 개인별 연간 발생 연차일수  */
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalAnnualLeaveOfThisYear' AND lslm.language_code = #{languageCode}) AS total_al_this_year /* accumulation_last_year + creation_this_year */
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.usedAnnualLeaveAtThisYear'  AND lslm.language_code = #{languageCode}) AS used_al_this_year      /*"Used AL at This Year(4)"  -- 개인별 연간 사용 연차일수 "Used Annual Leave at This Year(4)" */
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.fullDays'                   AND lslm.language_code = #{languageCode}) AS full_days              /*"Full Days"*/
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.workingDaysThisYear'        AND lslm.language_code = #{languageCode}) AS working_days           /*"Working Days"*/
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidDaysThisYear'         AND lslm.language_code = #{languageCode}) AS unpaid_days            /*"Unpaid Days"*/
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustDays'                 AND lslm.language_code = #{languageCode}) AS adj_days               /*"Adj days"*/
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payDays'                    AND lslm.language_code = #{languageCode}) AS pay_days               /*"Pay days" */
+                      ,(SELECT REPLACE(lslm.label_name, '\n', ' ') FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.remainDays'                 AND lslm.language_code = #{languageCode}) AS remain_days            /*"Remain Days"*/
+
+                FROM dual
+                UNION ALL
+                SELECT
+                       '2' AS gubun
+                      ,main.employee_no
+                      ,main.full_name   AS employee_name
+                      ,TO_CHAR(main.date_hire_subsidiary, 'DD/MM/YYYY')      AS start_date
+                      ,TO_CHAR(main.attendance_start_date, 'DD/MM/YYYY')     AS calc_start_date
+                      ,TO_CHAR(main.attendance_end_date, 'DD/MM/YYYY')       AS resignation_date
+                      ,TO_CHAR(NVL(( SELECT ata.residual_annual_leave_days
+                                     FROM tb_att_annual_leave_n ata
+                                     WHERE ata.time_and_attendance_yyyymm = to_char(add_months(TRUNC(to_date(SUBSTR(main.time_and_attendance_yyyymm,1,4),'yyyy'),'year'),-1),'yyyymm')
+                                     AND   ata.employee_no = main.employee_no
+                                    ),0), 'FM9,990.0')                       AS accumulation_last_year /*"Accumulation from Last Year(1)"--전년도 잔여년차 */
+                      ,TO_CHAR(main.yearly_annual_leave_days, 'FM9,990.0')   AS creation_this_year     /*"Creation from This Year(2)"  -- 개인별 연간 발생 연차일수  */
+
+                      ,TO_CHAR(NVL(( SELECT ata.residual_annual_leave_days
+                                     FROM tb_att_annual_leave_n ata
+                                     WHERE ata.time_and_attendance_yyyymm = to_char(add_months(TRUNC(to_date(SUBSTR(main.time_and_attendance_yyyymm,1,4),'yyyy'),'year'),-1),'yyyymm')
+                                     AND   ata.employee_no = main.employee_no
+                                    ),0) + main.yearly_annual_leave_days, 'FM9,990.0') AS total_al_this_year /* accumulation_last_year + creation_this_year */
+
+                      ,TO_CHAR(main.yearly_annual_used_days , 'FM9,990.0')   AS used_al_this_year      /*"Used AL at This Year(4)"  -- 개인별 연간 사용 연차일수 "Used Annual Leave at This Year(4)" */
+                      ,TO_CHAR(main.full_days               , 'FM9,990.0')   AS full_days              /*"Full Days"*/
+                      ,TO_CHAR(main.working_days            , 'FM9,990.0')   AS working_days           /*"Working Days"*/
+                      ,TO_CHAR(main.unpaid_days             , 'FM9,990.0')   AS unpaid_days            /*"Unpaid Days"*/
+                      ,TO_CHAR(al.annual_calibration_days   , 'FM9,990.0')   AS adj_days               /*"Adj days"*/
+                      ,TO_CHAR(al.annual_compensation_days  , 'FM9,990.0')   AS pay_days               /*"Pay days" */
+                      ,TO_CHAR(al.residual_annual_leave_days, 'FM9,990.0')   AS remain_days            /*"Remain Days"*/
+
+                FROM  (
+                        SELECT ar.employee_no
+                              ,ar.full_name
+                              ,ar.full_days
+                              ,ar.working_days
+                              ,ar.unpaid_days
+                              ,ar.date_hire_subsidiary
+                              ,ar.attendance_start_date
+                              ,ar.attendance_end_date
+                              ,NVL(SUM(aa.occur_monthly_ann_lv_days), 0) AS yearly_annual_leave_days  -- 개인별 연간 발생 연차일수
+                              ,NVL(SUM(aa.use_annual_leave_days), 0)     AS yearly_annual_used_days  -- 개인별 연간 사용 연차일수
+                              ,MAX(aa.time_and_attendance_yyyymm)        AS time_and_attendance_yyyymm  -- 최종 년월
+
+                        FROM   (
+                                SELECT ar.subsidiary_code
+                                      ,ar.employee_no
+                                      ,em.full_name
+                                      ,em.date_hire_subsidiary
+                                      ,em.attendance_start_date
+                                      ,em.attendance_end_date
+                                      ,em.full_days                                                             -- 1년 만근일수
+                                      ,(em.attendance_end_date - em.attendance_start_date + 1) AS working_days  -- 개인별 만근일수
+                                      ,NVL(SUM(ac.unpaid_days), 0)                             AS unpaid_days   -- 개인별 무급일수
+                                FROM   (
+                                        SELECT em.subsidiary_code      AS subsidiary_code
+                                              ,em.employee_number      AS employee_number
+                                              ,em.full_name_local      AS full_name
+                                              ,(TO_DATE(TO_CHAR(em.date_retire, 'YYYY') || '1231', 'YYYYMMDD') - TO_DATE(TO_CHAR(em.date_retire, 'YYYY') || '0101', 'YYYYMMDD') + 1) AS full_days  -- 1년 만근일수
+                                              ,GREATEST(em.date_hire_subsidiary, TO_DATE(TO_CHAR(em.date_retire, 'YYYY') || '0101', 'YYYYMMDD'))                                     AS attendance_start_date  -- 개인별 기산시작일
+                                              ,em.date_retire                                                                                                                        AS attendance_end_date    -- 개인별 기산종료일
+                                              ,em.date_hire_subsidiary
+                                        FROM   tb_pay_calc_set_target_per_n ps
+                                              ,emp_master                   em
+                                        WHERE  ps.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+                                        AND    ps.employee_no                = em.employee_number
+                                        AND    em.subsidiary_code            = #{subsidiaryCode}
+                                        AND    em.date_retire               IS NOT NULL  -- 퇴직자만
+                                        <![CDATA[
+                                        AND    em.date_retire               <= ( SELECT last_day(to_date(#{payrollCalcPeriodValue},'mm/yyyy')) FROM dual)
+                                        ]]>
+                                       ) em,
+                                       tb_att_result_n ar,
+                                       tb_att_code_c   ac
+                                WHERE  em.subsidiary_code                = ar.subsidiary_code
+                                AND    em.employee_number                = ar.employee_no
+                                AND    ar.time_and_attendance_date BETWEEN em.attendance_start_date AND em.attendance_end_date
+                                AND    ar.subsidiary_code                = ac.subsidiary_code
+                                AND    ar.time_and_attendance_code       = ac.time_and_attendance_code
+                                GROUP BY ar.subsidiary_code, ar.employee_no, em.attendance_start_date, em.attendance_end_date, full_days,date_hire_subsidiary,em.full_name
+                               ) ar,
+                               tb_att_annual_leave_n aa
+                        WHERE  ar.subsidiary_code                  = aa.subsidiary_code
+                        AND    ar.employee_no                      = aa.employee_no
+                        AND    aa.time_and_attendance_yyyymm BETWEEN TO_CHAR(ar.attendance_start_date, 'YYYYMM') AND TO_CHAR(ar.attendance_end_date, 'YYYYMM')
+                        GROUP BY ar.employee_no,ar.full_name, ar.full_days, ar.working_days, ar.unpaid_days,ar.date_hire_subsidiary,ar.attendance_start_date,ar.attendance_end_date
+                      ) main
+                     , tb_att_annual_leave_n al
+                WHERE al.employee_no = main.employee_no
+                AND   al.time_and_attendance_yyyymm = main.time_and_attendance_yyyymm
+                )
+    </select>
+
+    <!-- 퇴직자 연차 재계산 -->
+    <select id="saveCalculateAnnualLeave" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00023.saveCalculateAnnualLeave */
+              lgvatt_resignation_pkg.apply_att_annual_lv_corr_retir( #{retCode                             , mode=OUT, jdbcType=NUMERIC} /*p_ret_code. 0:성공, 그외:실패*/
+                                                                   , #{errorMessage                        , mode=OUT, jdbcType=VARCHAR} /*p_ret_msg*/
+                                                                   , #{USER_SESSION.applicationUserId      , mode=IN , jdbcType=NUMERIC} /*p_user_id. (필수)*/
+                                                                   , #{LGVHR_PROJECT_SESSION.subsidiaryCode, mode=IN , jdbcType=VARCHAR} /*p_subsidiary_code. (필수)*/
+                                                                   , TO_CHAR(TO_DATE(#{payrollCalcPeriodValue, mode=IN , jdbcType=VARCHAR}, 'MM/YYYY'), 'YYYYMM') /*p_yyyymm.(필수) payMonth*/
+                                                                   , #{calculationSetId                    , mode=IN , jdbcType=NUMERIC} /*p_payroll_calculation_set_id. (필수) calculation_set_id*/
+                                                                   , #{employeeNo                          , mode=IN , jdbcType=NUMERIC} /*p_employee_no. (선택) 연차 재계산할 퇴직자 사번. 없는 경우 payMonth의 급여대상자 중 퇴직자 전체 연차 재계산 됨.*/
+                                                                   )
+        }
+    </select>
+
+    <!-- 연차 보상일수 수정(퇴직월 이후에도 연차정보가 있을 수 있으므로 퇴직월 이후 연차정보 모두 변경 -->
+    <update id="updateAnnualLeave" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00023.updateAnnualLeave */
+               tb_att_annual_leave_n
+        SET    annual_compensation_days               = NVL(#{payDays, jdbcType=NUMERIC}, 0)       /* 연차보상일수 */
+             , residual_annual_leave_days             = 0     /* 잔여연차휴가일수 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+        WHERE  subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}           /* 해외법인코드 */
+        AND    employee_no                            = #{employeeNo}                                     /* 사원번호 */
+        <![CDATA[
+        AND    time_and_attendance_yyyymm             >= #{timeAndAttendanceYyyymm}
+        ]]>
+
+    </update>
+
+</mapper>

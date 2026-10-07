@@ -1,0 +1,1106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00012">
+    <!-- CSV 다운로드 -->
+    <!-- HMT_20210420   Year over OT caculate, Add _300h_taxable, _300h_hr, and _300h_special_hr 
+         ThuyHM_20250428 Add child incentive, ....
+     -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00012.createDirectCSVDownloadData */
+                           yyyymm
+                          ,employee_no
+                          ,employee_name
+                          ,gender
+                          ,payroll_type_code
+                          ,payroll_type_name
+                          ,payroll_calculation_set_id
+                          ,payroll_calculation_set_name
+                          ,organization_code
+                          ,organization_name
+                          ,employment_category_name
+                          ,grade_type_name
+                          ,grade_title_code
+                          ,grade_name
+                          ,band
+                          ,job_group_name
+                          ,job_family_name
+                          ,job_series_name
+                          ,position_name
+                          ,hire_date
+                          ,suspension_date
+                          ,resignation_date
+                          ,probation_start_date
+                          ,probation_end_date
+                          ,working_days
+                          ,unpaid_absence_leave_days
+                          ,paid_leave_days
+                          ,base_salary
+                          ,position_allowance
+                          ,qualificaiton_allowance
+                          ,job_allowance
+                          ,adjustment1_allowance
+                          ,adjustment2_allowance
+                          ,adjustment3_allowance
+                          ,extra_over_hr
+                          ,extra_over_taxable
+                          ,extra_over_non_taxable
+                          ,total_extra_over
+                          ,ot150_hr
+                          ,ot150_300h_hr
+                          ,ot150_300h_taxable
+                          ,ot150_40h_hr
+                          ,ot150_40h_taxable
+                          ,ot150_taxable
+                          ,ot150_non_taxable
+                          ,total_ot150
+                          ,ot200_hr
+                          ,ot200_300h_hr
+                          ,ot200_300h_taxable
+                          ,ot200_40h_hr
+                          ,ot200_40h_taxable
+                          ,ot200_taxable
+                          ,ot200_non_taxable
+                          ,total_ot200
+                          ,ot300_hr
+                          ,ot300_300h_hr
+                          ,ot300_300h_taxable
+                          ,ot300_40h_hr
+                          ,ot300_40h_taxable
+                          ,ot300_taxable
+                          ,ot300_non_taxable
+                          ,total_ot300
+                          ,nt200_hr
+                          ,nt200_300h_hr
+                          ,nt200_300h_taxable
+                          ,nt200_40h_hr
+                          ,nt200_40h_taxable
+                          ,nt200_taxable
+                          ,nt200_non_taxable
+                          ,total_nt200
+                          ,nt210_hr
+                          ,nt210_300h_hr
+                          ,nt210_300h_taxable
+                          ,nt210_40h_hr
+                          ,nt210_40h_taxable
+                          ,nt210_taxable
+                          ,nt210_non_taxable
+                          ,total_nt210
+                          ,nt270_hr
+                          ,nt270_300h_hr
+                          ,nt270_300h_taxable
+                          ,nt270_40h_hr
+                          ,nt270_40h_taxable
+                          ,nt270_taxable
+                          ,nt270_non_taxable
+                          ,total_nt270
+                          ,nt390_hr
+                          ,nt390_300h_hr
+                          ,nt390_300h_taxable
+                          ,nt390_40h_hr
+                          ,nt390_40h_taxable
+                          ,nt390_taxable
+                          ,nt390_non_taxable
+                          ,total_nt390
+                          ,nt30_non_taxable
+                          ,nt30_hr
+                          ,total_ot_sal
+                          ,lateness_deduction
+                          ,lateness_hr
+                          ,goout_deduction
+                          ,goout_hr
+                          ,ealry_leave_amount
+                          ,ealry_leave_hr
+                          ,unapid_amount
+                          ,unpaid_days
+                          ,absence_days
+                          ,unpaid_leaves
+                          ,unpaid_suspension
+                          ,total_working_days
+                          ,annual_leave_amount
+                          ,annual_leave_count
+                          ,housing_allw_base
+                          ,housing_allw_result
+                          ,ot_adj
+                          ,ot_adj_nontaxable
+                          ,salary_adj
+                          ,salary_adj_nontaxable -- TaiDD_20210120
+                          ,transport_allwance
+                          ,attendance_incentive
+                          ,disaster_support_amount
+                          ,firefighting_allowance -- TaiDD_20210120
+                          ,welfare_CC_taxable -- TaiDD_20210120
+                          ,welfare_CC_nontaxable -- TaiDD_20210120
+                          ,total_welfare_CC -- TaiDD_20210120
+                          ,hardship_allowance -- TaiDD_20210120
+                          ,encouragement_incentive -- sangNV_20230720
+                          ,taxable_in_kind_others
+                          ,domitory_deduction
+                          ,id_card_deduction
+                          ,pregnancy_card_deduction
+                          ,etc_deduction
+                          ,si_employee
+                          ,hi_employee
+                          ,ui_employee
+                          ,tu_employee
+                          ,pi
+                          ,ps
+                          ,salary_13
+                          ,menstruation_allowance
+                          ,child_incentive --ThuyHM_20250428
+                          ,retention_incentive
+                          ,lucky_money
+                          ,interviewer_pool_bonus
+                          ,internal_intro_incentive
+                          ,signing_bonus
+                          ,serverance_allowance  --ThuyHM 20260201
+                          ,onboard_incentive
+                          ,extra_night_hr
+                          ,extra_night_incentive
+                          ,actual_salary 
+                          ,total_taxable_earning
+                          ,famliy_deduction
+                          ,night_work_non_taxable
+                          ,total_income_to_calculate_tax
+                          ,DECODE(calc_exception_flag, 'P','Y1', calc_exception_flag) as calc_exception_flag
+                          ,total_non_taxable_earning
+                          ,gross_salary
+                          ,deduction_total_amount
+                          ,total_gross_invoice
+                          ,total_deduction_invoice
+                          ,pit
+                          ,pit_adjustment
+                          ,net_salary
+                          ,bank_name
+                          ,account_no
+        FROM (
+                  SELECT '1' gubun
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payMonth'                  AND lslm.language_code = #{languageCode}) as yyyymm
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeNo'                AND lslm.language_code = #{languageCode}) as employee_no
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeName'              AND lslm.language_code = #{languageCode}) as employee_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'Gender'                              AND lslm.language_code = #{languageCode}) as gender
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payTypeCode'               AND lslm.language_code = #{languageCode}) as payroll_type_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payType'                   AND lslm.language_code = #{languageCode}) as payroll_type_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calcSetId'                 AND lslm.language_code = #{languageCode}) as payroll_calculation_set_id
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calculationSetName'        AND lslm.language_code = #{languageCode}) as payroll_calculation_set_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'OrganizationCode2'                   AND lslm.language_code = #{languageCode}) as organization_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.organizationName'          AND lslm.language_code = #{languageCode}) as organization_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.empCategory'               AND lslm.language_code = #{languageCode}) as employment_category_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.gradeType'                 AND lslm.language_code = #{languageCode}) as grade_type_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.grade'                     AND lslm.language_code = #{languageCode}) as grade_title_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobTitle'                  AND lslm.language_code = #{languageCode}) as grade_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.band'                      AND lslm.language_code = #{languageCode}) as band
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobGroup'                  AND lslm.language_code = #{languageCode}) as job_group_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobFamily'                 AND lslm.language_code = #{languageCode}) as job_family_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobSeries'                 AND lslm.language_code = #{languageCode}) as job_series_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'Position'                            AND lslm.language_code = #{languageCode}) as position_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.hireDate'                  AND lslm.language_code = #{languageCode}) as hire_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.suspensionDate'            AND lslm.language_code = #{languageCode}) as suspension_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.resignationDate'           AND lslm.language_code = #{languageCode}) as resignation_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationStartDate'        AND lslm.language_code = #{languageCode}) as probation_start_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationEndDate'          AND lslm.language_code = #{languageCode}) as probation_end_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.workingDays'               AND lslm.language_code = #{languageCode}) as working_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidLeaveDays'           AND lslm.language_code = #{languageCode}) as unpaid_absence_leave_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.paidLeaveDays'             AND lslm.language_code = #{languageCode}) as paid_leave_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.baseSalary'                AND lslm.language_code = #{languageCode}) as base_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.positionAllowance'         AND lslm.language_code = #{languageCode}) as position_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.qualificationAllowance'    AND lslm.language_code = #{languageCode}) as qualificaiton_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobAllowance'              AND lslm.language_code = #{languageCode}) as job_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment1Allowance'      AND lslm.language_code = #{languageCode}) as adjustment1_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment2Allowance'      AND lslm.language_code = #{languageCode}) as adjustment2_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment3Allowance'      AND lslm.language_code = #{languageCode}) as adjustment3_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraOverHr'               AND lslm.language_code = #{languageCode}) as extra_over_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraOverTaxable'          AND lslm.language_code = #{languageCode}) as extra_over_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraOverNonTaxable'       AND lslm.language_code = #{languageCode}) as extra_over_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalExtraOver'            AND lslm.language_code = #{languageCode}) as total_extra_over
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150Taxable'              AND lslm.language_code = #{languageCode}) as ot150_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150NonTaxable'           AND lslm.language_code = #{languageCode}) as ot150_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150Total'                AND lslm.language_code = #{languageCode}) as total_ot150
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150Hr'                   AND lslm.language_code = #{languageCode}) as ot150_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hOTTaxable'        AND lslm.language_code = #{languageCode}) as ot150_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hOTHr'             AND lslm.language_code = #{languageCode}) as ot150_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot15040hOTTaxable'         AND lslm.language_code = #{languageCode}) as ot150_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot15040hOTHr'              AND lslm.language_code = #{languageCode}) as ot150_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Taxable'              AND lslm.language_code = #{languageCode}) as ot200_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200NonTaxable'           AND lslm.language_code = #{languageCode}) as ot200_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Total'                AND lslm.language_code = #{languageCode}) as total_ot200
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Hr'                   AND lslm.language_code = #{languageCode}) as ot200_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hOTTaxable'        AND lslm.language_code = #{languageCode}) as ot200_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hOTHr'             AND lslm.language_code = #{languageCode}) as ot200_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot20040hOTTaxable'         AND lslm.language_code = #{languageCode}) as ot200_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot20040hOTHr'              AND lslm.language_code = #{languageCode}) as ot200_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Taxable'              AND lslm.language_code = #{languageCode}) as ot300_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300NonTaxable'           AND lslm.language_code = #{languageCode}) as ot300_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Total'                AND lslm.language_code = #{languageCode}) as total_ot300
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Hr'                   AND lslm.language_code = #{languageCode}) as ot300_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hOTTaxable'        AND lslm.language_code = #{languageCode}) as ot300_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hOTHr'             AND lslm.language_code = #{languageCode}) as ot300_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot30040hOTTaxable'         AND lslm.language_code = #{languageCode}) as ot300_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot30040hOTHr'              AND lslm.language_code = #{languageCode}) as ot300_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Taxable'              AND lslm.language_code = #{languageCode}) as nt200_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200NonTaxable'           AND lslm.language_code = #{languageCode}) as nt200_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Total'                AND lslm.language_code = #{languageCode}) as total_nt200
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Hr'                   AND lslm.language_code = #{languageCode}) as nt200_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hOTTaxable'        AND lslm.language_code = #{languageCode}) as nt200_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hOTHr'             AND lslm.language_code = #{languageCode}) as nt200_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt20040hOTTaxable'         AND lslm.language_code = #{languageCode}) as nt200_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt20040hOTHr'              AND lslm.language_code = #{languageCode}) as nt200_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Taxable'              AND lslm.language_code = #{languageCode}) as nt210_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210NonTaxable'           AND lslm.language_code = #{languageCode}) as nt210_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Total'                AND lslm.language_code = #{languageCode}) as total_nt210
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Hr'                   AND lslm.language_code = #{languageCode}) as nt210_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hOTTaxable'        AND lslm.language_code = #{languageCode}) as nt210_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hOTHr'             AND lslm.language_code = #{languageCode}) as nt210_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt21040hOTTaxable'         AND lslm.language_code = #{languageCode}) as nt210_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt21040hOTHr'              AND lslm.language_code = #{languageCode}) as nt210_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Taxable'              AND lslm.language_code = #{languageCode}) as nt270_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270NonTaxable'           AND lslm.language_code = #{languageCode}) as nt270_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Total'                AND lslm.language_code = #{languageCode}) as total_nt270
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Hr'                   AND lslm.language_code = #{languageCode}) as nt270_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hOTTaxable'        AND lslm.language_code = #{languageCode}) as nt270_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hOTHr'             AND lslm.language_code = #{languageCode}) as nt270_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt27040hOTTaxable'         AND lslm.language_code = #{languageCode}) as nt270_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt27040hOTHr'              AND lslm.language_code = #{languageCode}) as nt270_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Taxable'              AND lslm.language_code = #{languageCode}) as nt390_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390NonTaxable'           AND lslm.language_code = #{languageCode}) as nt390_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Total'                AND lslm.language_code = #{languageCode}) as total_nt390
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Hr'                   AND lslm.language_code = #{languageCode}) as nt390_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hOTTaxable'        AND lslm.language_code = #{languageCode}) as nt390_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hOTHr'             AND lslm.language_code = #{languageCode}) as nt390_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt39040hOTTaxable'         AND lslm.language_code = #{languageCode}) as nt390_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt39040hOTHr'              AND lslm.language_code = #{languageCode}) as nt390_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30NonTaxable'            AND lslm.language_code = #{languageCode}) as nt30_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30Hr'                    AND lslm.language_code = #{languageCode}) as nt30_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalOTSal'                AND lslm.language_code = #{languageCode}) as total_ot_sal
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.latenessDeduction'         AND lslm.language_code = #{languageCode}) as lateness_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.latenessHr'                AND lslm.language_code = #{languageCode}) as lateness_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.goingOutDeduction'         AND lslm.language_code = #{languageCode}) as goout_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.goingOutHr'                AND lslm.language_code = #{languageCode}) as goout_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.leavingEarlyDeduction'     AND lslm.language_code = #{languageCode}) as ealry_leave_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.leavingEarlyHr'            AND lslm.language_code = #{languageCode}) as ealry_leave_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidAmount'              AND lslm.language_code = #{languageCode}) as unapid_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidDays'                AND lslm.language_code = #{languageCode}) as unpaid_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.absenceDays'               AND lslm.language_code = #{languageCode}) as absence_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidLeaveDays'           AND lslm.language_code = #{languageCode}) as unpaid_leaves
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidSuspensionDays'      AND lslm.language_code = #{languageCode}) as unpaid_suspension
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalWorkingDays'          AND lslm.language_code = #{languageCode}) as total_working_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.annualLeaveAmount'         AND lslm.language_code = #{languageCode}) as annual_leave_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.annualLeaveCount'          AND lslm.language_code = #{languageCode}) as annual_leave_count
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.housingBaseAmount'         AND lslm.language_code = #{languageCode}) as housing_allw_base
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.housingResult'             AND lslm.language_code = #{languageCode}) as housing_allw_result
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.otAdjustmentAllowance'     AND lslm.language_code = #{languageCode}) as ot_adj
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.otAdjustmentNontaxable'    AND lslm.language_code = #{languageCode}) as ot_adj_nontaxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.salaryAdjustmentAllowance' AND lslm.language_code = #{languageCode}) as salary_adj
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.salaryAdjustmentAllowanceNontaxable'     AND lslm.language_code = #{languageCode}) as salary_adj_nontaxable -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.transportAllowance'        AND lslm.language_code = #{languageCode}) as transport_allwance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.attendanceIncentive'       AND lslm.language_code = #{languageCode}) as attendance_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.disasterSupportAmount'     AND lslm.language_code = #{languageCode}) as disaster_support_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.firefightingAllowance'     AND lslm.language_code = #{languageCode}) as firefighting_allowance -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.welfareCongratulationsCondolencesTaxable'     AND lslm.language_code = #{languageCode}) as welfare_CC_taxable -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.welfareCongratulationsCondolencesNontaxable'     AND lslm.language_code = #{languageCode}) as welfare_CC_nontaxable -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalWelfareCongratulationsCondolences'     AND lslm.language_code = #{languageCode}) as total_welfare_CC -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.hardshipAllowance'     AND lslm.language_code = #{languageCode}) as hardship_allowance -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.encouragementIncentive'    AND lslm.language_code = #{languageCode}) as encouragement_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.taxableInKindOthers'       AND lslm.language_code = #{languageCode}) as taxable_in_kind_others
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.domitoryDeduction'         AND lslm.language_code = #{languageCode}) as domitory_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.idCardDeduction'           AND lslm.language_code = #{languageCode}) as id_card_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pregnancyCardDeduction'    AND lslm.language_code = #{languageCode}) as pregnancy_card_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.socialInsAmount'           AND lslm.language_code = #{languageCode}) as si_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.healthInsAmount'           AND lslm.language_code = #{languageCode}) as hi_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unemploymentInsAmount'     AND lslm.language_code = #{languageCode}) as ui_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.etcDeduction'              AND lslm.language_code = #{languageCode}) as etc_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.tradeUnionAmount'          AND lslm.language_code = #{languageCode}) as tu_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pi'                        AND lslm.language_code = #{languageCode}) as pi
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ps'                        AND lslm.language_code = #{languageCode}) as ps
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.13thSalary'                AND lslm.language_code = #{languageCode}) as salary_13
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.menstruationAllowance'     AND lslm.language_code = #{languageCode}) as menstruation_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.childIncentive'            AND lslm.language_code = #{languageCode}) as child_incentive   --ThuyHM_20250428
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.retentionIncentive'        AND lslm.language_code = #{languageCode}) as retention_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.luckyMoney'                AND lslm.language_code = #{languageCode}) as lucky_money
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.interviewerPoolBonus'      AND lslm.language_code = #{languageCode}) as interviewer_pool_bonus
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.internalIntroIncentive'    AND lslm.language_code = #{languageCode}) as internal_intro_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.signingBonus'              AND lslm.language_code = #{languageCode}) as signing_bonus
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.serveranceAllowance'       AND lslm.language_code = #{languageCode}) as serverance_allowance   --ThuyHM 20260201
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.onboardIncentive'          AND lslm.language_code = #{languageCode}) as onboard_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraNightHr'              AND lslm.language_code = #{languageCode}) as extra_night_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraNightIncentive'       AND lslm.language_code = #{languageCode}) as extra_night_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.actualSalary'              AND lslm.language_code = #{languageCode}) as actual_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalTaxableEarning'       AND lslm.language_code = #{languageCode}) as total_taxable_earning
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.famliyDeduction'           AND lslm.language_code = #{languageCode}) as famliy_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nightWorkNonTaxable'       AND lslm.language_code = #{languageCode}) as night_work_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalIncomeToCalculateTax' AND lslm.language_code = #{languageCode}) as total_income_to_calculate_tax
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calcExceptionFlag'         AND lslm.language_code = #{languageCode}) as calc_exception_flag
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalNonTaxableEarning'    AND lslm.language_code = #{languageCode}) as total_non_taxable_earning
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.grossSalary'               AND lslm.language_code = #{languageCode}) as gross_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalDeductionAmount'      AND lslm.language_code = #{languageCode}) as deduction_total_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalGrossInvoice'         AND lslm.language_code = #{languageCode}) as total_gross_invoice
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalDeductionInvoice'     AND lslm.language_code = #{languageCode}) as total_deduction_invoice
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pit'                       AND lslm.language_code = #{languageCode}) as pit
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pitAdjustment'             AND lslm.language_code = #{languageCode}) as pit_adjustment 
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.netSalary'                 AND lslm.language_code = #{languageCode}) as net_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.bankName'                  AND lslm.language_code = #{languageCode}) as bank_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.accountNumber'             AND lslm.language_code = #{languageCode}) as account_no
+                   FROM DUAL
+                  UNION ALL
+                      SELECT '2' gubun
+                            ,TO_CHAR(TO_DATE(a.basis_yyyymm, 'YYYYMM'), 'MM/YYYY') as yyyymm
+                            ,a.employee_no  as employee_no
+                            ,a.full_name    as employee_name
+                            ,em.gender      AS gender
+                            ,a.payroll_type_code as payroll_type_code
+                            ,a.payroll_type_name as payroll_type_name
+                            ,to_char(a.payroll_calculation_set_id) as payroll_calculation_set_id
+                            ,to_char(a.payroll_calculation_set_name) as payroll_calculation_set_name
+                            ,to_char(a.organization_code) as organization_code
+                            ,to_char(a.organization_name) as organization_name
+                            ,to_char(a.employment_category_name) as employment_category_name
+                            ,to_char(a.grade_type_name) as grade_type_name
+                            ,to_char(a.grade_title_code) as grade_title_code
+                            ,to_char(a.grade_name) as grade_name
+                            ,to_char(a.competency_grade_point_code) as band
+                            ,to_char(a.job_group_name) as job_group_name
+                            ,to_char(a.job_family_name) as job_family_name
+                            ,to_char(a.job_series_name) as job_series_name
+                            ,to_char(a.position_name) as position_name
+                            ,to_char(to_date(a.hire_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') as hire_date
+                            ,to_char(to_date(a.absence_leave_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') as suspension_date
+                            ,to_char(to_date(a.resignation_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') as resignation_date
+                            ,to_char(a.probation_start_date,'dd/mm/yyyy') as probation_start_date
+                            ,to_char(a.probation_end_date,'dd/mm/yyyy') as probation_end_date
+                            ,to_char(a.working_Days) as working_days
+                            ,to_char(a.unpaid_absence_leave_days) as unpaid_absence_leave_days
+                            ,to_char(a.paid_absence_leave_days) as paid_leave_days
+                            ,to_char(a.base_salary) as base_salary
+                            ,to_char(a.position_allowance) as position_allowance
+                            ,to_char(a.qualification_allowance) as qualificaiton_allowance
+                            ,to_char(a.job_allowance) as job_allowance
+                            ,to_char(a.adjustment1_allowance) as adjustment1_allowance
+                            ,to_char(a.adjustment2_allowance) as adjustment2_allowance
+                            ,to_char(a.adjustment3_allowance) as adjustment3_allowance
+                            ,to_char(a.extra_over_hr) as extra_over_hr
+                            ,to_char(a.extra_over_taxable) as extra_over_taxable
+                            ,to_char(a.extra_over_non_taxable) as extra_over_non_taxable
+                            ,to_char(a.total_extra_over) as total_extra_over
+                            ,to_char(a.overtime150_taxable) as ot150_taxable
+                            ,to_char(a.overtime150_non_taxable) as ot150_non_taxable
+                            ,to_char(a.total_overtime150) as total_ot150
+                            ,to_char(a.overtime150_hr + a.overtime150_hc_hr) as ot150_hr
+                            ,to_char(a.overtime150_300h_taxable) as ot150_300h_taxable
+                            ,to_char(a.overtime150_300h_hr + a.overtime150_300h_hc_hr) as ot150_300h_hr
+                            ,to_char(a.overtime150_40h_taxable) as ot150_40h_taxable
+                            ,to_char(a.overtime150_40h_hr + a.overtime150_40h_hc_hr) as ot150_40h_hr
+                            ,to_char(a.overtime200_taxable) as ot200_taxable
+                            ,to_char(a.overtime200_non_taxable) as ot200_non_taxable
+                            ,to_char(a.total_overtime200) as total_ot200
+                            ,to_char(a.overtime200_hr + a.overtime200_hc_hr) as ot200_hr
+                            ,to_char(a.overtime200_300h_taxable) as ot200_300h_taxable
+                            ,to_char(a.overtime200_300h_hr + a.overtime200_300h_hc_hr) as ot200_300h_hr
+                            ,to_char(a.overtime200_40h_taxable) as ot200_40h_taxable
+                            ,to_char(a.overtime200_40h_hr + a.overtime200_40h_hc_hr) as ot200_40h_hr
+                            ,to_char(a.overtime300_taxable) as ot300_taxable
+                            ,to_char(a.overtime300_non_taxable) as ot300_non_taxable
+                            ,to_char(a.total_overtime300) as total_ot300
+                            ,to_char(a.overtime300_hr + a.overtime300_hc_hr) as ot300_hr
+                            ,to_char(a.overtime300_300h_taxable) as ot300_300h_taxable
+                            ,to_char(a.overtime300_300h_hr + a.overtime300_300h_hc_hr) as ot300_300h_hr
+                            ,to_char(a.overtime300_40h_taxable) as ot300_40h_taxable
+                            ,to_char(a.overtime300_40h_hr + a.overtime300_40h_hc_hr) as ot300_40h_hr
+                            ,to_char(a.night200_taxable) as nt200_taxable
+                            ,to_char(a.night200_non_taxable) as nt200_non_taxable
+                            ,to_char(a.total_night200) as total_nt200
+                            ,to_char(a.night200_hr + a.night200_hc_hr) as nt200_hr
+                            ,to_char(a.night200_300h_taxable) as nt200_300h_taxable
+                            ,to_char(a.night200_300h_hr + a.night200_300h_hc_hr) as nt200_300h_hr
+                            ,to_char(a.night200_40h_taxable) as nt200_40h_taxable
+                            ,to_char(a.night200_40h_hr + a.night200_40h_hc_hr) as nt200_40h_hr
+                            ,to_char(a.night210_taxable) as nt210_taxable
+                            ,to_char(a.night210_non_taxable) as nt210_non_taxable
+                            ,to_char(a.total_night210) as total_nt210
+                            ,to_char(a.night210_hr + a.night210_hc_hr) as nt210_hr
+                            ,to_char(a.night210_300h_taxable) as nt210_300h_taxable
+                            ,to_char(a.night210_300h_hr + a.night210_300h_hc_hr) as nt210_300h_hr
+                            ,to_char(a.night210_40h_taxable) as nt210_40h_taxable
+                            ,to_char(a.night210_40h_hr + a.night210_40h_hc_hr) as nt210_40h_hr
+                            ,to_char(a.night270_taxable) as nt270_taxable
+                            ,to_char(a.night270_non_taxable) as nt270_non_taxable
+                            ,to_char(a.total_night270) as total_nt270
+                            ,to_char(a.night270_hr + a.night270_hc_hr) as nt270_hr
+                            ,to_char(a.night270_300h_taxable) as nt270_300h_taxable
+                            ,to_char(a.night270_300h_hr + a.night270_300h_hc_hr) as nt270_300h_hr
+                            ,to_char(a.night270_40h_taxable) as nt270_40h_taxable
+                            ,to_char(a.night270_40h_hr + a.night270_40h_hc_hr) as nt270_40h_hr
+                            ,to_char(a.night390_taxable) as nt390_taxable
+                            ,to_char(a.night390_non_taxable) as nt390_non_taxable
+                            ,to_char(a.total_night390) as total_nt390
+                            ,to_char(a.night390_hr + a.night390_hc_hr) as nt390_hr
+                            ,to_char(a.night390_300h_taxable) as nt390_300h_taxable
+                            ,to_char(a.night390_300h_hr + a.night390_300h_hc_hr) as nt390_300h_hr
+                            ,to_char(a.night390_40h_taxable) as nt390_40h_taxable
+                            ,to_char(a.night390_40h_hr + a.night390_40h_hc_hr) as nt390_40h_hr
+                            ,to_char(a.night30_non_taxable) as nt30_non_taxable
+                            ,to_char(a.night30_hr + a.night30_hc_hr) as nt30_hr
+                            ,to_char(a.total_ot_sal + a.extra_night_incentive) as total_ot_sal
+                            ,to_char(a.tardy_amount) as lateness_deduction
+                            ,to_char(a.tardy_hr) as lateness_hr
+                            ,to_char(a.goout_amount) as goout_deduction
+                            ,to_char(a.goout_hr) as goout_hr
+                            ,to_char(a.ealry_leave_amount) as ealry_leave_amount
+                            ,to_char(a.ealry_leave_hr) as ealry_leave_hr
+                            ,to_char(a.unpaid_amount) as unapid_amount
+                            ,to_char(a.unpaid_days) as unpaid_days
+                            ,to_char(a.abscense_days) as absence_days
+                            ,to_char(a.Unpaid_leaves) as unpaid_leaves
+                            ,to_char(a.Unpaid_suspension) as unpaid_suspension
+                            ,to_char(a.total_working_days) as total_working_days
+                            ,to_char(a.annual_leave_amount) as annual_leave_amount
+                            ,to_char(a.annual_leave_count) as annual_leave_count
+                            ,to_char(a.housing_base_amount) as housing_allw_base
+                            ,to_char(a.housing_result) as housing_allw_result
+                            ,to_char(a.ot_adjustment) as ot_adj
+                            ,to_char(a.ot_adj_nontaxable) as ot_adj_nontaxable
+                            ,to_char(a.salary_adjustment) as salary_adj
+                            ,to_char(a.salary_adjustment_nontaxable) as salary_adj_nontaxable -- TaiDD_20210120
+                            ,to_char(a.transport_allwance) as transport_allwance
+                            ,to_char(a.attendance_incentive) as attendance_incentive
+                            ,to_char(a.disaster_support_amt) as disaster_support_amount
+                            ,to_char(a.firefighting_allw) as firefighting_allowance -- TaiDD_20210120
+                            ,to_char(a.welfare_CC_taxable) as welfare_CC_taxable -- TaiDD_20210120
+                            ,to_char(a.welfare_CC_nontaxable) as welfare_CC_nontaxable -- TaiDD_20210120
+                            ,to_char(a.total_welfare_CC) as total_welfare_CC -- TaiDD_20210120
+                            ,to_char(a.hardship_allowance) as hardship_allowance -- TaiDD_20210120
+                            ,to_char(a.encouragement_incentive) as encouragement_incentive -- sangNV_20230720
+                            ,to_char(a.other_income_in_kind) as taxable_in_kind_others
+                            ,to_char(a.domitory_deduction) as domitory_deduction
+                            ,to_char(a.id_card_deduction) as id_card_deduction
+                            ,to_char(a.pregnancy_card_ded) as pregnancy_card_deduction
+                            ,to_char(a.si_employee) as si_employee
+                            ,to_char(a.hi_employee) as hi_employee
+                            ,to_char(a.ui_employee) as ui_employee
+                            ,to_char(a.etc_deduction) as etc_deduction
+                            ,to_char(a.tu_employee) as tu_employee
+                            ,to_char(a.pi) as pi
+                            ,to_char(a.ps) as ps
+                            ,to_char(a.salary_13th) as salary_13
+                            ,to_char(a.menstruation_allowance) as menstruation_allowance
+                            ,to_char(a.child_incentive) as child_incentive --ThuyHM_20250428
+                            ,to_char(a.retention_incentive) as retention_incentive
+                            ,to_char(a.lucky_money) as lucky_money
+                            ,to_char(a.interviewer_pool_bonus) as interviewer_pool_bonus
+                            ,to_char(a.internal_intro_incentive) as internal_intro_incentive
+                            ,to_char(a.signing_bonus) as signing_bonus
+                            ,to_char(a.serverance_allowance) as serverance_allowance
+                            ,to_char(a.onboard_incentive) as onboard_incentive  --ThuyHM 20260201
+                            ,to_char(a.extra_night_hr) as extra_night_hr  
+                            ,to_char(a.extra_night_incentive) as extra_night_incentive  
+                            ,to_char(a.actual_salary_for_excel) as actual_salary                            
+                            ,to_char(a.aggregate_taxation_amount) as total_taxable_earning
+                            ,to_char(a.family_deduction) as famliy_deduction
+                            ,to_char(a.night_work_non_taxable) as night_work_non_taxable
+                            ,to_char(GREATEST(a.total_income_to_calcualate_tax, 0)) as total_income_to_calculate_tax
+                            ,to_char(NVL(a.calc_exception_flag,'Y'))  as calc_exception_flag
+                            ,to_char(a.tax_free_sum_amount) as total_non_taxable_earning
+                            ,to_char(a.salary_total_amount) as gross_salary
+                            ,to_char(a.deduction_total_amount) as deduction_total_amount
+                            ,to_char(a.total_gross_invoice) as total_gross_invoice
+                            ,to_char(a.total_deduction_invoice) as total_deduction_invoice
+                            ,to_char(a.pit) as pit
+                            ,to_char(a.pit_adj) as pit_adjustment
+                            ,to_char(a.bank_transfer_amount) as net_salary
+                            ,to_char(a.bank_name) as bank_name
+                            ,'="' || TO_CHAR(a.payment_bank_account_no) || '"' as account_no
+                       FROM   vw_pay_payroll_run_result a
+                            , emp_master em
+                       WHERE  1=1
+                       <if test="payrollCalculationExecId != null and payrollCalculationExecId != ''">
+                            AND a.payroll_calculation_exec_id = #{payrollCalculationExecId}
+                       </if>
+                       <if test="searchPayMonth != null and searchPayMonth != ''">
+                            AND a.basis_yyyymm = #{searchPayMonth}
+                       </if>
+                       <if test="payType != null and payType != ''">
+                            AND a.payroll_type_name  = #{payType}
+                       </if>
+                       <if test="employeeNo != null and employeeNo != ''">
+                            AND a.employee_no  = #{employeeNo}
+                       </if>
+                       <if test="employeeName != null and employeeName != ''">
+                            AND UPPER(a.full_name) like '%' || UPPER(#{employeeName}) || '%'
+                       </if>
+                       AND    em.employee_number = a.employee_no
+        )
+        ORDER BY gubun, employee_no asc
+    </select>
+    
+    <select id="createDirectCSVDownloadDataOS" parameterType="java.util.HashMap" resultType="LGCOMData">
+   	   /* Vanaa 2025/11/05 Excel for OUS */
+   	   SELECT /* LGVPAY00012.createDirectCSVDownloadDataOS */
+       	                   yyyymm
+                          ,employee_no
+                          ,employee_name
+                          ,gender
+                          ,payroll_type_code
+                          ,payroll_type_name
+                          ,payroll_calculation_set_id
+                          ,payroll_calculation_set_name
+                          ,organization_code
+                          ,organization_name
+                          ,employment_category_name
+                          ,grade_type_name
+                          ,grade_title_code
+                          ,grade_name
+                          ,band
+                          ,job_group_name
+                          ,job_family_name
+                          ,job_series_name
+                          ,position_name
+                          ,vendor_name
+                          ,hire_date
+                          ,suspension_date
+                          ,resignation_date
+                          ,probation_start_date
+                          ,probation_end_date
+                          ,working_days
+                          ,unpaid_absence_leave_days
+                          ,paid_leave_days
+                          ,base_salary
+                          ,position_allowance
+                          ,qualificaiton_allowance
+                          ,job_allowance
+                          ,os_adj
+                          ,adjustment1_allowance
+                          ,adjustment2_allowance
+                          ,adjustment3_allowance
+                          ,extra_over_hr
+                          ,extra_over_taxable
+                          ,extra_over_non_taxable
+                          ,total_extra_over
+                          ,ot150_hr
+                          ,ot150_special_ot_hr
+                          ,ot150_300h_hr
+                          ,ot150_300h_special_hr
+                          ,ot150_300h_taxable
+                          ,ot150_taxable
+                          ,ot150_non_taxable
+                          ,total_ot150
+                          ,ot200_hr
+                          ,ot200_special_ot_hr
+                          ,ot200_300h_hr
+                          ,ot200_300h_special_hr
+                          ,ot200_300h_taxable
+                          ,ot200_taxable
+                          ,ot200_non_taxable
+                          ,total_ot200
+                          ,ot300_hr
+                          ,ot300_special_ot_hr
+                          ,ot300_300h_hr
+                          ,ot300_300h_special_hr
+                          ,ot300_300h_taxable
+                          ,ot300_taxable
+                          ,ot300_non_taxable
+                          ,total_ot300
+                          ,nt200_hr
+                          ,nt200_special_ot_hr
+                          ,nt200_300h_hr
+                          ,nt200_300h_special_hr
+                          ,nt200_300h_taxable
+                          ,nt200_taxable
+                          ,nt200_non_taxable
+                          ,total_nt200
+                          ,nt210_hr
+                          ,nt210_special_ot_hr
+                          ,nt210_300h_hr
+                          ,nt210_300h_special_hr
+                          ,nt210_300h_taxable
+                          ,nt210_taxable
+                          ,nt210_non_taxable
+                          ,total_nt210
+                          ,nt270_hr
+                          ,nt270_special_ot_hr
+                          ,nt270_300h_hr
+                          ,nt270_300h_special_hr
+                          ,nt270_300h_taxable
+                          ,nt270_taxable
+                          ,nt270_non_taxable
+                          ,total_nt270
+                          ,nt390_hr
+                          ,nt390_special_ot_hr
+                          ,nt390_300h_hr
+                          ,nt390_300h_special_hr
+                          ,nt390_300h_taxable
+                          ,nt390_taxable
+                          ,nt390_non_taxable
+                          ,total_nt390
+                          ,nt30_non_taxable
+                          ,nt30_hr
+                          ,nt30_special_ot_hr
+                          ,total_ot_sal
+                          ,lateness_deduction
+                          ,lateness_hr
+                          ,goout_deduction
+                          ,goout_hr
+                          ,ealry_leave_amount
+                          ,ealry_leave_hr
+                          ,unapid_amount
+                          ,unpaid_days
+                          ,absence_days
+                          ,unpaid_leaves
+                          ,unpaid_suspension
+                          ,total_working_days
+                          ,annual_leave_amount
+                          ,annual_leave_count
+                          ,housing_allw_base
+                          ,housing_allw_result
+                          ,ot_adj
+                          ,ot_adj_nontaxable
+                          ,salary_adj
+                          ,salary_adj_nontaxable -- TaiDD_20210120
+                          ,transport_allwance
+                          ,attendance_incentive
+                          ,disaster_support_amount
+                          ,firefighting_allowance -- TaiDD_20210120
+                          ,welfare_CC_taxable -- TaiDD_20210120
+                          ,welfare_CC_nontaxable -- TaiDD_20210120
+                          ,total_welfare_CC -- TaiDD_20210120
+                          ,hardship_allowance -- TaiDD_20210120
+                          ,special_allowance --sangNV_20240913
+                          ,encouragement_incentive -- sangNV_20230720
+                          ,taxable_in_kind_others
+                          ,domitory_deduction
+                          ,id_card_deduction
+                          ,pregnancy_card_deduction
+                          ,etc_deduction
+                          ,si_employee
+                          ,si_employer
+                          ,hi_employee
+                          ,hi_employer
+                          ,ui_employee
+                          ,ui_employer
+                          ,tu_employee
+                          ,pi
+                          ,ps
+                          ,salary_13
+                          ,menstruation_allowance
+                          ,actual_salary 
+                          ,total_taxable_earning
+                          ,famliy_deduction
+                          ,total_income_to_calculate_tax
+                          ,calc_exception_flag
+                          ,total_non_taxable_earning
+                          ,gross_salary
+                          ,deduction_total_amount
+                          ,total_gross_invoice
+                          ,total_deduction_invoice
+                          ,pit
+                          ,pit_adjustment
+                          ,net_salary
+                          ,total_amount_for_vendor
+                          ,kpi_os
+                          ,service_fee
+                          ,entrance_bonus
+                          ,adj_payment_to_vender
+                          ,bank_name
+                          ,account_no
+        FROM (
+                  SELECT '1' gubun
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payMonth'                  AND lslm.language_code = 'en') as yyyymm
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeNo'                AND lslm.language_code = 'en') as employee_no
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.employeeName'              AND lslm.language_code = 'en') as employee_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'Gender'                              AND lslm.language_code = 'en') as gender
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payTypeCode'               AND lslm.language_code = 'en') as payroll_type_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.payType'                   AND lslm.language_code = 'en') as payroll_type_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calcSetId'                 AND lslm.language_code = 'en') as payroll_calculation_set_id
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calculationSetName'        AND lslm.language_code = 'en') as payroll_calculation_set_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'OrganizationCode2'                   AND lslm.language_code = 'en') as organization_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.organizationName'          AND lslm.language_code = 'en') as organization_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.empCategory'               AND lslm.language_code = 'en') as employment_category_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.gradeType'                 AND lslm.language_code = 'en') as grade_type_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.grade'                     AND lslm.language_code = 'en') as grade_title_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobTitle'                  AND lslm.language_code = 'en') as grade_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.band'                      AND lslm.language_code = 'en') as band
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobGroup'                  AND lslm.language_code = 'en') as job_group_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobFamily'                 AND lslm.language_code = 'en') as job_family_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobSeries'                 AND lslm.language_code = 'en') as job_series_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'Position'                            AND lslm.language_code = 'en') as position_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'Vendor'                              AND lslm.language_code = 'en') as vendor_name -- Vanaa 03/11/2025
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.hireDate'                  AND lslm.language_code = 'en') as hire_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.suspensionDate'            AND lslm.language_code = 'en') as suspension_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.resignationDate'           AND lslm.language_code = 'en') as resignation_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationStartDate'        AND lslm.language_code = 'en') as probation_start_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.probationEndDate'          AND lslm.language_code = 'en') as probation_end_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.workingDays'               AND lslm.language_code = 'en') as working_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidLeaveDays'           AND lslm.language_code = 'en') as unpaid_absence_leave_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.paidLeaveDays'             AND lslm.language_code = 'en') as paid_leave_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.baseSalary'                AND lslm.language_code = 'en') as base_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.positionAllowance'         AND lslm.language_code = 'en') as position_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.qualificationAllowance'    AND lslm.language_code = 'en') as qualificaiton_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.jobAllowance'              AND lslm.language_code = 'en') as job_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjusment'                 AND lslm.language_code = 'en') as os_adj
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment1Allowance'      AND lslm.language_code = 'en') as adjustment1_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment2Allowance'      AND lslm.language_code = 'en') as adjustment2_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.adjustment3Allowance'      AND lslm.language_code = 'en') as adjustment3_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraOverHr'               AND lslm.language_code = 'en') as extra_over_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraOverTaxable'          AND lslm.language_code = 'en') as extra_over_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraOverNonTaxable'       AND lslm.language_code = 'en') as extra_over_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalExtraOver'            AND lslm.language_code = 'en') as total_extra_over
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150Taxable'              AND lslm.language_code = 'en') as ot150_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150NonTaxable'           AND lslm.language_code = 'en') as ot150_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150Total'                AND lslm.language_code = 'en') as total_ot150
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150Hr'                   AND lslm.language_code = 'en') as ot150_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150SpecialOTHr'          AND lslm.language_code = 'en') as ot150_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hOTTaxable'        AND lslm.language_code = 'en') as ot150_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hOTHr'             AND lslm.language_code = 'en') as ot150_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hSpecialOTHr'      AND lslm.language_code = 'en') as ot150_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Taxable'              AND lslm.language_code = 'en') as ot200_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200NonTaxable'           AND lslm.language_code = 'en') as ot200_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Total'                AND lslm.language_code = 'en') as total_ot200
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Hr'                   AND lslm.language_code = 'en') as ot200_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200SpecialOTHr'          AND lslm.language_code = 'en') as ot200_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hOTTaxable'        AND lslm.language_code = 'en') as ot200_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hOTHr'             AND lslm.language_code = 'en') as ot200_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hSpecialOTHr'      AND lslm.language_code = 'en') as ot200_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Taxable'              AND lslm.language_code = 'en') as ot300_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300NonTaxable'           AND lslm.language_code = 'en') as ot300_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Total'                AND lslm.language_code = 'en') as total_ot300
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Hr'                   AND lslm.language_code = 'en') as ot300_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300SpecialOTHr'          AND lslm.language_code = 'en') as ot300_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hOTTaxable'        AND lslm.language_code = 'en') as ot300_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hOTHr'             AND lslm.language_code = 'en') as ot300_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hSpecialOTHr'      AND lslm.language_code = 'en') as ot300_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Taxable'              AND lslm.language_code = 'en') as nt200_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200NonTaxable'           AND lslm.language_code = 'en') as nt200_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Total'                AND lslm.language_code = 'en') as total_nt200
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Hr'                   AND lslm.language_code = 'en') as nt200_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200SpecialOTHr'          AND lslm.language_code = 'en') as nt200_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hOTTaxable'        AND lslm.language_code = 'en') as nt200_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hOTHr'             AND lslm.language_code = 'en') as nt200_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hSpecialOTHr'      AND lslm.language_code = 'en') as nt200_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Taxable'              AND lslm.language_code = 'en') as nt210_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210NonTaxable'           AND lslm.language_code = 'en') as nt210_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Total'                AND lslm.language_code = 'en') as total_nt210
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Hr'                   AND lslm.language_code = 'en') as nt210_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210SpecialOTHr'          AND lslm.language_code = 'en') as nt210_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hOTTaxable'        AND lslm.language_code = 'en') as nt210_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hOTHr'             AND lslm.language_code = 'en') as nt210_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hSpecialOTHr'      AND lslm.language_code = 'en') as nt210_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Taxable'              AND lslm.language_code = 'en') as nt270_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270NonTaxable'           AND lslm.language_code = 'en') as nt270_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Total'                AND lslm.language_code = 'en') as total_nt270
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Hr'                   AND lslm.language_code = 'en') as nt270_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270SpecialOTHr'          AND lslm.language_code = 'en') as nt270_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hOTTaxable'        AND lslm.language_code = 'en') as nt270_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hOTHr'             AND lslm.language_code = 'en') as nt270_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hSpecialOTHr'      AND lslm.language_code = 'en') as nt270_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Taxable'              AND lslm.language_code = 'en') as nt390_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390NonTaxable'           AND lslm.language_code = 'en') as nt390_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Total'                AND lslm.language_code = 'en') as total_nt390
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Hr'                   AND lslm.language_code = 'en') as nt390_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390SpecialOTHr'          AND lslm.language_code = 'en') as nt390_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hOTTaxable'        AND lslm.language_code = 'en') as nt390_300h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hOTHr'             AND lslm.language_code = 'en') as nt390_300h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hSpecialOTHr'      AND lslm.language_code = 'en') as nt390_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30NonTaxable'            AND lslm.language_code = 'en') as nt30_non_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30Hr'                    AND lslm.language_code = 'en') as nt30_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30SpecialOTHr'           AND lslm.language_code = 'en') as nt30_special_ot_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalOTSal'                AND lslm.language_code = 'en') as total_ot_sal
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.latenessDeduction'         AND lslm.language_code = 'en') as lateness_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.latenessHr'                AND lslm.language_code = 'en') as lateness_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.goingOutDeduction'         AND lslm.language_code = 'en') as goout_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.goingOutHr'                AND lslm.language_code = 'en') as goout_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.leavingEarlyDeduction'     AND lslm.language_code = 'en') as ealry_leave_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.leavingEarlyHr'            AND lslm.language_code = 'en') as ealry_leave_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidAmount'              AND lslm.language_code = 'en') as unapid_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidDays'                AND lslm.language_code = 'en') as unpaid_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.absenceDays'               AND lslm.language_code = 'en') as absence_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidLeaveDays'           AND lslm.language_code = 'en') as unpaid_leaves
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unpaidSuspensionDays'      AND lslm.language_code = 'en') as unpaid_suspension
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalWorkingDays'          AND lslm.language_code = 'en') as total_working_days
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.annualLeaveAmount'         AND lslm.language_code = 'en') as annual_leave_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.annualLeaveCount'          AND lslm.language_code = 'en') as annual_leave_count
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.housingBaseAmount'         AND lslm.language_code = 'en') as housing_allw_base
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.housingResult'             AND lslm.language_code = 'en') as housing_allw_result
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.otAdjustmentAllowance'     AND lslm.language_code = 'en') as ot_adj
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.otAdjustmentNontaxable'    AND lslm.language_code = 'en') as ot_adj_nontaxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.salaryAdjustmentAllowance' AND lslm.language_code = 'en') as salary_adj
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.salaryAdjustmentAllowanceNontaxable'     AND lslm.language_code = 'en') as salary_adj_nontaxable -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.transportAllowance'        AND lslm.language_code = 'en') as transport_allwance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.attendanceIncentive'       AND lslm.language_code = 'en') as attendance_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.disasterSupportAmount'     AND lslm.language_code = 'en') as disaster_support_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.firefightingAllowance'     AND lslm.language_code = 'en') as firefighting_allowance -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.welfareCongratulationsCondolencesTaxable'     AND lslm.language_code = 'en') as welfare_CC_taxable -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.welfareCongratulationsCondolencesNontaxable'     AND lslm.language_code = 'en') as welfare_CC_nontaxable -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalWelfareCongratulationsCondolences'     AND lslm.language_code = 'en') as total_welfare_CC -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.hardshipAllowance'     AND lslm.language_code = 'en') as hardship_allowance -- TaiDD_20210120
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.specialAllowance'          AND lslm.language_code = 'en') as special_allowance -- sangNV_20240913
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.encouragementIncentive'    AND lslm.language_code = 'en') as encouragement_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.taxableInKindOthers'       AND lslm.language_code = 'en') as taxable_in_kind_others
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.domitoryDeduction'         AND lslm.language_code = 'en') as domitory_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.idCardDeduction'           AND lslm.language_code = 'en') as id_card_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pregnancyCardDeduction'    AND lslm.language_code = 'en') as pregnancy_card_deduction
+                          
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.socialInsAmount'           AND lslm.language_code = 'en') as si_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.socialInsAmountEr'           AND lslm.language_code = 'en') as si_employer -- 03/11/2025 vanaa add column
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.healthInsAmount'           AND lslm.language_code = 'en') as hi_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.healthInsAmountEr'           AND lslm.language_code = 'en') as hi_employer -- 03/11/2025 vanaa add column
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unemploymentInsAmount'     AND lslm.language_code = 'en') as ui_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.unemploymentInsAmountEr'     AND lslm.language_code = 'en') as ui_employer -- 03/11/2025 vanaa add column
+                          
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.etcDeduction'              AND lslm.language_code = 'en') as etc_deduction
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.tradeUnionAmount'          AND lslm.language_code = 'en') as tu_employee
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pi'                        AND lslm.language_code = 'en') as pi
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ps'                        AND lslm.language_code = 'en') as ps
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.13thSalary'                AND lslm.language_code = 'en') as salary_13
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.menstruationAllowance'     AND lslm.language_code = 'en') as menstruation_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.actualSalary'              AND lslm.language_code = 'en') as actual_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalTaxableEarning'       AND lslm.language_code = 'en') as total_taxable_earning
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.famliyDeduction'           AND lslm.language_code = 'en') as famliy_deduction                          
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalIncomeToCalculateTax' AND lslm.language_code = 'en') as total_income_to_calculate_tax
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calcExceptionFlag'         AND lslm.language_code = 'en') as calc_exception_flag
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalNonTaxableEarning'    AND lslm.language_code = 'en') as total_non_taxable_earning
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.grossSalary'               AND lslm.language_code = 'en') as gross_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalDeductionAmount'      AND lslm.language_code = 'en') as deduction_total_amount
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalGrossInvoice'         AND lslm.language_code = 'en') as total_gross_invoice
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalDeductionInvoice'     AND lslm.language_code = 'en') as total_deduction_invoice
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pit'                       AND lslm.language_code = 'en') as pit
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.pitAdjustment'             AND lslm.language_code = 'en') as pit_adjustment 
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.netSalary'                 AND lslm.language_code = 'en') as net_salary
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'total_amount_for_vendor'             AND lslm.language_code = 'en') as total_amount_for_vendor
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'kpi_os'                              AND lslm.language_code = 'en') as kpi_os      -- 04/11/2025 vanaa add column         
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'service_fee'                         AND lslm.language_code = 'en') as service_fee -- 04/11/2025 vanaa add column                                                             
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'entrance_bonus'                      AND lslm.language_code = 'en') as entrance_bonus -- 04/11/2025 vanaa add column                                                             
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'adj_payment_to_vender'               AND lslm.language_code = 'en') as adj_payment_to_vender
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.bankName'                  AND lslm.language_code = 'en') as bank_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.accountNumber'             AND lslm.language_code = 'en') as account_no
+                   FROM DUAL
+                  UNION ALL
+                      SELECT '2' gubun
+                            ,TO_CHAR(TO_DATE(a.basis_yyyymm, 'YYYYMM'), 'MM/YYYY') as yyyymm
+                            ,a.employee_no  as employee_no
+                            ,a.full_name    as employee_name
+                            ,em.gender      AS gender
+                            ,a.payroll_type_code as payroll_type_code
+                            ,a.payroll_type_name as payroll_type_name
+                            ,to_char(a.payroll_calculation_set_id) as payroll_calculation_set_id
+                            ,to_char(a.payroll_calculation_set_name) as payroll_calculation_set_name
+                            ,to_char(a.organization_code) as organization_code
+                            ,to_char(a.organization_name) as organization_name
+                            ,to_char(a.employment_category_name) as employment_category_name
+                            ,to_char(a.grade_type_name) as grade_type_name
+                            ,to_char(a.grade_title_code) as grade_title_code
+                            ,to_char(a.grade_name) as grade_name
+                            ,to_char(a.competency_grade_point_code) as band
+                            ,to_char(a.job_group_name) as job_group_name
+                            ,to_char(a.job_family_name) as job_family_name
+                            ,to_char(a.job_series_name) as job_series_name
+                            ,to_char(a.position_name) as position_name
+                            ,to_char(a.vendor_name) as vendor_name -- vanaa 03/11/2025
+                            ,to_char(to_date(a.hire_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') as hire_date
+                            ,to_char(to_date(a.absence_leave_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') as suspension_date
+                            ,to_char(to_date(a.resignation_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') as resignation_date
+                            ,to_char(a.probation_start_date,'dd/mm/yyyy') as probation_start_date
+                            ,to_char(a.probation_end_date,'dd/mm/yyyy') as probation_end_date
+                            ,to_char(a.working_Days) as working_days
+                            ,to_char(a.unpaid_absence_leave_days) as unpaid_absence_leave_days
+                            ,to_char(a.paid_absence_leave_days) as paid_leave_days
+                            ,to_char(a.base_salary) as base_salary
+                            ,to_char(a.position_allowance) as position_allowance
+                            ,to_char(a.qualification_allowance) as qualificaiton_allowance
+                            ,to_char(a.job_allowance) as job_allowance
+                            ,to_char(a.os_adj) as os_adj
+                            ,to_char(a.adjustment1_allowance) as adjustment1_allowance
+                            ,to_char(a.adjustment2_allowance) as adjustment2_allowance
+                            ,to_char(a.adjustment3_allowance) as adjustment3_allowance
+                            ,to_char(a.extra_over_hr) as extra_over_hr
+                            ,to_char(a.extra_over_taxable) as extra_over_taxable
+                            ,to_char(a.extra_over_non_taxable) as extra_over_non_taxable
+                            ,to_char(a.total_extra_over) as total_extra_over
+                            ,to_char(a.overtime150_taxable) as ot150_taxable
+                            ,to_char(a.overtime150_non_taxable) as ot150_non_taxable
+                            ,to_char(a.total_overtime150) as total_ot150
+                            ,to_char(a.overtime150_hr) as ot150_hr
+                            ,to_char(a.overtime150_hc_hr) as ot150_special_ot_hr
+                            ,to_char(a.overtime150_300h_taxable) as ot150_300h_taxable
+                            ,to_char(a.overtime150_300h_hr) as ot150_300h_hr
+                            ,to_char(a.overtime150_300h_hc_hr) as ot150_300h_special_hr
+                            ,to_char(a.overtime200_taxable) as ot200_taxable
+                            ,to_char(a.overtime200_non_taxable) as ot200_non_taxable
+                            ,to_char(a.total_overtime200) as total_ot200
+                            ,to_char(a.overtime200_hr) as ot200_hr
+                            ,to_char(a.overtime200_hc_hr) as ot200_special_ot_hr
+                            ,to_char(a.overtime200_300h_taxable) as ot200_300h_taxable
+                            ,to_char(a.overtime200_300h_hr) as ot200_300h_hr
+                            ,to_char(a.overtime200_300h_hc_hr) as ot200_300h_special_hr
+                            ,to_char(a.overtime300_taxable) as ot300_taxable
+                            ,to_char(a.overtime300_non_taxable) as ot300_non_taxable
+                            ,to_char(a.total_overtime300) as total_ot300
+                            ,to_char(a.overtime300_hr) as ot300_hr
+                            ,to_char(a.overtime300_hc_hr) as ot300_special_ot_hr
+                            ,to_char(a.overtime300_300h_taxable) as ot300_300h_taxable
+                            ,to_char(a.overtime300_300h_hr) as ot300_300h_hr
+                            ,to_char(a.overtime300_300h_hc_hr) as ot300_300h_special_hr
+                            ,to_char(a.night200_taxable) as nt200_taxable
+                            ,to_char(a.night200_non_taxable) as nt200_non_taxable
+                            ,to_char(a.total_night200) as total_nt200
+                            ,to_char(a.night200_hr) as nt200_hr
+                            ,to_char(a.night200_hc_hr) as nt200_special_ot_hr
+                            ,to_char(a.night200_300h_taxable) as nt200_300h_taxable
+                            ,to_char(a.night200_300h_hr) as nt200_300h_hr
+                            ,to_char(a.night200_300h_hc_hr) as nt200_300h_special_hr
+                            ,to_char(a.night210_taxable) as nt210_taxable
+                            ,to_char(a.night210_non_taxable) as nt210_non_taxable
+                            ,to_char(a.total_night210) as total_nt210
+                            ,to_char(a.night210_hr) as nt210_hr
+                            ,to_char(a.night210_hc_hr) as nt210_special_ot_hr
+                            ,to_char(a.night210_300h_taxable) as nt210_300h_taxable
+                            ,to_char(a.night210_300h_hr) as nt210_300h_hr
+                            ,to_char(a.night210_300h_hc_hr) as nt210_300h_special_hr
+                            ,to_char(a.night270_taxable) as nt270_taxable
+                            ,to_char(a.night270_non_taxable) as nt270_non_taxable
+                            ,to_char(a.total_night270) as total_nt270
+                            ,to_char(a.night270_hr) as nt270_hr
+                            ,to_char(a.night270_hc_hr) as nt270_special_ot_hr
+                            ,to_char(a.night270_300h_taxable) as nt270_300h_taxable
+                            ,to_char(a.night270_300h_hr) as nt270_300h_hr
+                            ,to_char(a.night270_300h_hc_hr) as nt270_300h_special_hr
+                            ,to_char(a.night390_taxable) as nt390_taxable
+                            ,to_char(a.night390_non_taxable) as nt390_non_taxable
+                            ,to_char(a.total_night390) as total_nt390
+                            ,to_char(a.night390_hr) as nt390_hr
+                            ,to_char(a.night390_hc_hr) as nt390_special_ot_hr
+                            ,to_char(a.night390_300h_taxable) as nt390_300h_taxable
+                            ,to_char(a.night390_300h_hr) as nt390_300h_hr
+                            ,to_char(a.night390_300h_hc_hr) as nt390_300h_special_hr
+                            ,to_char(a.night30_non_taxable) as nt30_non_taxable
+                            ,to_char(a.night30_hr) as nt30_hr
+                            ,to_char(a.night30_hc_hr) as nt30_special_ot_hr
+                            ,to_char(a.total_ot_sal) as total_ot_sal
+                            ,to_char(a.tardy_amount) as lateness_deduction
+                            ,to_char(a.tardy_hr) as lateness_hr
+                            ,to_char(a.goout_amount) as goout_deduction
+                            ,to_char(a.goout_hr) as goout_hr
+                            ,to_char(a.ealry_leave_amount) as ealry_leave_amount
+                            ,to_char(a.ealry_leave_hr) as ealry_leave_hr
+                            ,to_char(a.unpaid_amount) as unapid_amount
+                            ,to_char(a.unpaid_days) as unpaid_days
+                            ,to_char(a.abscense_days) as absence_days
+                            ,to_char(a.Unpaid_leaves) as unpaid_leaves
+                            ,to_char(a.Unpaid_suspension) as unpaid_suspension
+                            ,to_char(a.total_working_days) as total_working_days
+                            ,to_char(a.annual_leave_amount) as annual_leave_amount
+                            ,to_char(a.annual_leave_count) as annual_leave_count
+                            ,to_char(a.housing_base_amount) as housing_allw_base
+                            ,to_char(a.housing_result) as housing_allw_result
+                            ,to_char(a.ot_adjustment) as ot_adj
+                            ,to_char(a.ot_adj_nontaxable) as ot_adj_nontaxable
+                            ,to_char(a.salary_adjustment) as salary_adj
+                            ,to_char(a.salary_adjustment_nontaxable) as salary_adj_nontaxable -- TaiDD_20210120
+                            ,to_char(a.transport_allwance) as transport_allwance
+                            ,to_char(a.attendance_incentive) as attendance_incentive
+                            ,to_char(a.disaster_support_amt) as disaster_support_amount
+                            ,to_char(a.firefighting_allw) as firefighting_allowance -- TaiDD_20210120
+                            ,to_char(a.welfare_CC_taxable) as welfare_CC_taxable -- TaiDD_20210120
+                            ,to_char(a.welfare_CC_nontaxable) as welfare_CC_nontaxable -- TaiDD_20210120
+                            ,to_char(a.total_welfare_CC) as total_welfare_CC -- TaiDD_20210120
+                            ,to_char(a.hardship_allowance) as hardship_allowance -- TaiDD_20210120
+                            ,to_char(a.special_allowance) as special_allowance -- sangNV_20240913
+                            ,to_char(a.encouragement_incentive) as encouragement_incentive -- sangNV_20230720
+                            ,to_char(a.other_income_in_kind) as taxable_in_kind_others
+                            ,to_char(a.domitory_deduction) as domitory_deduction
+                            ,to_char(a.id_card_deduction) as id_card_deduction
+                            ,to_char(a.pregnancy_card_ded) as pregnancy_card_deduction
+                            ,to_char(a.si_employee) as si_employee
+                            ,to_char(a.si_employer) as si_employer
+                            ,to_char(a.hi_employee) as hi_employee
+                            ,to_char(a.hi_employer) as hi_employer
+                            ,to_char(a.ui_employee) as ui_employee
+                            ,to_char(a.ui_employer) as ui_employer
+                            ,to_char(a.etc_deduction) as etc_deduction
+                            ,to_char(a.tu_employee) as tu_employee
+                            ,to_char(a.pi) as pi
+                            ,to_char(a.ps) as ps
+                            ,to_char(a.salary_13th) as salary_13
+                            ,to_char(a.menstruation_allowance) as menstruation_allowance
+                            ,to_char(a.actual_salary_for_excel) as actual_salary                            
+                            ,to_char(a.aggregate_taxation_amount) as total_taxable_earning
+                            ,to_char(a.family_deduction) as famliy_deduction
+                            ,to_char(a.total_income_to_calcualate_tax) as total_income_to_calculate_tax
+                            ,to_char(NVL(a.calc_exception_flag,'Y'))  as calc_exception_flag
+                            ,to_char(a.tax_free_sum_amount) as total_non_taxable_earning
+                            ,to_char(a.salary_total_amount) as gross_salary
+                            ,to_char(a.deduction_total_amount) as deduction_total_amount
+                            ,to_char(a.total_gross_invoice) as total_gross_invoice
+                            ,to_char(a.total_deduction_invoice) as total_deduction_invoice
+                            ,to_char(a.pit) as pit
+                            ,to_char(a.pit_adj) as pit_adjustment
+                            ,to_char(a.bank_transfer_amount) as net_salary
+                            ,to_char(a.total_amount_for_vendor) as total_amount_for_vendor -- vanaa add column
+                            ,to_char(a.kpi_os) as kpi_os -- vanaa add column
+                            ,to_char(a.service_fee) as service_fee -- vanaa add column
+                            ,to_char(a.entrance_bonus) as entrance_bonus -- vanaa add column
+                            ,to_char(a.adj_payment_to_vender) as adj_payment_to_vender -- vanaa add column
+                            ,to_char(a.bank_name) as bank_name
+                            ,'="' || TO_CHAR(a.payment_bank_account_no) || '"' as account_no
+                       FROM   vw_pay_payroll_run_result a
+                            , emp_master em
+                       WHERE  1=1
+                       <if test="payrollCalculationExecId != null and payrollCalculationExecId != ''">
+                            AND a.payroll_calculation_exec_id = #{payrollCalculationExecId}
+                       </if>
+                       <if test="searchPayMonth != null and searchPayMonth != ''">
+                            AND a.basis_yyyymm = #{searchPayMonth}
+                       </if>
+                       <if test="payType != null and payType != ''">
+                            AND a.payroll_type_name  = #{payType}
+                       </if>
+                       <if test="employeeNo != null and employeeNo != ''">
+                            AND a.employee_no  = #{employeeNo}
+                       </if>
+                       <if test="employeeName != null and employeeName != ''">
+                            AND UPPER(a.full_name) like '%' || UPPER(#{employeeName}) || '%'
+                       </if>
+                       AND    em.employee_number = a.employee_no
+        )
+        ORDER BY gubun, employee_no asc
+    </select>
+    
+    <select id="checkDownload" parameterType="LGCOMData" resultType="LGCOMData">
+	   <![CDATA[ 
+	    SELECT /* LGVPAY00012.checkDownload */
+	             CASE 
+			        WHEN pacs.object_type = 'OS' THEN 'OS'
+			        ELSE 'LGD'
+			    END AS object_type
+	        FROM   tb_pay_calc_period_basis_n     pcpb
+	             , tb_pay_calc_exec_n             pce
+	             , lgcom_common_code_multi_lang_c cccm
+	             , tb_pay_calc_emp_exec_n         pcee
+	             , tb_pay_calc_set_n              pacs
+	
+	        WHERE  pcpb.payroll_calc_period_value      = #{searchPayMonth}
+	        AND    pcpb.Subsidiary_Code                = 'LGDVN'
+	        AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd,'yyyymmdd') AND to_date(pcpb.end_yyyymmdd,'yyyymmdd')
+	        AND     pce.payroll_calculation_exec_id      = #{payrollCalculationExecId}
+	        AND    cccm.code_type_code                 = 'LGVHR_PAY_RUN_TYPE'
+	        AND    pce.payroll_type_code               = cccm.common_code
+	        AND    cccm.language_code                  = 'en'
+	        AND    pcee.payroll_calculation_exec_id(+) = pce.payroll_calculation_exec_id
+	        AND    pacs.payroll_calculation_set_id     = pce.payroll_calculation_set_id
+	
+	        GROUP BY pce.payroll_calculation_exec_id
+	               , pce.payroll_calculation_set_id
+	               , pacs.payroll_calculation_set_name
+	               , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')
+	               , pce.payroll_type_code
+	               , cccm.common_code_name
+	               , TO_CHAR(pce.basis_date,'dd/mm/yyyy')
+	               , NVL(pce.confirm_flag, 'N')
+	               , NVL(pce.retroactive_flag, 'N')
+	               , TO_CHAR(TO_DATE(pce.retroactive_pay_start_yyyymm,'yyyymm'),'mm/yyyy')
+	               , TO_CHAR(TO_DATE(pce.retroactive_payroll_end_yyyymm,'yyyymm'),'mm/yyyy')
+	               , pce.creation_user_id
+	               , pce.adding_up_taxation_flag
+	               , TO_CHAR(TO_DATE(pce.addup_taxation_start_yyyymm,'yyyymm'),'mm/yyyy')
+	               , pacs.object_type
+	        ORDER BY 1 DESC
+	    ]]>
+	</select>
+
+</mapper>

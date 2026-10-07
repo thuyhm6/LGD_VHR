@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00033">
+    <!-- 급여대상자 조회 -->
+    <select id="retrievePerfectActual" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00033.retrievePerfectActual */
+             r.employee_no , em.assignment_category, r.time_and_attendance_yyyymm
+			,SUM(DECODE(b.time_and_attendance_code,'NW',1,'PH',1,0)) perfect_work_days 
+			,SUM(lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), 
+			b.shift_type_code, b.work_hours, 'pay_perfect_hours')) as perfect_work_hours
+			,SUM( CASE WHEN (c.paid_days > 0 OR c.attendance_days > 0) THEN lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), b.shift_type_code, b.work_hours, 'pay_perfect_hours')
+			      END) ACTUAL_HOURS
+			,(SUM( CASE WHEN (c.paid_days > 0 OR c.attendance_days > 0) THEN lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), b.shift_type_code, b.work_hours, 'pay_perfect_hours') 
+			            WHEN r.time_and_attendance_code = 'WH' THEN 0 
+			            ELSE (SELECT ar.work_hours FROM tb_att_result_n ar where ar.employee_no = r.employee_no and ar.time_and_attendance_date = b.time_and_attendance_date and ar.time_and_attendance_code != 'NN' )
+			            END   ) - 192
+			            - (nvl(SUM(nvl(r.tardy_hours,0)) + SUM(nvl(r.going_out_hours,0)) + SUM(nvl(r.early_leave_hours,0)),0)) ) AS EXTRA_HOURS 
+			,SUM( CASE WHEN r.shift_type_code LIKE '32%' THEN 1
+			      ELSE 0 END) as "2S3G_OR_NOT" 
+			,SUM( CASE WHEN r.time_attend_detail_code = #{paidLeaveDetailCode} THEN b.work_hours ELSE 0 END) PL_HOURS, 
+			nvl(SUM(nvl(r.tardy_hours,0)) + SUM(nvl(r.going_out_hours,0)) + SUM(nvl(r.early_leave_hours,0)),0) DEDUC_HOURS,
+			SUM(CASE WHEN ((c.paid_days > 0 OR c.attendance_days > 0) AND b.shift_type_code like '%102%') THEN
+			        lgvpay_info_pkg.get_work_hours(
+			                         'LGDVN'
+			                         ,r.employee_no
+			                         ,b.time_and_attendance_date
+			                         ,DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW')
+			                         ,b.shift_type_code
+			                         ,b.work_hours
+			                         ,'pay_perfect_hours')
+			        END) AS actual_hours_2S10G
+			FROM tb_att_result_n r, tb_att_code_c c, tb_att_base_bas_n b, emp_master em
+			WHERE r.time_and_attendance_code = c.time_and_attendance_code
+			AND r.shift_type_code = b.shift_type_code
+			AND r.time_and_attendance_date = b.time_and_attendance_date
+			AND r.time_and_attendance_yyyymm = #{payMonth}
+			AND em.employee_number = r.employee_no
+			AND em.employee_number IN (
+			select tpp.employee_no from tb_pay_paid_leave_n  tpp where 
+			              tpp.payment_yyyymm      = #{payMonth}
+			              AND    tpp.paid_leave_detail_code      = #{paidLeaveDetailCode}
+			)
+			
+        <if test="employeeNo != null and employeeNo != ''">
+            AND em.employee_no = #{employeeNo}
+       </if>
+       <if test="employeeName != null and employeeName != ''">
+           AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+       </if>
+        GROUP BY r.employee_no, em.assignment_category, r.time_and_attendance_yyyymm
+    </select>
+
+    
+
+    
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVPAY00033.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10 , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+                                     , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20, ATTRIBUTE21)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Employee No' AS EMPLOYEE_NO
+                    , 'Employee Name' AS EMPLOYEE_NAME_LOCAL
+                    , 'Employee Eng Name' AS EMPLOYEE_NAME
+                    , 'Payment' AS payment
+					, 'Remark' AS REMARK
+					, 'AP Number' AS ap_number
+					, 'PIC Number' AS pic_number
+					, 'PIC Name' AS pic_name
+                    , 'Organization Name' AS ORGANIZATION_NAME
+                    , 'Type' AS PERSON_TYPE
+                    , 'Status' AS STATUS
+                    , 'Grade' AS GRADE_CODE
+                    , 'Title' AS GRADE_TITLE
+                    , 'Emp. Category' AS EMP_CATEGORY_NAME
+                    , 'Hire Date' AS DATE_HIRE_SUBSIDIARY
+                    , 'Resignation Date' AS DATE_RETIRE
+                    , 'Supervisor' AS SUPERVISOR
+                    , 'Supervisor' AS SUPERVISOR_NAME
+                    , 'Supervisor' AS SUPERVISOR_ORG_NAME
+                    , 'Mobile Phone No.' AS MOBILE_PHONE
+                    , 'Work Type' AS SHIFT_TYPE_NAME
+               FROM DUAL
+               UNION ALL
+               SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+                     , em.employee_number       AS employee_no
+                     , em.full_name_english   AS employee_name
+                     , em.full_name_local     AS employee_name_local
+                     , TO_CHAR(tpe.payment)    as payment
+					 , tpe.remark              as remark
+					 , tpe.ap_number       as ap_number
+					 , tpe.pic_id          as pic_id
+					 , tpe.pic_name         as pic_name
+                     , em.org_name_local      AS organization_name
+                     , em.person_type         AS person_type
+                     , em.status              AS status
+                     , em.grade   AS grade_code
+                     , (SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL)      AS grade_title
+                     , em.grade_type          AS emp_category_name
+                     , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
+                     , TO_CHAR(em.date_retire, 'DD/MM/YYYY')          AS date_retire
+                     , em.supervisor                                  AS supervisor
+                     , (select ema.full_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_name
+                     , (select ema.org_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_org_name
+                     , um.employee_mobile_phone_no as mobile_phone
+                     ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
+                   FROM   tb_pay_emp_other_income_n   tpe
+                         , emp_master          em
+                         , lgcom_user_m        um
+                         , lgcom_company_v     cv
+                   WHERE  em.employee_number   = tpe.employee_no
+                   AND    um.user_name         = em.employee_number
+                   AND    cv.short_code        = em.subsidiary_code
+                   AND    tpe.payment_yyyymm   = #{payMonth} 
+                   <if test="employeeNo != null and employeeNo != ''">
+                        AND tpe.employee_no = #{employeeNo}
+                   </if>
+                   <if test="employeeName != null and employeeName != ''">
+                        AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+                    </if>
+                   ORDER BY ORDER_BY, EMPLOYEE_NO asc
+              ) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    </insert>
+    
+
+</mapper>

@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT00016">
+	<!-- Retrieve Annual Leave Days Info -->
+	<select id="retrieveAnnualLeave" parameterType="LGCOMData"
+		resultType="LGCOMData">
+	<![CDATA[
+		/*LGVATT00016.retrieveAnnualLeave*/
+        SELECT ann.employee_no                                    AS employee_no
+              ,em.full_name_local                                 AS employee_name
+              ,em.org_name_local                                  AS emp_org_name
+              ,to_char(em.date_retire, 'DD/MM/YYYY')              AS resignation_date
+              ,ann.emp_type                                       AS emp_type
+              ,NVL(ann.annual_leave_days, GREATEST(0, LEAST(4, CEIL((MONTHS_BETWEEN(
+                      CASE WHEN em.date_retire IS NOT NULL THEN LEAST(em.date_retire, ann.effective_end_date)
+                           ELSE ann.effective_end_date
+                      END
+                     ,ann.effective_start_date) / 12 * (CASE WHEN ann.emp_type = '4' THEN 2 ELSE 4 END)) * 2) / 2))) AS annual_leave_days
+              ,CASE WHEN ann.annual_leave_days IS NOT NULL THEN 'Y' ELSE 'N' END AS is_calculated
+              ,to_char(ann.effective_start_date, 'DD/MM/YYYY')    AS effective_start_date
+              ,to_char(ann.effective_end_date, 'DD/MM/YYYY')      AS effective_end_date
+              ,to_char(ann.creation_date, 'DD/MM/YYYY')           AS creation_date
+        FROM   tb_att_emp_annual_m ann
+              ,emp_master          em
+        WHERE  em.employee_number = ann.employee_no
+    ]]>
+		<if test="employeeNo != null and employeeNo != ''">
+			AND em.employee_number = #{employeeNo}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND em.full_name_local = #{employeeName}
+		</if>
+		<if test="orgName != null and orgName != ''">
+			AND em.organization_id = #{orgName}
+		</if>
+		<if test="timeAndAttendanceYyyy != null and timeAndAttendanceYyyy != ''">
+			AND to_char(ann.effective_end_date, 'YYYY') = #{timeAndAttendanceYyyy}
+		</if>
+		ORDER BY ann.employee_no
+	</select>
+
+	<insert id="excelDownData" parameterType="java.util.HashMap">
+		/*LGVATT00016.excelDownData*/
+		INSERT INTO xxlge_export_info (SESSION_ID, CREATED_BY, CREATION_DATE,
+		SEQ_NO, CHARACTER_SET_NAME
+		, ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5,
+		ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8)
+		SELECT AI.* FROM (SELECT #{sessionId}
+		,#{USER_SESSION.applicationUserId}
+		,SYSDATE
+		,1
+		,'KO16KSC5601'
+		,'Employee No' AS employee_no
+		,'Employee Name' AS employee_name
+		,'Organization' AS emp_org_name
+		,'Resignation Date' AS resignation_date
+		,'Emp Type' AS emp_type
+		,'Annual Leave Days' AS annual_leave_days
+		,'Effective Start Date' AS effective_start_date
+		,'Effective End Date' AS effective_end_date
+		FROM DUAL
+		UNION ALL
+		SELECT #{sessionId}
+		,#{USER_SESSION.applicationUserId}
+		,sysdate
+		,2
+		,'KO16KSC5601'
+		,ann.employee_no AS employee_no
+		,em.full_name_local AS employee_name
+		,em.org_name_local AS emp_org_name
+		,to_char(em.date_retire, 'DD/MM/YYYY') AS resignation_date
+		,ann.emp_type AS emp_type
+		,to_char(NVL(ann.annual_leave_days, GREATEST(0, LEAST(4, CEIL((MONTHS_BETWEEN(
+				CASE WHEN em.date_retire IS NOT NULL THEN LEAST(em.date_retire, ann.effective_end_date)
+				     ELSE ann.effective_end_date
+				END
+				,ann.effective_start_date) / 12 * (CASE WHEN ann.emp_type = '4' THEN 2 ELSE 4 END)) * 2) / 2)))) AS annual_leave_days
+		,to_char(ann.effective_start_date, 'DD/MM/YYYY') AS effective_start_date
+		,to_char(ann.effective_end_date, 'DD/MM/YYYY') AS effective_end_date
+		FROM tb_att_emp_annual_m ann
+		,emp_master em
+		WHERE em.employee_number = ann.employee_no
+		<if test="employeeNo != null and employeeNo != ''">
+			AND em.employee_number = #{employeeNo}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND em.full_name_local = #{employeeName}
+		</if>
+		<if test="orgName != null and orgName != ''">
+			AND em.organization_id = #{orgName}
+		</if>
+		<if test="timeAndAttendanceYyyy != null and timeAndAttendanceYyyy != ''">
+			AND to_char(ann.effective_end_date, 'YYYY') = #{timeAndAttendanceYyyy}
+		</if>
+		ORDER BY employee_no
+		) AI
+	</insert>
+
+	<update id="mergeAnnualLeave" parameterType="LGCOMData">
+		/*LGVATT00016.mergeAnnualLeave*/
+		MERGE INTO tb_att_emp_annual_m a
+		USING
+		dual b
+		ON (a.employee_no = #{employeeNo}
+		AND a.effective_start_date = to_date(#{effectiveStartDate}, 'DD/MM/YYYY'))
+		WHEN MATCHED THEN
+		UPDATE
+		SET emp_type = #{empType}
+		,annual_leave_days = #{annualLeaveDays}
+		,effective_end_date = to_date(#{effectiveEndDate}, 'DD/MM/YYYY')
+		,last_update_user_id = #{applicationUserId}
+		,last_update_date = SYSDATE
+		WHEN NOT MATCHED THEN
+		INSERT
+		(employee_no
+		,effective_start_date
+		,effective_end_date
+		,emp_type
+		,annual_leave_days
+		,creation_user_id
+		,creation_date
+		,last_update_user_id
+		,last_update_date)
+		VALUES
+		(#{employeeNo}
+		,to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+		,to_date(#{effectiveEndDate}, 'DD/MM/YYYY')
+		,#{empType}
+		,#{annualLeaveDays}
+		,#{applicationUserId}
+		,SYSDATE
+		,#{applicationUserId}
+		,SYSDATE)
+	</update>
+
+	<!-- 체크박스로 선택된 데이터(employee_no + effective_start_date)의 연차일수를 재계산하여 DB에 바로 반영 -->
+	<update id="recalculateAnnualLeave" parameterType="LGCOMData">
+		/*LGVATT00016.recalculateAnnualLeave*/
+		UPDATE tb_att_emp_annual_m ann
+		SET annual_leave_days = GREATEST(0, LEAST(4, CEIL((MONTHS_BETWEEN(
+				CASE WHEN (SELECT em.date_retire FROM emp_master em WHERE em.employee_number = ann.employee_no) IS NOT NULL
+				     THEN LEAST((SELECT em.date_retire FROM emp_master em WHERE em.employee_number = ann.employee_no), ann.effective_end_date)
+				     ELSE ann.effective_end_date
+				END
+				,ann.effective_start_date) / 12 * (CASE WHEN ann.emp_type = '4' THEN 2 ELSE 4 END)) * 2) / 2))
+		,last_update_user_id = #{applicationUserId}
+		,last_update_date = SYSDATE
+		WHERE ann.employee_no = #{employeeNo}
+		AND   ann.effective_start_date = to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+		AND   ann.annual_leave_days IS NULL
+	</update>
+
+	<!--
+		재계산된 annual_leave_days를 TB_ATT_ANNUAL_LEAVE_N.residual_annual_leave_days(대상월)에 가산
+		대상월(#{targetYyyymm})은 서비스에서 effective_start_date/effective_end_date로 계산하여 전달
+		동일 employee_no가 같은 대상월에 emp_type이 다른 여러 건(예: '4', '5')을 가지는 경우 annual_leave_days의 합계를 가산
+	-->
+	<update id="creditResidualAnnualLeaveDays" parameterType="LGCOMData">
+		/*LGVATT00016.creditResidualAnnualLeaveDays*/
+		UPDATE tb_att_annual_leave_n aln
+		SET residual_annual_leave_days = NVL(residual_annual_leave_days, 0) + NVL((
+				SELECT SUM(ann.annual_leave_days)
+				FROM   tb_att_emp_annual_m ann
+				WHERE  ann.employee_no = #{employeeNo}
+				AND    <![CDATA[
+				       CASE WHEN TO_CHAR(ann.effective_start_date, 'YYYYMM') < TO_CHAR(ann.effective_end_date, 'YYYY') || '01'
+				            THEN TO_CHAR(ann.effective_end_date, 'YYYY') || '01'
+				            ELSE TO_CHAR(ann.effective_start_date, 'YYYYMM')
+				       END ]]> = #{targetYyyymm}
+			), 0)
+		,last_update_user_id = #{applicationUserId}
+		,last_update_date = SYSDATE
+		WHERE aln.employee_no = #{employeeNo}
+		AND   aln.time_and_attendance_yyyymm = #{targetYyyymm}
+	</update>
+
+	<!--
+		재계산된 annual_leave_days를 TB_ATT_ANNUAL_LEAVE_N.annual_calibration_days(대상월의 전월, #{prevYyyymm})에 가산
+		동일 employee_no가 같은 대상월에 emp_type이 다른 여러 건(예: '4', '5')을 가지는 경우 annual_leave_days의 합계를 가산
+	-->
+	<update id="creditAnnualCalibrationDays" parameterType="LGCOMData">
+		/*LGVATT00016.creditAnnualCalibrationDays*/
+		UPDATE tb_att_annual_leave_n aln
+		SET annual_calibration_days = NVL(annual_calibration_days, 0) + NVL((
+				SELECT SUM(ann.annual_leave_days)
+				FROM   tb_att_emp_annual_m ann
+				WHERE  ann.employee_no = #{employeeNo}
+				AND    <![CDATA[
+				       CASE WHEN TO_CHAR(ann.effective_start_date, 'YYYYMM') < TO_CHAR(ann.effective_end_date, 'YYYY') || '01'
+				            THEN TO_CHAR(ann.effective_end_date, 'YYYY') || '01'
+				            ELSE TO_CHAR(ann.effective_start_date, 'YYYYMM')
+				       END ]]> = #{targetYyyymm}
+			), 0)
+		,last_update_user_id = #{applicationUserId}
+		,last_update_date = SYSDATE
+		WHERE aln.employee_no = #{employeeNo}
+		AND   aln.time_and_attendance_yyyymm = #{prevYyyymm}
+	</update>
+
+	<!-- 체크박스로 선택되어 삭제된 데이터 반영 -->
+	<update id="deleteAnnualLeave" parameterType="LGCOMData">
+		/*LGVATT00016.deleteAnnualLeave*/
+		DELETE FROM tb_att_emp_annual_m
+		WHERE employee_no = #{employeeNo}
+		AND   effective_start_date = to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+	</update>
+
+	<!-- 사원 구분(emp_type) 코드/명 조회 -->
+	<select id="retrieveEmpTypeNameList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*LGVATT00016.retrieveEmpTypeNameList*/
+			   lcm.common_code as code, lcm.common_code_name as name
+		FROM lgcom_common_code_multi_lang_c lcm
+		    ,lgcom_common_code_c lcc
+		WHERE lcm.code_type_code = 'LGVHR_AL_EMP_TYPE_CODE'
+		AND lcm.code_type_code = lcc.code_type_code
+		AND lcm.common_code = lcc.common_code
+		AND lcm.language_code = #{languageCode}  -- session language
+		AND lcc.use_flag = 'Y'
+	</select>
+
+	<insert id="UploadExcelFile" parameterType="java.util.HashMap">
+
+		INSERT INTO TB_ATT_EMP_ANNUAL_M (EMPLOYEE_NO, EMP_TYPE,
+		EFFECTIVE_START_DATE, EFFECTIVE_END_DATE, CREATION_USER_ID,
+		CREATION_DATE)
+		select
+		trim(li.attribute1) employee_no
+		,trim(li.attribute2) emp_type
+		,TO_DATE(trim(li.attribute3), 'DD/MM/YYYY') effective_start_date
+		,TO_DATE(trim(li.attribute4), 'DD/MM/YYYY') effective_end_date
+		,#{applicationUserId} AS CREATION_USER_ID
+		,SYSDATE
+
+		from lgcom_import_n li
+
+		where li.session_id = #{sessionId}
+
+		and li.seq_no > 1
+
+		and not exists
+		(select 'Y'
+
+		from tb_att_emp_annual_m ea
+
+		where ea.employee_no = trim(li.attribute1)
+		and ea.effective_start_date = TO_DATE(trim(li.attribute3), 'DD/MM/YYYY')
+		)
+	</insert>
+
+</mapper>

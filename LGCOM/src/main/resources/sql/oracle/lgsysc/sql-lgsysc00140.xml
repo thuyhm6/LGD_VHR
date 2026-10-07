@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00140">
+	<!-- Program 목록 조회 -->
+	<select id="retrieveProgramList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT 	/* LGSYSC00140.retrieveProgramList */
+		         a.system_code
+		       , a.module_code 
+		       , a.program_id
+		       , a.program_name
+		       , a.program_type_code
+		       , a.business_effect_code
+		       , a.difficulty_code
+		       , TO_CHAR(a.transfer_date,'YYYY-MM-DD') AS transfer_date
+		       , a.use_flag
+		       , DECODE(NVL(b.use_count,0),0,'N','Y') AS is_menu
+		       , etc_attach_file_id
+		       , a.link_url_addr
+		    FROM LGCOM_PROGRAM_M a
+		       , (
+		            SELECT program_id
+		                 , COUNT(menu_id) AS use_count
+		              FROM LGCOM_MENU_M
+		          GROUP BY program_id
+		         ) b
+		   WHERE a.program_id = b.program_id(+)
+		<if test="systemCode != null and systemCode != ''">
+			AND a.system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+			AND a.module_code = #{moduleCode}
+		</if>
+		<if test="programName != null and programName != ''">
+			AND a.program_name LIKE #{programName} || '%'
+		</if>
+		<if test="useFlag != null and useFlag != ''">
+			AND a.use_flag = #{useFlag}
+		</if>
+		ORDER BY a.system_code, a.module_code, a.program_id
+	</select>
+
+	<!-- Program 목록 조회 -->
+	<select id="retrieveCheckDuplicatedProgramId" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGSYSC00140.retrieveCheckDuplicatedProgramId */
+		       COUNT(program_id) AS cnt
+		  FROM LGCOM_PROGRAM_M
+		 WHERE program_id = #{programId}
+	</select>
+
+	<!-- Program 신규 추가 -->
+	<insert id="insertProgramList" parameterType="java.util.HashMap">
+		INSERT  /* LGSYSC00140.insertProgramList */ 
+		  INTO LGCOM_PROGRAM_M (
+		    program_id,program_name,system_code,module_code,
+		    program_type_code,business_effect_code,difficulty_code,
+		    link_url_addr,
+		    transfer_date,use_flag,created_by,creation_date,
+		    last_updated_by,last_update_date
+		) VALUES (
+		    #{programId},#{programName},#{systemCode},#{moduleCode},
+		    #{programTypeCode},#{businessEffectCode},#{difficultyCode},
+		    #{linkUrlAddr},
+		    TO_DATE(#{transferDate},'YYYY-MM-DD'),'Y',#{sessionUserId},SYSDATE,
+		    #{sessionUserId},SYSDATE
+		)
+	</insert>
+
+	<!-- Program 수정 -->
+	<update id="updateProgramList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_PROGRAM_M   /* LGSYSC00140.updateProgramList */ 
+		   SET program_name         = #{programName}
+		     , system_code          = #{systemCode}
+		     , module_code          = #{moduleCode}
+		     , program_type_code    = #{programTypeCode}
+		     , business_effect_code = #{businessEffectCode}
+		     , difficulty_code      = #{difficultyCode}
+		     , transfer_date        = TO_DATE(#{transferDate},'YYYY-MM-DD')
+		     , ETC_ATTACH_FILE_ID   = #{etcAttachFileId}
+		     , link_url_addr        = #{linkUrlAddr}
+		     , use_flag             = #{useFlag}
+		     , last_updated_by      = #{sessionUserId}
+		     , last_update_date     = SYSDATE
+		 WHERE program_id            = #{programId}
+	</update>
+
+	<!-- Program 삭제 -->
+	<update id="deleteProgramList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_PROGRAM_M /* LGSYSC00140.deleteProgramList */ 
+		   SET use_flag         = 'N'
+		     , last_updated_by  = #{sessionUserId}
+		     , last_update_date = SYSDATE
+		 WHERE program_id       = #{programId}
+	</update>
+	
+	<select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+      select /* LGSYSC00140.createDirectCSVDownloadData */ 
+             system_code
+           , module_code 
+           , program_id
+           , program_name
+           , program_type_code
+           , business_effect_code
+           , difficulty_code
+           , transfer_date
+           , use_flag
+           , is_menu
+           , etc_attach_file_id
+           , link_url_addr
+		  FROM (	
+      SELECT '1' gubun
+           , 'Sytem Code' AS SYSTEM_CODE
+           , 'Module Code' AS MODULE_CODE
+           , 'Program Id' AS PROGRAM_ID
+           , 'Program Name' AS PROGRAM_NAME
+           , 'Program Type Code' AS PROGRAM_TYPE_CODE
+           , 'Business Effect Code' AS BUSINESS_EFFECT_CODE
+           , 'Difficulty Code' AS DIFFICULTY_CODE
+           , 'Transfer Date' AS TRANSFER_DATE
+           , 'Use Flag' AS USE_FLAG
+           , 'Menu Flag' AS IS_MENU
+           , 'Attachment File ID' AS ETC_ATTACH_FILE_ID
+           , 'Link Addr' AS link_url_addr
+       FROM DUAL
+      UNION ALL	
+		  SELECT '2' gubun
+		       , a.system_code
+		       , a.module_code 
+		       , a.program_id
+		       , a.program_name
+		       , a.program_type_code
+		       , a.business_effect_code
+		       , a.difficulty_code
+		       , TO_CHAR(a.transfer_date,'YYYY-MM-DD') AS transfer_date
+		       , a.use_flag
+		       , DECODE(NVL(b.use_count,0),0,'N','Y') AS is_menu
+		       , to_char(etc_attach_file_id) AS etc_attach_file_id
+		       , a.link_url_addr
+		    FROM LGCOM_PROGRAM_M a
+		       , (
+		            SELECT program_id
+		                 , COUNT(menu_id) AS use_count
+		              FROM LGCOM_MENU_M
+		          GROUP BY program_id
+		         ) b
+		   WHERE a.program_id = b.program_id(+)
+		<if test="systemCode != null and systemCode != ''">
+			AND a.system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+			AND a.module_code = #{moduleCode}
+		</if>
+		<if test="programName != null and programName != ''">
+			AND a.program_name LIKE #{programName} || '%'
+		</if>
+		<if test="useFlag != null and useFlag != ''">
+			AND a.use_flag = #{useFlag}
+		</if>
+		)
+		ORDER BY gubun, system_code, module_code, program_id
+	</select>
+	<insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGSYSC00140.createExcelDownloadData */ 
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+                                     , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10 , ATTRIBUTE11 , ATTRIBUTE12 )
+      SELECT #{sessionId}
+           , #{USER_SESSION.applicationUserId}
+           , SYSDATE
+           , 1 AS ORDER_BY
+           , 'KO16KSC5601'
+           , 'Sytem Code' AS SYSTEM_CODE
+           , 'Module Code' AS MODULE_CODE
+           , 'Program Id' AS PROGRAM_ID
+           , 'Program Name' AS PROGRAM_NAME
+           , 'Program Type Code' AS PROGRAM_TYPE_CODE
+           , 'Business Effect Code' AS BUSINESS_EFFECT_CODE
+           , 'Difficulty Code' AS DIFFICULTY_CODE
+           , 'Transfer Date' AS TRANSFER_DATE
+           , 'Use Flag' AS USE_FLAG
+           , 'Menu Flag' AS IS_MENU
+           , 'Attachment File ID' AS ETC_ATTACH_FILE_ID
+           , 'BiMatrix Id' AS link_url_addr
+       FROM DUAL
+
+      UNION ALL
+
+      SELECT #{sessionId}
+           , #{USER_SESSION.applicationUserId}
+           , SYSDATE
+           , 2 AS ORDER_BY
+           , 'KO16KSC5601'
+           , A.SYSTEM_CODE
+           , A.MODULE_CODE
+           , A.PROGRAM_ID
+           , A.PROGRAM_NAME
+           , A.PROGRAM_TYPE_CODE
+           , A.BUSINESS_EFFECT_CODE
+           , A.DIFFICULTY_CODE
+           , TO_CHAR(A.TRANSFER_DATE,'YYYY-MM-DD') AS TRANSFER_DATE
+           , A.USE_FLAG
+           , DECODE(NVL(B.USE_COUNT,0),0,'N','Y') AS IS_MENU
+           , TO_CHAR(ETC_ATTACH_FILE_ID) AS  ETC_ATTACH_FILE_ID
+           , a.link_url_addr
+        FROM LGCOM_PROGRAM_M A
+               , (  SELECT PROGRAM_ID
+                         , COUNT(MENU_ID) AS USE_COUNT
+                      FROM LGCOM_MENU_M
+                  GROUP BY PROGRAM_ID  ) B
+           WHERE A.PROGRAM_ID = B.PROGRAM_ID(+)
+        <if test="systemCode != null and systemCode != ''">
+            AND A.SYSTEM_CODe = #{systemCode}
+        </if>
+        <if test="moduleCode != null and moduleCode != ''">
+            AND A.MODULE_CODE = #{moduleCode}
+        </if>
+        <if test="programName != null and programName != ''">
+            AND A.PROGRAM_NAME LIKE #{programName} || '%'
+        </if>
+        <if test="useFlag != null and useFlag != ''">
+            AND A.USE_FLAG = #{useFlag}
+        </if>
+      ORDER BY ORDER_BY, SYSTEM_CODE, MODULE_CODE, PROGRAM_ID
+	</insert>
+
+	<!-- Excel Upload 후속 처리 -->
+	<select id="createProgramInfoFromUpload" statementType="CALLABLE" parameterType="java.util.HashMap">
+		{call lgcom_excel_pkg.lgsysc00140(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},
+		                                  #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},
+			                              #{sessionId, mode=IN , jdbcType=NUMERIC, javaType=string})}
+	</select>
+</mapper>

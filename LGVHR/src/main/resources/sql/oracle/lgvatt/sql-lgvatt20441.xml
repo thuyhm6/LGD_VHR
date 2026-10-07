@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT20441">
+	<!-- Long Term Plan 상세 조회 -->
+	<select id="retrieveMutiplanDetail" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[		  
+		  SELECT /*LGVATT20441.retrieveMutiplanDetail*/
+				   a.planning_id as planning_id
+				  ,a.approval_request_id as approval_request_id
+			      ,a.subsidiary_code as subsidiary_code
+			      ,a.employee_no as employee_no
+			      ,e.full_name_local || '(' || e.user_name || ')' || '/' || NVL(e.position_name,e.title_name) || '/' || e.organization_name_eng AS requestor
+			      ,(	select  
+                      		lcc.common_code_desc as name
+		                from lgcom_common_code_c lcc, tb_att_code_c cac
+		                where lcc.code_type_code = 'LGVHR_ATTENDANCE_TYPE_CODE' 
+		                and lcc.common_code = cac.time_and_attendance_type_code
+		                and cac.time_and_attendance_code = a.time_and_attendance_code
+		            ) AS attendance_type
+			      ,(select tac.time_and_attendance_name from tb_att_code_c tac where tac.time_and_attendance_code = a.time_and_attendance_code) AS attendance_type_detail
+			      ,(select lcc.common_code_desc from lgcom_common_code_c lcc where lcc.code_type_code  =  'LGVHR_ATTENDANCE_DETAIL_CODE' and lcc.common_code = a.time_attend_detail_code) as detail_reason
+			      ,a.time_and_attendance_code as time_and_attendance_code
+			      ,TO_CHAR(a.plan_start_date,'dd/mm/yyyy') as plan_start_date
+			      ,TO_CHAR(a.plan_end_date,'dd/mm/yyyy') as plan_end_date
+			      ,a.request_reason_content as request_reason_content
+			      ,a.approval_request_id as approval_request_id
+			      ,a.creation_user_id as creation_user_id
+			      ,TO_CHAR(a.creation_date,'dd/mm/yyyy') as creation_date
+			      ,a.last_update_user_id as last_update_user_id
+			      ,TO_CHAR(a.last_update_date,'dd/mm/yyyy') as last_update_date
+            	  ,TO_CHAR(a.creation_date,'dd/mm/yyyy') as request_date
+			FROM TB_ATT_LT_TIME_ATTEND_PLAN_N a
+			LEFT OUTER JOIN lgcom_approval_request_n b
+			ON a.approval_request_id = b.request_master_id
+		    LEFT OUTER JOIN lgcom_user_m_v e
+		    ON a.employee_no = e.user_name
+		   	WHERE a.approval_request_id = #{approvalRequestId}
+		   	AND  a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	]]>	
+	</select>
+	
+	<!-- 승인상태 변경 -->
+	<update  id="updateApporvalStatus" parameterType="LGCOMData">
+		UPDATE tb_att_lt_time_attend_plan_n tap
+		SET tap.progress_status_code = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = tap.approval_request_id AND request_code = tap.request_code)
+		      ,tap.last_update_user_id  = #{sessionAppUserId}
+		      ,tap.last_update_date     = SYSDATE
+		 WHERE tap.approval_request_id = #{requestMasterId}
+		   AND tap.request_code = #{requestCode}
+	</update>		
+	
+	<!-- 반려 시 승인상태 변경 -->
+	<update  id="updateRequestProgress" parameterType="LGCOMData">
+		UPDATE tb_att_lt_time_attend_plan_n
+		<choose>
+		<when test="approvalCommand == 'INPROGRESS'">
+           SET progress_status_code = '30'
+        </when>
+        <when test="approvalCommand == 'APPROVAL'">
+           SET progress_status_code = '40'
+        </when>
+        <when test="approvalCommand == 'REJECT'">
+           SET progress_status_code = '50'
+        </when>
+        <when test="approvalCommand == 'REQUESTCANCEL'">
+           SET progress_status_code = '70'
+        </when>
+        <otherwise>
+           SET progress_status_code = '20'
+        </otherwise>
+        </choose>
+		      ,last_update_user_id  = #{sessionAppUserId}
+		      ,last_update_date     = SYSDATE
+		 WHERE approval_request_id = #{requestMasterId}
+		 AND request_code = #{requestCode}
+		 AND subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	</update>		
+</mapper>

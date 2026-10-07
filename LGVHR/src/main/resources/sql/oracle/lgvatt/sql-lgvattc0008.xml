@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTC0008">
+
+	<select id="executeApplyAttResultFrPlan" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVATTC0008.executeApplyAttResultFrPlan */
+		       lgvatt_batch_pkg.apply_att_result_fr_plan( #{errorCode, mode=OUT, jdbcType=VARCHAR}, 
+		                                                  #{errorBuf,  mode=OUT, jdbcType=VARCHAR} 
+		                                                ) }
+	</select>
+	
+</mapper>

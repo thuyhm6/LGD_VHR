@@ -1,0 +1,2396 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTCOMM">
+<!-- HMT_20210323 Replace DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', '9.5', '8')) by lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},time_and_attendance_date,'21',shift_type_code,8,'perfect_work_hours')--> 
+    <!-- 근태유형명 조회 -->
+    <select id="retrieveAttendanceTypeList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveAttendanceTypeList */
+               ac_t.time_and_attendance_type_code    AS code   /* 근태유형명 */
+             , lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_TYPE_CODE', ac_t.time_and_attendance_type_code, NULL, #{USER_SESSION.langaugeCode})   AS name   /* 근태유형명 */
+        FROM   tb_att_code_c ac_t /* 근태유형 */
+             , tb_att_code_c ac_c /* 근태코드 */
+        WHERE  ac_t.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    ac_c.subsidiary_code = ac_t.subsidiary_code
+        AND    ac_c.time_and_attendance_type_code = ac_t.time_and_attendance_type_code
+        <if test="ofcWrkTechWrkTypeCode != null and ofcWrkTechWrkTypeCode != ''">
+        AND    ac_c.ofc_wrk_tech_wrk_type_code IN ('ALL', #{ofcWrkTechWrkTypeCode})
+        </if>
+        <if test="genderCode != null and genderCode != ''">
+        AND    ac_c.gender_code  IN ('ALL', #{genderCode})
+        </if>
+        <if test="useFlag != null and useFlag != ''">
+        AND    ac_c.use_flag = #{useFlag}
+        </if>
+        <if test="planTgFlag != null and planTgFlag != ''">
+        AND    ac_c.daily_time_attend_plan_tg_flag = #{planTgFlag}
+        </if>
+        <if test="rsltTgFlag != null and rsltTgFlag != ''">
+        AND    ac_c.daily_time_attend_rslt_tg_flag = #{rsltTgFlag}
+        </if>
+        GROUP BY ac_t.time_and_attendance_type_code
+        ORDER BY ac_t.time_and_attendance_type_code
+    </select>
+    
+    <!-- 근태코드 조회 -->
+    <select id="retrieveAttendanceCodeList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveAttendanceCodeList */
+               ac.time_and_attendance_code        AS code    /* 근태코드 */
+             , ac.time_and_attendance_short_name  AS name    /* 근태명 */
+             , ac.time_and_attendance_type_code   AS attend_type_name   /* 근태유형명 */
+             , overtime_flag                                     /* 연장근무여부 */
+             , use_flag                                          /* 사용여부 */
+             , update_enable_flag                                /* 수정가능여부 */
+             , daily_time_attend_plan_tg_flag    AS plan_tg_flag /* 일별근태계획대상여부 */
+             , daily_time_attend_rslt_tg_flag    AS rslt_tg_flag /* 일별근태실적대상여부  */
+        FROM   tb_att_code_c ac
+        WHERE  ac.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        <if test="ofcWrkTechWrkTypeCode != null and ofcWrkTechWrkTypeCode != ''">
+        AND    ac.ofc_wrk_tech_wrk_type_code IN ('ALL', #{ofcWrkTechWrkTypeCode})
+        </if>
+        <if test="genderCode != null and genderCode != ''">
+        AND    ac.gender_code  IN ('ALL', #{genderCode})
+        </if>
+        <if test="useFlag != null and useFlag != ''">
+        AND    ac_c.use_flag = #{useFlag}
+        </if>
+        <if test="planTgFlag != null and planTgFlag != ''">
+        AND    ac.daily_time_attend_plan_tg_flag = #{planTgFlag}
+        </if>
+        <if test="rsltTgFlag != null and rsltTgFlag != ''">
+        AND    ac.daily_time_attend_rslt_tg_flag = #{rsltTgFlag}
+        </if>
+        ORDER BY ac.time_and_attendance_type_code, ac.time_and_attendance_short_name, ac.time_and_attendance_code
+    </select>
+
+    <!-- 근태년월 리스트 조회 -->
+    <!-- HMT_20210525 use closeDateFlag to show yyyymmList  -->
+    <select id="retrieveAttendanceYyyymmList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveAttendanceYyyymmList */
+               ac.time_and_attendance_yyyymm AS code                /* 근태년월 */
+             , TO_CHAR(TO_DATE(ac.time_and_attendance_yyyymm, 'YYYYMM'), 'MM/YYYY') AS name                /* 근태년월 */
+             , ac.period_from_date                                  /* 기간from일자 */
+             , ac.period_to_date                                    /* 기간to일자 */
+             , ac.period_close_date                                 /* 기간마감일자 */
+             , ac.perfect_attendance_days                           /* 확정여부 */
+             , ac.confirm_flag                                      /* 만근일수 */
+        FROM   tb_att_close_n ac
+        WHERE  ac.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}             /* 해외법인코드 */
+        AND    ac.time_and_attendance_yyyymm >= lgvhr_common_pkg.decode_lookup('LGVHR_ATT_COMMON_CODE', 'OPEN_YYYYMM', 'A1')
+        <if test="closeDateFlag != null and closeDateFlag != ''">
+			AND ac.period_close_date >= sysdate
+		</if>
+        ORDER BY ac.time_and_attendance_yyyymm DESC
+    </select>
+    
+    <!-- 현재 근태 년월 -->
+    <select id="retrieveCurrentYyyymm" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveCurrentYyyymm */
+               lgvatt_common_pkg.get_curr_att_yyyymm(#{LGVHR_PROJECT_SESSION.subsidiaryCode}) AS attendance_yyyymm
+        FROM   DUAL
+    </select>
+    
+    <!-- 출근시간콤보에 사용할 데이터 조회 -->
+    <select id="retrieveWorkStartTimeList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVATTCOMM.retrieveWorkStartTimeList */
+		       cc.common_code       AS code
+		     , ccm.common_code_name AS name
+			 , 'Y' AS holiday_flag /* 휴일인 경우 전체 출근시간중 선택 */
+		FROM   lgcom_common_code_c cc
+		     , lgcom_common_code_multi_lang_c ccm
+		WHERE  cc.code_type_code = 'LGVHR_ATT_WORK_START_TIME'
+		AND    cc.use_flag = 'Y'
+		AND    ccm.code_type_code = cc.code_type_code
+		AND    ccm.common_code = cc.common_code
+		AND    ccm.language_code = #{USER_SESSION.languageCode}
+		UNION ALL
+		SELECT cc.common_code       AS code
+		     , ccm.common_code_name AS name
+			 , 'N' AS holiday_flag /* 평일인 경우 8시와 20시만 선택 */
+		FROM   lgcom_common_code_c cc
+		     , lgcom_common_code_multi_lang_c ccm
+		WHERE  cc.code_type_code = 'LGVHR_ATT_WORK_START_TIME'
+		AND    cc.use_flag = 'Y'
+		AND    ccm.code_type_code = cc.code_type_code
+		AND    ccm.common_code = cc.common_code
+		AND    ccm.language_code = #{USER_SESSION.languageCode}
+		AND    cc.common_code IN ('08:00', '20:00')
+		UNION ALL
+	    SELECT cc.common_code       AS code
+	         , ccm.common_code_name AS name
+	       , 'X' AS holiday_flag /* 평일인 경우 8시와 20시만 선택 */
+	    FROM   lgcom_common_code_c cc
+	         , lgcom_common_code_multi_lang_c ccm
+	    WHERE  cc.code_type_code = 'LGVHR_ATT_WORK_START_TIME_FLEXIBLE'
+	    AND    cc.use_flag = 'Y'
+	    AND    ccm.code_type_code = cc.code_type_code
+	    AND    ccm.common_code = cc.common_code
+	    AND    ccm.language_code = #{USER_SESSION.languageCode}
+	    UNION ALL
+		SELECT cc.common_code       AS code
+		     , ccm.common_code_name AS name
+			 , 'T' AS holiday_flag /* 평일인 경우 8시와 14시만 선택 */
+		FROM   lgcom_common_code_c cc
+		     , lgcom_common_code_multi_lang_c ccm
+		WHERE  cc.code_type_code = 'LGVHR_ATT_WORK_START_TIME'
+		AND    cc.use_flag = 'Y'
+		AND    ccm.code_type_code = cc.code_type_code
+		AND    ccm.common_code = cc.common_code
+		AND    ccm.language_code = #{USER_SESSION.languageCode}
+		AND    cc.common_code IN ('08:00', '14:00')
+		ORDER BY holiday_flag, code
+    </select>
+    
+    <!-- 사용자 정보 조회 -->
+    <select id="retrieveEmployee" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveEmployee */
+               em.employee_number     AS employee_no
+             , em.full_name_local     AS employee_name
+             , em.grade               AS grade_code
+             , em.grade_title
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name  
+             , em.grade_type          AS emp_category_name
+             , em.organization_id     
+             , um.default_org_id
+             , em.org_name_local      AS organization_name
+             , em.attribute10         AS shift_type_code
+             , em.job_family||'.'||em.job_group||'.'||em.job_detail  AS work_type_name
+             , em.assignment_category AS employment_category_code /* 재량권 조회시 사용 */
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
+             , um.application_user_id
+             , um.mail_addr
+             , cv.organization_id     AS operating_unit_id
+             , lgvhr_common_pkg.get_org_resp_flag_func(em.subsidiary_code, em.employee_number, TRUNC(SYSDATE)) AS org_resp_flag /* 조직책임자 여부 */
+             , em.subsidiary_code
+             , um.language_code
+             , em.fse_yn  /* FSE 여부 */
+             , em.flsa_yn /* 단기파견자 여부 */
+        FROM   emp_master          em
+             , lgcom_user_m        um
+             , lgcom_company_v     cv
+        <if test="employeeNo == null or employeeNo == ''">
+        WHERE  em.employee_number   = #{USER_SESSION.userName}
+        </if>
+        <if test="employeeNo != null and employeeNo != ''">
+        WHERE  em.employee_number   = #{employeeNo}
+        </if>
+        AND    um.user_name         = em.employee_number
+        AND    cv.short_code        = em.subsidiary_code
+    </select>
+    
+    <!-- OT계산 HMT_20210717 Swap weekly holiday (Add employeeNo)-->
+    <select id="processCalculateOT" statementType="CALLABLE" parameterType="LGCOMData">
+    {call /* LGVATTCOMM.processCalculateOT */ 
+          lgvatt_ot_calculation_pkg.calculate_ot(#{subsidiaryCode, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{employeeNo, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 TO_DATE( REPLACE(#{attendanceYyyymmdd, mode=IN, jdbcType=VARCHAR, javaType=string}, '/', ''), 'DDMMYYYY'),
+                                                 #{attendanceCode, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{shiftTypeCode, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{dayNightFlag, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{dinnerFlag, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{workingStartTime, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{lateness, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{leavingEarly, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{goingOut, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{overtimeSumHours, mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                 #{ot150, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{ot200, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{ot300, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{nt200, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{nt210, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{nt270, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{nt390, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{nt30, mode=OUT, jdbcType=NUMERIC, javaType=double},
+                                                 #{nightDayStatus, mode=OUT, jdbcType=VARCHAR, javaType=string}
+                                                )
+    }
+    </select>
+    
+    <!-- 요청서 작성 시 필요한 기본정보를 조회한다.(재량권 번호, 요청서번호) -->
+    <select id="retrieveRequestDocBaseInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveRequestDocBaseInfo */
+               cc.code_data1_value   AS arm_no
+             , cc.parent_common_code AS request_code /* LGCOM 결재의 문서유형코드LGCOM_APPROVAL_REQUEST_CODE와 매핑 */
+        FROM   lgcom_common_code_c cc
+        WHERE  cc.code_type_code = 'LGVCOM_APPROVAL_REQUEST_CODE'
+        AND    cc.common_code    = #{requestDocCode}
+    </select>
+    
+    <!-- 재량권 정보를 조회한다. -->
+    <select id="retrieveARMInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveARMInfo */ 
+               sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = #{ARM_PARAM.employeeNo}
+        AND    em.attribute1     IS NOT NULL
+        AND    em.attribute1      = sv.user_name
+        AND    em.attribute4      = md.user_name(+)
+        UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = #{ARM_PARAM.employeeNo}
+        AND    em.attribute2     IS NOT NULL
+        AND    em.attribute2      = sv.user_name
+        AND    em.attribute5      = md.user_name(+)
+    </select>
+    
+    <!-- 공통 결재 요청마스터번호 시퀀스 조회 -->
+    <select id="retrieveRequestMasterId" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveRequestMasterId */
+               sq_lgcom_approval_request_n.nextval     AS request_master_id
+        FROM   dual
+    </select>
+    
+    <!-- 공통 결재 마스터에 입력할 정보 조회 -->
+    <select id="retreiveRequestBasicInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retreiveRequestBasicInfo */
+               #{requestMasterId}                AS request_master_id
+             , cc.common_code                    AS request_code
+             , #{USER_SESSION.defaultOrgId}      AS ou_id
+             , cc_m.parent_common_code||'-'||cc_m.code_data5_value||'-'|| cc.common_code||'-'|| #{requestMasterId, jdbcType=VARCHAR}  AS request_no /* LGVHR-모듈3자리-request_code-request_mater_id */
+             , cc_m.parent_common_code           AS system_code
+             , cc.parent_common_code             AS module_code
+             , cm.common_code_name               AS request_title
+             , cm.common_code_name               AS comment_content
+             , #{requestorId}                    AS requestor_id
+             , NVL(cc_yn.code_data2_value, 'Y')  AS portal_flag /* 통합결재 전송할지 여부 */
+             , NVL(cc_yn.code_data3_value, 'Y')  AS mail_flag /* 메일발송여부 */
+        FROM   lgcom_common_code_c            cc
+             , lgcom_common_code_multi_lang_c cm
+             , lgcom_common_code_c            cc_m /* system_code, module_code 조회하기 위한 모듈코드 */
+             , lgcom_common_code_c            cc_yn /* 통합결재, 메일발송여부 조회하기 위한 코드 */
+        WHERE  cc.code_type_code   = 'LGCOM_APPROVAL_REQUEST_CODE'
+        <choose>
+        <when test="approvalMenuId != null and approvalMenuId != ''">
+        AND    cc.code_data3_value = #{approvalMenuId}
+        </when>
+        <when test="requestCode != null and requestCode != ''">
+        AND    cc.common_code      = #{requestCode}
+        </when>
+        <when test="master != null and master != '' and master.approvalMenuId != null and master.approvalMenuId != ''">
+        AND    cc.code_data3_value = #{master.approvalMenuId}
+        </when>
+        <when test="master != null and master != '' and master.requestCode != null and master.requestCode != ''">
+        AND    cc.common_code      = #{master.requestCode}
+        </when>
+        <otherwise>
+        AND    1=2
+        </otherwise>
+        </choose>
+        AND    cm.code_type_code           = cc.code_type_code
+        AND    cm.common_code              = cc.common_code
+        AND    cm.language_code            = #{USER_SESSION.languageCode}
+        AND    cc_m.code_type_code         = 'LGCOM_MODULE_CODE'
+        AND    cc_m.common_code            = cc.parent_common_code
+        
+        AND    cc_yn.code_type_code(+)        = 'LGVCOM_APPROVAL_REQUEST_CODE'
+        AND    cc_yn.parent_code_type_code(+) = cc.code_type_code
+        AND    cc_yn.parent_common_code(+)    = cc.common_code
+    </select>
+    
+    <!-- 공통 결재 마스터 입력 -->
+    <select id="insertApprovalMaster" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.insertApprovalMaster */
+              lgcom_bizweb_approval_pkg.request_create_proc(#{requestMasterId}  /*pi_request_master_id*/,
+                                                            #{requestCode}      /*pi_request_code*/,
+                                                            #{ouId}             /*pi_organization_id*/,
+                                                            #{requestNo}        /*pi_request_no*/,
+                                                            #{systemCode}       /*pi_system_code*/,
+                                                            #{moduleCode}       /*pi_module_code*/,
+                                                            'CREATE'            /*pi_request_creation_code*/,
+                                                            '10'                /*pi_status_code. 10=PRE REQUEST*/,
+                                                            NULL                /*pi_process_status_code*/,
+                                                            'N'                 /*pi_apply_status_code*/,
+                                                            #{requestTitle}     /*pi_request_title*/,
+                                                            #{commentContent}   /*pi_comment_content*/,
+                                                            #{requestorDepartmentCode} /*pi_department_code. 요청자부서코드 */,
+                                                            #{requestorId}         /*pi_requestor_id*/,
+                                                            SYSDATE                /*pi_request_date*/,
+                                                            #{attachFileId}        /*pi_attach_file_id*/,
+                                                            NULL                   /*pi_purchase_type_code*/,
+                                                            NULL                   /*pi_approval_on_off_flag*/,
+                                                            NULL                   /*pi_submission_type_code*/,
+                                                            NULL                   /*pi_source_document_code*/,
+                                                            NULL                   /*pi_concurrent_request_id*/,
+                                                            NULL                   /*pi_group_seq_no*/,
+                                                            NULL                   /*pi_doc_category_code*/,
+                                                            NULL                   /*pi_submit_objective_content*/,
+                                                            NULL                   /*pi_submission_content*/,
+                                                            NULL                   /*pi_approver_screen_url_addr*/,
+                                                            NULL                   /*pi_approval_url_addr*/,
+                                                            NULL                   /*pi_requestor_screen_url_addr*/,
+                                                            NULL                   /*pi_request_url_addr*/,
+                                                            #{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                            #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/
+                                                           )
+        }
+    </select>
+    
+    <!-- 공통 결재에 결자자 입력 -->
+    <select id="insertApprovalLine" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.insertApprovalLine */
+              lgcom_bizweb_approval_pkg.approval_line_create_proc(#{requestMasterId}         /*pi_request_master_id*/,
+                                                                  #{requestCode}             /*pi_request_code*/,
+                                                                  #{ouId}                    /*pi_organization_id*/,
+                                                                  #{employeeNo}              /*pi_user_no. 결재자 사번*/,
+                                                                  #{approvalActionCode}      /*pi_approval_action_code*/,
+                                                                  #{positionName}            /*pi_approval_duty_code*/,
+                                                                  NULL                       /*pi_approval_comment*/,
+                                                                  NULL                       /*pi_inspection_comment*/,
+                                                                  NULL                       /*pi_share_flag*/,
+                                                                  NULL                       /*pi_return_flag*/,
+                                                                  #{menDatorAemployeeNo}     /*pi_mandator_employee_no*/,
+                                                                  NULL                       /*pi_approval_line_id*/,
+                                                                  #{settlementDeleteFlag}    /*pi_settlement_delete_flag*/,
+                                                                  #{sessionAppUserId}        /*pi_creator_user_id*/,
+                                                                  #{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                                  #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/
+                                                                 )
+        } 
+    </select>
+    
+    <!-- 공통 결재 결재자 삭제 -->
+    <select id="deleteApprovalLine" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.deleteApprovalLine */
+              lgcom_bizweb_approval_pkg.approval_line_del_proc(#{requestMasterId}         /*pi_request_master_id*/,
+                                                               #{requestCode}             /*pi_request_code*/,
+                                                               #{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                               #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/
+                                                               )
+        }
+    </select>
+    
+    <!-- 결재요청 -->
+    <select id="insertApprovalRequest" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.insertApprovalRequest */
+              lgcom_bizweb_approval_pkg.main_proc(#{approvalCommand}    /*pi_command. REQUEST:결재요청, APPROVAL:승인, REJECT:반려 */,
+                                                  #{requestMasterId}    /*pi_request_master_id*/,
+                                                  #{requestCode}        /*pi_request_code*/,
+                                                  #{sessionAppUserId}   /*pi_user_id.요청:요청자 application_user_id, 결재:결재자 application_user_id*/,
+                                                  #{comment}            /*pi_comment*/,
+                                                  #{portalFlag}         /*pi_portal_flag. 통합결재 전송여부[Y:전송,N:미전송]*/,
+                                                  #{mailFlag}           /*pi_mail_flag*/,
+                                                  #{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                  #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/
+                                                 )
+        }
+    </select>
+    
+    <!-- 공통결재 승인완료 또는 반려 여부 조회 -->
+    <select id="retrieveApprovalStatus" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveApprovalStatus */
+               DECODE(larn.status_code, '40', 'Y', 'N') AS approved_flag /* 최종승인여부 */
+             , DECODE(larn.status_code, '50', 'Y', 'N') AS rejected_flag /* 반려여부 */
+             , NVL(#{approvalCommand}, DECODE(UPPER(cc.common_code_desc), 'REJECTED', 'REJECT', UPPER(cc.common_code_desc)))  AS approval_type /* 후처리 프로시저 파라메터로 사용 */
+             , larn.status_code
+             , DECODE(SUM(CASE WHEN lasn.user_no IS NOT NULL THEN 1 ELSE 0 END), 0, 'N', 'Y') AS approver_flag /* 결재자 여부 */
+             , CASE WHEN larn.status_code IN ('20', '30') AND SUM(CASE WHEN lasn.approval_status_code = '2' THEN 1 ELSE 0 END) > 0 THEN 'Y'
+                    ELSE 'N'
+               END AS approval_enable_flag /* 결재가능 상태 여부 */
+        FROM   lgcom_approval_request_n larn
+             , lgcom_common_code_c      cc
+             , lgcom_approval_status_n  lasn
+        WHERE  larn.request_master_id       = #{requestMasterId}
+        AND    larn.request_code            = #{requestCode}
+        AND    cc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND    cc.common_code               = larn.status_code
+        AND    lasn.request_master_id(+)    = larn.request_master_id
+        AND    lasn.request_code(+)         = larn.request_code
+        AND    lasn.approval_action_code(+) = 'APPROVAL'
+        <choose>
+        <when test="approverEmployeeNo != null and approverEmployeeNo != ''">
+        AND    lasn.user_no(+)              = #{approverEmployeeNo} /* 결재자 사번 */
+        </when>
+        <otherwise>
+        AND    lasn.user_no(+)              = #{LGVHR_PROJECT_SESSION.employeeNo} /* 결재자 사번이 없는 경우 세션 사용자의 사번 */
+        </otherwise>
+        </choose>
+        GROUP BY larn.status_code, cc.common_code_desc
+    </select>
+    
+    <!-- 일근태 실적 반려 후처리 -->
+    <select id="updateProcessAfterApproval" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.updateProcessAfterApproval */
+              lgvatt_transaction_pkg.apply_att_result_approval(#{retCode , mode=OUT, jdbcType=NUMERIC}     /*p_ret_code*/,
+                                                               #{errorMessage, mode=OUT, jdbcType=VARCHAR} /*p_ret_msg*/,
+                                                               #{USER_SESSION.applicationUserId}           /*p_user_id, 결재자 application_user_id로 last_update_user_id에 입력됨*/,
+                                                               #{LGVHR_PROJECT_SESSION.subsidiaryCode}     /*p_subsidiary_code*/,
+                                                               #{employeeNo}                               /*p_employee_no, 일근태 대상 임직원 사번*/,
+                                                               TO_DATE( REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY')  /*p_time_and_attendance_yyyymmdd, 근태년월일*/,
+                                                               #{resultPlanType}                           /*p_result_plan_type, PLAN:계획, RESULT:실적*/,
+                                                               #{approvalType}                             /*p_approval_type, APPROVAL  또는 REJECT */
+                                                              )
+        }
+    </select>
+    
+    <!-- 수청요청서 승인/반려 후처리 -->
+    <select id="applyAttModifyRequest" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.applyAttModifyRequest */
+              lgvatt_transaction_pkg.apply_att_update_req_approval(#{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                                   #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/,
+                                                                   #{sessionAppUserId},
+                                                                   #{LGVHR_PROJECT_SESSION.subsidiaryCode},
+                                                                   #{requestMasterId},
+                                                                   #{approvalCommand}        
+                                                                  )
+        }
+    </select>
+    
+    <!-- 연차 처리 및 휴가 사용 가능여부 조회 -->
+    <select id="retrieveValidateAnualLeave" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.retrieveValidateAnualLeave */
+              lgvatt_transaction_pkg.valid_att_annual_leave_proc(#{retCode, mode=OUT, jdbcType=NUMERIC}      /*p_ret_code. 0:성공, 그외:실패*/,
+                                                                 #{errorMessage, mode=OUT, jdbcType=VARCHAR} /*p_ret_msg*/,
+                                                                 #{sessionAppUserId}                         /*p_user_id. [필수]로그인 사용자 application_user_id*/,
+                                                                 #{attType}                                  /*p_att_type. [필수]INPUT:근태입력, APPROVAL:근태결재, UPD_REQ:수정요청서 요청, UPD_APPR:수정요청서 결재, LT_TA_REQ:장기근태계획 요청, LT_TA_APPR:장기근태계획 결재*/,
+                                                                 #{subsidiaryCode}                           /*p_subsidiary_code. [필수]법인코드*/,
+                                                                 #{employeeNo}                               /*p_employee_no. [필수]근태 대상자 사번. LIne Worker 수정요청서일때 NULL*/,
+                                                                 #{languageCode}                             /*p_lang_code. [선택]언어코드. null인 경우 en 기본값 */,
+                                                                 TO_DATE(REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY')    /*p_time_and_attendance_date. [선택]Plan 기준의 (오늘)일자. null인 경우 sysdate로 처리됨 */,
+                                                                 #{requestNo}                                /*p_request_no. [선택]Line Worker 수정요청서 번호*/,
+                                                                 #{empCat}                                   /*p_emp_cat. 고용범주. 사무직 일근태 요청 및 수정 요청 시 LGD_OW로 넘길떄 사용함.*/,
+                                                                 #{newInputResultAttCode}                    /*p_new_result_attendance_code 신규 입력된 계획근태코드*/,
+                                                                 #{newInputPlanAttCode}                      /*p_new_plan_attendance_code 신규 입력된 근태코드*/							
+                                                                )
+        }
+    </select>
+  	
+  	<!-- 승인정보 조회 -->
+	<select id="retrieveApproverList" parameterType="LGCOMData" resultType="LGCOMData">
+    <![CDATA[
+		SELECT /*LGVATTCOMM.retrieveApproverList*/
+				 x.approval_seqs
+				,x.approval_action_code
+				,z2.common_code_name approval_action_name
+				,y.common_code_desc
+				,NVL(e1.position_name, e1.title_name) AS position
+				,x.user_no
+				,x.mandator_employee_no
+				,e1.full_name_local || '/' || NVL(e1.position_name,e1.title_name) || '/' || e1.organization_name_eng AS approver
+				,REPLACE(e2.full_name_local || '/' || NVL(e2.position_name,e2.title_name) || '/' || e2.organization_name_eng, '//', '') AS mandator
+				,x.approval_status_code
+				,y.common_code_desc AS approval_status_code_name
+				,TO_CHAR(x.approval_date, 'DD/MM/YYYY HH24:MI') AS approval_date
+			    ,x.approval_comment
+		 FROM   lgcom_approval_status_n        x
+		       ,lgcom_common_code_c            y
+		       ,lgcom_common_code_c            z1
+		       ,lgcom_common_code_multi_lang_c z2
+		       ,lgcom_user_m_v                 e1
+		       ,lgcom_user_m_v                 e2
+	    WHERE  1 = 1
+	    AND    x.approval_status_code = y.common_code
+	    AND    y.code_type_code = 'LGCOM_APPROVAL_STATUS_CODE'
+	    AND    x.approval_action_code = z1.common_code
+	    AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+	    AND    z1.code_type_code = z2.code_type_code
+	    AND    z1.common_code = z2.common_code
+	    AND    z2.language_code = #{USER_SESSION.languageCode}
+	    AND    x.request_master_id = #{requestMasterId}
+	    AND    x.request_code = #{requestCode}
+	    AND    x.approval_seqs > 0
+	    AND    x.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL', 'PARAGREE_OR')
+	    AND    x.user_no = e1.user_name
+	    AND    x.mandator_employee_no = e2.user_name(+)
+	    ORDER  BY x.approval_seqs
+    ]]>
+    </select>
+
+    <!-- OT 재계산하기 위한 파라메터 조회 -->
+    <select id="retrieveCalculateOtParamData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrieveCalculateOtParamData */
+               #{LGVHR_PROJECT_SESSION.subsidiaryCode} AS subsidiary_code
+             , #{attendanceYyyymmdd}                   AS attendance_yyyymmdd
+             , #{attendanceCode}                       AS attendance_code
+             , #{shiftTypeCode}                        AS shift_type_code
+             , #{nightShiftFlag}                       AS day_night_flag
+             , #{eveningMealFlag}                      AS dinner_flag
+             , #{workStartTime}                        AS working_start_time
+             , TO_CHAR(#{tardyHours})                  AS lateness
+             , TO_CHAR(#{earlyLeaveHours})             AS leaving_early
+             , TO_CHAR(#{goingOutHours})               AS going_out
+             , TO_CHAR(#{overtimeSumHours})            AS overtime_sum_hours
+             
+             /* tb_att_ot_validation_n 저장시 필요한 파라메터 */
+             , #{LGVHR_PROJECT_SESSION.employeeNo}     AS employee_no
+             , #{attendanceYyyymmdd}                   AS att_date
+             , #{shiftTypeCode}                        AS actual_shift_code
+             , #{attendanceCode}                       AS actual_attendance_detail
+             , #{nightShiftFlag}                       AS actual_day_night
+             , #{workStartTime}                        AS actual_start_tm
+             , #{eveningMealFlag}                      AS actual_dinner_chk
+             
+             , #{USER_SESSION.languageCode}            AS language_code
+             , lgvhr_common_pkg.decode_lookup('LGVHR_ATT_COMMON_CODE', 'OT_CHECK_FLAG', 'A1', 'en') AS ot_check_flag
+        FROM   DUAL
+    </select>
+
+    <!-- OT 재조회한 값과 전달된 파라메터 값 비교 -->
+    <select id="retrieveCompareOtData" parameterType="LGCOMData" resultType="LGCOMData">
+    	WITH check_value AS (
+	        SELECT /* LGVATTCOMM.retrieveCompareOtData */
+	               CASE WHEN COUNT(1) > 0 THEN 'Y' ELSE 'N' END as error_flag
+	        FROM   DUAL
+	        WHERE  1=1
+	        <![CDATA[
+	        AND   (
+	              ( NVL(TO_NUMBER(#{overtimeSumHours}), 0) <> NVL(TO_NUMBER(#{itemData.overtimeSumHours}), 0) ) /* overtime_sum_hours */
+	        OR    ( NVL(TO_NUMBER(#{ot150}), 0) <> NVL(TO_NUMBER(#{itemData.weekdayOvertimeHours}), 0) )        /* ot150. weekday_overtime_hours. */
+	        OR    ( NVL(TO_NUMBER(#{ot200}), 0) <> NVL(TO_NUMBER(#{itemData.holidayOvertimeHours}), 0) )        /* ot200. holiday_overtime_hours. */
+	        OR    ( NVL(TO_NUMBER(#{ot300}), 0) <> NVL(TO_NUMBER(#{itemData.publicHolidayOvertimeHours}), 0) )  /* ot300. public_holiday_overtime_hours. */
+	        OR    ( NVL(TO_NUMBER(#{nt200}), 0) <> NVL(TO_NUMBER(#{itemData.weekdayNightOvertimeHours}), 0) )   /* nt200. weekday_night_overtime_hours. */
+	        OR    ( NVL(TO_NUMBER(#{nt210}), 0) <> NVL(TO_NUMBER(#{itemData.weekdayOtAfNightWorkHours}), 0) )   /* nt210. weekday_ot_af_night_work_hours. */
+	        OR    ( NVL(TO_NUMBER(#{nt270}), 0) <> NVL(TO_NUMBER(#{itemData.holidayNightOvertimeHours}), 0) )   /* nt270. holiday_night_overtime_hours. */
+	        OR    ( NVL(TO_NUMBER(#{nt390}), 0) <> NVL(TO_NUMBER(#{itemData.publicHolidayNightOtHours}), 0) )   /* nt390. public_holiday_night_ot_hours. */
+	        OR    ( NVL(TO_NUMBER(#{nt30}), 0) <> NVL(TO_NUMBER(#{itemData.normalNightOvertimeHours}), 0) )     /* nt30. normal_night_overtime_hours. */
+	              )
+	        ]]>
+        )
+        SELECT check_value.error_flag
+             , lgvhr_common_pkg.decode_message('note.att.checkOT', #{languageCode})
+               || ' (' 
+               <![CDATA[
+               || CASE WHEN NVL(TO_NUMBER(#{overtimeSumHours}), 0) <> NVL(TO_NUMBER(#{itemData.overtimeSumHours}),           0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.totalOT'       AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{ot150}),            0) <> NVL(TO_NUMBER(#{itemData.weekdayOvertimeHours}),       0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOT'      AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTWeekDay2'             AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{ot200}),            0) <> NVL(TO_NUMBER(#{itemData.holidayOvertimeHours}),       0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOT'      AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTWeekDayHoliday2'      AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{ot300}),            0) <> NVL(TO_NUMBER(#{itemData.publicHolidayOvertimeHours}), 0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOT'      AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTPublicHoliday2'       AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{nt200}),            0) <> NVL(TO_NUMBER(#{itemData.weekdayNightOvertimeHours}),  0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNight' AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNightWeekDay2'        AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{nt210}),            0) <> NVL(TO_NUMBER(#{itemData.weekdayOtAfNightWorkHours}),  0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNight' AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNightWeekDayAfterOT2' AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{nt270}),            0) <> NVL(TO_NUMBER(#{itemData.holidayNightOvertimeHours}),  0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNight' AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNightWeekDayHoliday2' AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{nt390}),            0) <> NVL(TO_NUMBER(#{itemData.publicHolidayNightOtHours}),  0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNight' AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualOTNightPublicHoliday2'  AND lslm.language_code = #{languageCode})
+                       WHEN NVL(TO_NUMBER(#{nt30}),             0) <> NVL(TO_NUMBER(#{itemData.normalNightOvertimeHours}),   0) THEN (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.night'         AND lslm.language_code = #{languageCode}) || ' ' || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.nightNormal2'                 AND lslm.language_code = #{languageCode})
+                  END 
+               ]]> 
+               || ') '
+               || <![CDATA['<br/>']]>
+               || (SELECT lslm.label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.date' AND lslm.language_code = #{languageCode}) 
+               || ' : ' 
+               || TO_CHAR(TO_DATE(REPLACE(#{itemData.attendanceYyyymmdd}, '/', ''), 'DDMMYYYY'), 'DD/MM/YYYY') AS error_message
+        FROM   check_value
+    </select>
+    
+     <!-- 임시로 엑셀 추출 근태월간 리포트 테스트를 위한 쿼리이다 -->
+    <select id="createExcelMonthReportMain" parameterType="LGCOMData" resultType="LGCOMData">
+      INSERT INTO /* LGVATTCOMM.createExcelMonthReportMain */  
+        XXLGE_EXPORT_INFO (SESSION_ID,  CREATED_BY,  CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                         , ATTRIBUTE1,  ATTRIBUTE2,  ATTRIBUTE3,  ATTRIBUTE4,  ATTRIBUTE5
+                         , ATTRIBUTE6,  ATTRIBUTE7,  ATTRIBUTE8,  ATTRIBUTE9,  ATTRIBUTE10
+                         , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+                         , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+                         , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+                         , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+                         , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+                         , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39, ATTRIBUTE40
+                         , ATTRIBUTE41, ATTRIBUTE42, ATTRIBUTE43, ATTRIBUTE44, ATTRIBUTE45
+                         , ATTRIBUTE46, ATTRIBUTE47, ATTRIBUTE48
+                          )
+      SELECT   #{sessionId}                       AS SESSION_ID
+             , #{sessionUserId}                   AS CREATED_BY
+             , SYSDATE                            AS CREATION_DATE
+             , 1                                  AS ORDER_BY       
+             , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+             , 'No'                               AS ROWNO
+             , 'HR ID'                            AS EMPLOYEE_NUMBER
+             , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+             , 'Name'                             AS PULL_NAME_LOCAL
+             , 'Team'                             AS ORG_NAME_LOCAL
+             , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+             , 'Start Date'                       AS START_DATE
+             , '1'                                AS DD01 
+             , '2'                                AS DD02 
+             , '3'                                AS DD03 
+             , '4'                                AS DD04 
+             , '5'                                AS DD05 
+             , '6'                                AS DD06 
+             , '7'                                AS DD07 
+             , '8'                                AS DD08 
+             , '9'                                AS DD09 
+             , '10'                               AS DD10 
+             , '11'                               AS DD11 
+             , '12'                               AS DD12 
+             , '13'                               AS DD13 
+             , '14'                               AS DD14 
+             , '15'                               AS DD15 
+             , '16'                               AS DD16 
+             , '17'                               AS DD17 
+             , '18'                               AS DD18 
+             , '19'                               AS DD19 
+             , '20'                               AS DD20 
+             , '21'                               AS DD21 
+             , '22'                               AS DD22 
+             , '23'                               AS DD23 
+             , '24'                               AS DD24 
+             , '25'                               AS DD25 
+             , '26'                               AS DD26 
+             , '27'                               AS DD27 
+             , '28'                               AS DD28 
+             , '29'                               AS DD29  
+             , '30'                               AS DD30 
+             , '31'                               AS DD31
+             , 'H'                                AS H_Days                      -- H : WORKING DAYS-PAID     
+             , 'A'                                AS A_Days                      -- A : WORKING DAYS-PAID     
+             , 'M'                                AS M_Days                      -- M : WORKING DAYS-PAID     
+             , 'F'                                AS F_Days                      -- F : WORKING DAYS-PAID     
+             , 'W'                                AS W_Days                      -- W : WORKING DAYS-PAID     
+             , 'Not Working (Days)'               AS NW_Days                     -- Not Working (Days)        
+             , 'Full Absence (Days)'              AS FA_Days                     -- Full Absence (Days)       
+             , 'Late/Soon/GoOut (Hrs)'            AS LSG_Hours                   -- Late/Soon/GoOut (Hrs)     
+             , 'TOTAL PAID (Days)'                AS TP_Days  
+             , 'A.L. Remain'                      AS AL                                                 
+      FROM   DUAL
+
+      UNION ALL
+
+      SELECT   #{sessionId}                                              AS SESSION_ID
+             , #{sessionUserId}                                          AS CREATED_BY
+             , SYSDATE                                                   AS CREATION_DATE
+             , ROWNUM+1                                                  AS ORDER_BY       
+             , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+             , TO_CHAR(ROWNUM)                                           AS ROWNO
+             , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+             , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+             , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+             , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+             , T.PART_UNIT                                               AS PART_UNIT
+             , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+             , T.DD01                                                    AS DD01
+             , T.DD02                                                    AS DD02
+             , T.DD03                                                    AS DD03
+             , T.DD04                                                    AS DD04
+             , T.DD05                                                    AS DD05
+             , T.DD06                                                    AS DD06
+             , T.DD07                                                    AS DD07
+             , T.DD08                                                    AS DD08
+             , T.DD09                                                    AS DD09
+             , T.DD10                                                    AS DD10
+             , T.DD11                                                    AS DD11
+             , T.DD12                                                    AS DD12
+             , T.DD13                                                    AS DD13
+             , T.DD14                                                    AS DD14
+             , T.DD15                                                    AS DD15
+             , T.DD16                                                    AS DD16
+             , T.DD17                                                    AS DD17
+             , T.DD18                                                    AS DD18
+             , T.DD19                                                    AS DD19
+             , T.DD20                                                    AS DD20
+             , T.DD21                                                    AS DD21
+             , T.DD22                                                    AS DD22
+             , T.DD23                                                    AS DD23
+             , T.DD24                                                    AS DD24
+             , T.DD25                                                    AS DD25
+             , T.DD26                                                    AS DD26
+             , T.DD27                                                    AS DD27
+             , T.DD28                                                    AS DD28
+             , T.DD29                                                    AS DD29
+             , T.DD30                                                    AS DD30
+             , T.DD31                                                    AS DD31
+             , TO_CHAR(T.H_Days    )                                     AS H_Days                      -- H : WORKING DAYS-PAID
+             , TO_CHAR(T.A_Days    )                                     AS A_Days                      -- A : WORKING DAYS-PAID
+             , TO_CHAR(T.M_Days    )                                     AS M_Days                      -- M : WORKING DAYS-PAID
+             , TO_CHAR(T.F_Days    )                                     AS F_Days                      -- F : WORKING DAYS-PAID
+             , TO_CHAR(T.W_Days    )                                     AS W_Days                      -- W : WORKING DAYS-PAID
+             , TO_CHAR(T.NW_Days   )                                     AS NW_Days                     -- Not Working (Days)
+             , TO_CHAR(T.FA_Days   )                                     AS FA_Days                     -- Full Absence (Days)
+             , TO_CHAR(T.LSG_Hours )                                     AS LSG_Hours                   -- Late/Soon/GoOut (Hrs)
+             , TO_CHAR(T.TP_Days   )                                     AS TP_Days
+             , ''                                                        AS AL
+         FROM (
+      SELECT    
+               rr.employee_no                    AS employee_number              -- 사번
+             , rr.assignment_category            AS assignment_category
+             , rr.full_name_local                AS full_name_local
+             , rr.org_name_local                 AS org_name_local
+             , ''                                AS part_unit
+             , rr.probation_start_date           AS probation_start_date
+             ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+             ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+             ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+             ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+             ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+             ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+             ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+             ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+             ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+             ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+             ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+             ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+             ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+             ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+             ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+             ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+             ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+             ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+             ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+             ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+             ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+             ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+             ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+             ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+             ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+             ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+             ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+             ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+             ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+             ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+             ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+             ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+             ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+             ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31
+                 
+             ,SUM(rr.H_Days)                     AS  H_Days                      -- H : WORKING DAYS-PAID
+             ,SUM(rr.A_Days)                     AS  A_Days                      -- A : WORKING DAYS-PAID
+             ,SUM(rr.M_Days)                     AS  M_Days                      -- M : WORKING DAYS-PAID
+             ,SUM(rr.F_Days)                     AS  F_Days                      -- F : WORKING DAYS-PAID
+             ,SUM(rr.W_Days)                     AS  W_Days                      -- W : WORKING DAYS-PAID
+             ,SUM(rr.NW_Days)                    AS  NW_Days                     -- Not Working (Days)
+             ,SUM(rr.FA_Days)                    AS  FA_Days                     -- Full Absence (Days)
+             ,SUM(rr.LSG_Hours)                  AS  LSG_Hours                   -- Late/Soon/GoOut (Hrs)
+                 
+             ,ROUND(--cl.perfect_attendance_days
+                   SUM(DECODE(bb.time_and_attendance_code,'NW',1,'PH',1,0)) --TaiDD-20190823
+                  -SUM(rr.NW_Days)
+                  -SUM(rr.FA_Days)
+                  -SUM(rr.LSG_Hours/default_work_hours), 2)       AS  TP_Days                     -- TOTAL PAID (Days)
+      FROM   (
+              SELECT time_and_attendance_yyyymm       AS time_and_attendance_yyyymm
+                    ,employee_no                      AS employee_no
+                    ,lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},time_and_attendance_date,'21',shift_type_code,8,'perfect_work_hours') AS default_work_hours /*HMT_20210323*/
+                    ,shift_type_code --TaiDD-20190823
+                    ,time_and_attendance_date --TaiDD-20190823
+                        
+                    ,assignment_category              AS assignment_category
+                    ,full_name_local                  AS full_name_local
+                    ,org_name_local                   AS org_name_local
+                    ,probation_start_date             AS probation_start_date
+                        
+                    ,dd                               AS dd
+                    ,cd                               AS cd
+                    ,DECODE(cd, 'H',  1, 0)           AS H_days
+                    ,DECODE(cd, 'A',  1, 0) + (CASE WHEN INSTR(cd, '0.5A') > 0 THEN 0.5 ELSE 0 END) AS A_days /* 반일연차 추가에 따른 연차 계산 로직 추가 */
+                    ,DECODE(cd, 'M',  1, 0)           AS M_days
+                    ,DECODE(cd, 'F',  1, 0)           AS F_days
+                    ,DECODE(ded_fg, 'Y', 1, 0)
+                    +DECODE(cd, 'X',  1, 0)
+                    -DECODE(cd, TO_CHAR(lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},time_and_attendance_date,'21',shift_type_code,8,'perfect_work_hours')), 1, 0)  AS W_days  /*HMT_20210323*/
+          
+                    ,DECODE(cd, 'N',  1, 0)           AS NW_Days
+                    ,DECODE(cd, TO_CHAR(lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},time_and_attendance_date,'21',shift_type_code,8,'perfect_work_hours')), 1, 'BU', 1, fa_day)  AS FA_Days  /*HMT_20210323*/
+          
+                    ,DECODE(ded_fg, 'Y', TO_NUMBER(REPLACE(cd, '0.5A_', '')), 0) /* 반일연차 추가에 따른 연차 계산 로직 추가 */ 
+                    -- +DECODE(cd, 'BU', 1, 0) * 8
+                    -- -DECODE(cd, '8',  1, 0) * 8
+                    -- -DECODE(cd, 'BU', 1, 0) * 8
+                                                      AS LSG_Hours
+          
+              FROM   (
+                      SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+                            ,ar.employee_no                             AS employee_no
+                            ,DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', DECODE(bb.time_and_attendance_code, 'NW', 'N', 'Y'), cc.holiday_flag)                            AS holiday_flag
+                            ,ar.shift_type_code							AS shift_type
+                            ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+          <![CDATA[
+                            ,CASE WHEN ar.time_and_attendance_date < em.date_hire_subsidiary 
+                                  THEN DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', DECODE(bb.time_and_attendance_code, 'NW', 'N', 'Y'), cc.holiday_flag), 'N', 'N', DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', bb.time_and_attendance_code, cc.time_and_attendance_code), 'WH', ' ', 'N'))  -- 입사일 이전
+                                  ELSE CASE WHEN ar.time_and_attendance_code IN ( 'AB', 'UL', 'UF', 'UM' )  -- 결근(Absence)
+                                            THEN DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', bb.time_and_attendance_code, cc.time_and_attendance_code), 'WH', ' ', 
+                                            TO_CHAR(lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},ar.time_and_attendance_date,'21',ar.shift_type_code,8,'perfect_work_hours'))) /*HMT_20210323*/
+                      
+                                            WHEN ar.time_and_attendance_code IN ( 'PH' )  -- 공휴일(Public Holiday)
+                                            THEN 'H'
+                      
+                                            WHEN ar.time_and_attendance_code IN ( 'WH' )  -- 무급휴일(Weekly Holiday)
+                                            THEN ' '
+                                              
+                                            WHEN ar.time_and_attendance_code IN ( 'AL' )  -- 연차휴가(Annual Leave)
+                                            THEN 'A'
+                                            
+                                            WHEN ar.time_and_attendance_code IN ( 'HL', 'HL_FN', 'HL_SN' )  -- 반일휴가(HalfDay Annual Leave)
+                                            THEN '0.5A' || (CASE WHEN NVL(ar.tardy_hours, 0) + NVL(ar.early_leave_hours, 0) + NVL(ar.going_out_hours, 0) BETWEEN 0.5 AND 7.5  -- 지각/조퇴/외출
+                                                                 THEN '_'||TO_CHAR(NVL(ar.tardy_hours, 0) + NVL(ar.early_leave_hours, 0) + NVL(ar.going_out_hours, 0), 'FM90.0')
+                                                                 ELSE ''
+                                                                 END)
+                      
+                                            WHEN ar.time_and_attendance_code IN ( 'US' )  -- 무급휴직(Unpaid Suspension)
+                                            THEN DECODE(lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', ar.time_attend_detail_code, 'A4'),
+                                                        'BU', DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', DECODE(bb.time_and_attendance_code, 'NW', 'N', 'Y'), cc.holiday_flag), 'N', 'BU', DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', bb.time_and_attendance_code, cc.time_and_attendance_code), 'PH', 'BU', ' ')),
+                                                        TO_CHAR(lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},ar.time_and_attendance_date,'21',ar.shift_type_code,8,'perfect_work_hours')),  DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', bb.time_and_attendance_code, cc.time_and_attendance_code), 'WH', ' ', 
+                                                        TO_CHAR(lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},ar.time_and_attendance_date,'21',ar.shift_type_code,8,'perfect_work_hours')) /*HMT_20210323*/
+                                                       ))
+                      
+                                            WHEN ar.time_and_attendance_code IN ( 'PM' )  -- 유급결혼(Paid Marriage)
+                                            THEN DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', DECODE(bb.time_and_attendance_code, 'NW', 'N', 'Y'), cc.holiday_flag), 'N', 'M', ' ')
+
+                                            WHEN ar.time_and_attendance_code IN ( 'PF' )  -- 유급장례(Paid Funeral)
+                                            THEN DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', DECODE(bb.time_and_attendance_code, 'NW', 'N', 'Y'), cc.holiday_flag), 'N', 'F', ' ')
+                      
+                                            WHEN ar.time_and_attendance_code IN ( 'NN' )  -- 입사전/퇴직후
+                                            THEN DECODE(DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', bb.time_and_attendance_code, cc.time_and_attendance_code), 'WH', ' ', 'N') /* 공휴일만 N으로 표기하고 WH인 경우 공백으로 표기 */
+                      
+                                            WHEN NVL(ar.tardy_hours, 0) + NVL(ar.early_leave_hours, 0) + NVL(ar.going_out_hours, 0) BETWEEN 0.5 AND 7.5  -- 지각/조퇴/외출
+                                            THEN TO_CHAR(NVL(ar.tardy_hours, 0) + NVL(ar.early_leave_hours, 0) + NVL(ar.going_out_hours, 0), 'FM90.0')
+                      
+                                            WHEN ac.attendance_days = 1  -- 나머지 출근코드
+                                            THEN 'X'
+                                            
+                                            --WHEN ac.unpaid_days = 1  -- 나머지 무급코드 : BU 코드는 확인필요
+                                            --THEN 'BU'
+                                       END
+                             END AS cd
+                      ]]>
+                            ,CASE WHEN DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', DECODE(bb.time_and_attendance_code, 'NW', 'N', 'Y'), cc.holiday_flag) = 'N' AND NVL(ar.tardy_hours, 0) + NVL(ar.early_leave_hours, 0) + NVL(ar.going_out_hours, 0) BETWEEN 0.5 AND 7.5  -- 지각/조퇴/외출
+                                  THEN 'Y'
+                                  ELSE 'N'
+                             END AS ded_fg  -- 지각/조퇴/외출여부
+                            ,CASE WHEN DECODE(SUBSTR(ar.shift_type_code, 0, 1), '3', bb.time_and_attendance_code, cc.time_and_attendance_code) = 'PH' AND ar.time_and_attendance_code IN ( 'UF', 'UL', 'UM', 'US' ) 
+                                  THEN ac.unpaid_days 
+                                  ELSE 0 
+                             END AS fa_day
+          
+                            ,em.assignment_category  AS assignment_category
+                            ,em.full_name_local      AS full_name_local
+                            ,em.org_name_local       AS org_name_local
+                            ,em.probation_start_date AS probation_start_date
+                            ,ar.shift_type_code --TaiDD-20190823
+                            ,ar.time_and_attendance_date --TaiDD-20190823
+          
+                      FROM   tb_att_result_n   ar
+                            ,tb_att_code_c     ac
+                            ,emp_master        em
+                            ,tb_att_calendar_n cc
+                            ,tb_att_base_bas_n bb
+                      WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+                      AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+                      AND    ar.subsidiary_code            = ac.subsidiary_code
+                      AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+                      AND    ar.subsidiary_code            = em.subsidiary_code
+                      AND    ar.employee_no                = em.employee_number
+                      AND    ar.subsidiary_code            = cc.subsidiary_code
+                      AND    ar.time_and_attendance_date   = cc.time_and_attendance_date
+                      AND    ar.time_and_attendance_date   = bb.time_and_attendance_date
+                      AND    ar.shift_type_code            = bb.shift_type_code
+                     )
+             ) rr
+            ,tb_att_close_n cl
+            ,tb_att_base_bas_n bb ---TaiDD-20190823
+
+      WHERE  rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+      AND    rr.time_and_attendance_date = bb.time_and_attendance_date --TaiDD
+      AND    rr.shift_type_code = bb.shift_type_code --TaiDD
+          
+      GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, rr.assignment_category, rr.org_name_local, rr.full_name_local, rr.probation_start_date
+      ORDER BY rr.assignment_category DESC, rr.employee_no ASC 
+      ) T
+    </select>
+    
+    <select id="createExcelMonthReportOt15" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportOt15 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'TOTALS OT 150(hrs)'				AS TOTALOT150                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALOT150)									   AS TOTALOT150
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALOT150
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.weekday_overtime_hours + nvl(so.weekday_overtime_hours, 0))				  AS CD		
+		                FROM   tb_att_result_n ar
+		                      ,tb_att_special_ot_result_n so
+		                      ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+                        AND    ar.subsidiary_code            = so.subsidiary_code(+)
+                        AND    ar.employee_no                = so.employee_no(+)
+                        AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <select id="createExcelMonthReportOt20" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportOt20 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'TOTALS OT 200(hrs)'				AS TOTALOT200                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALOT200)									   			AS TOTALOT200
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALOT200
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.holiday_overtime_hours+nvl(so.holiday_overtime_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <!-- ot30 -->
+    <select id="createExcelMonthReportOt30" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportOt30 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'TOTALS OT 300(hrs)'					AS TOTALOT300                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALOT300)									   			AS TOTALOT300
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALOT300
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.public_holiday_overtime_hours+nvl(so.public_holiday_overtime_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <!-- night -->
+    <select id="createExcelMonthReportNight20" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportNight20 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'Totals Night 200%'					AS TOTALNight200                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALNight200)									   			AS TOTALNight200
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALNight200
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.weekday_night_overtime_hours+nvl(so.weekday_night_overtime_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <!-- night21 -->
+    <select id="createExcelMonthReportNight21" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportNight21 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'Totals Night 210%'					AS TOTALNight210                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALNight210)									   			AS TOTALNight210
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALNight210
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.weekday_ot_af_night_work_hours+nvl(so.weekday_ot_af_night_work_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <!-- night27 -->
+    <select id="createExcelMonthReportNight27" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportNight27 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'Totals Night 270%'					AS TOTALNight270                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALNight270)									   			AS TOTALNight270
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALNight270
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.holiday_night_overtime_hours+nvl(so.holiday_night_overtime_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <!-- night39 -->
+    <select id="createExcelMonthReportNight39" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportNight39 */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'Totals Night 390%'					AS TOTALNight390                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALNight390)									   			AS TOTALNight390
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALNight390
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.public_holiday_night_ot_hours+nvl(so.public_holiday_night_ot_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <!-- 2s-night30+ -->
+    
+    <select id="createExcelMonthReportNight30Up" parameterType="LGCOMData" resultType="LGCOMData">
+    	INSERT INTO /* LGVATTCOMM.createExcelMonthReportNight30Up */  
+    		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		                             , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+		                             , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+		                             , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+		                             , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+		                             , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25
+		                             , ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30
+		                             , ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35
+		                             , ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39)
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , 1                                  AS ORDER_BY       
+		       , 'KO16KSC5601'                      AS CHARACTER_SET_NAME
+		       , 'No'                               AS ROWNO
+		       , 'HR ID'                            AS EMPLOYEE_NUMBER
+		       , 'Emp.Cat.'                         AS ASSIGNMENT_CATEGORY
+		       , 'Name'                             AS PULL_NAME_LOCAL
+		       , 'Team'                             AS ORG_NAME_LOCAL
+		       , 'Part/Unit'                        AS PART_UNIT   /* 컬럼값이 확인 안됨 */
+		       , 'Start Date'                       AS START_DATE
+		       , '1'                                AS DD01 
+		       , '2'                                AS DD02 
+		       , '3'                                AS DD03 
+		       , '4'                                AS DD04 
+		       , '5'                                AS DD05 
+		       , '6'                                AS DD06 
+		       , '7'                                AS DD07 
+		       , '8'                                AS DD08 
+		       , '9'                                AS DD09 
+		       , '10'                               AS DD10 
+		       , '11'                               AS DD11 
+		       , '12'                               AS DD12 
+		       , '13'                               AS DD13 
+		       , '14'                               AS DD14 
+		       , '15'                               AS DD15 
+		       , '16'                               AS DD16 
+		       , '17'                               AS DD17 
+		       , '18'                               AS DD18 
+		       , '19'                               AS DD19 
+		       , '20'                               AS DD20 
+		       , '21'                               AS DD21 
+		       , '22'                               AS DD22 
+		       , '23'                               AS DD23 
+		       , '24'                               AS DD24 
+		       , '25'                               AS DD25 
+		       , '26'                               AS DD26 
+		       , '27'                               AS DD27 
+		       , '28'                               AS DD28 
+		       , '29'                               AS DD29  
+		       , '30'                               AS DD30 
+		       , '31'                               AS DD31
+		       , 'Totals (hrs)'					AS TOTALNight300Up                                           
+		    FROM DUAL
+		     UNION ALL
+		     
+		SELECT   #{sessionId}                                              AS SESSION_ID
+		       , #{sessionUserId}                                          AS CREATED_BY
+		       , SYSDATE                                                   AS CREATION_DATE
+		       , ROWNUM+1                                                         AS ORDER_BY       
+		       , 'KO16KSC5601'                                             AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                                            AS ROWNO
+		       , T.EMPLOYEE_NUMBER                                         AS EMPLOYEE_NUMBER
+		       , T.ASSIGNMENT_CATEGORY                                     AS ASSIGNMENT_CATEGORY
+		       , T.FULL_NAME_LOCAL                                         AS FULL_NAME_LOCAL
+		       , T.ORG_NAME_LOCAL                                          AS ORG_NAME_LOCAL
+		       , T.PART_UNIT                                               AS PART_UNIT
+		       , TO_CHAR(T.PROBATION_START_DATE , 'DD/MON/YY')             AS START_DATE
+		       , TO_CHAR(T.DD01)                                                    AS DD01
+		       , TO_CHAR(T.DD02)                                                    AS DD02
+		       , TO_CHAR(T.DD03)                                                    AS DD03
+		       , TO_CHAR(T.DD04)                                                    AS DD04
+		       , TO_CHAR(T.DD05)                                                    AS DD05
+		       , TO_CHAR(T.DD06)                                                    AS DD06
+		       , TO_CHAR(T.DD07)                                                    AS DD07
+		       , TO_CHAR(T.DD08)                                                    AS DD08
+		       , TO_CHAR(T.DD09)                                                    AS DD09
+		       , TO_CHAR(T.DD10)                                                    AS DD10
+		       , TO_CHAR(T.DD11)                                                    AS DD11
+		       , TO_CHAR(T.DD12)                                                    AS DD12
+		       , TO_CHAR(T.DD13)                                                    AS DD13
+		       , TO_CHAR(T.DD14)                                                    AS DD14
+		       , TO_CHAR(T.DD15)                                                    AS DD15
+		       , TO_CHAR(T.DD16)                                                    AS DD16
+		       , TO_CHAR(T.DD17)                                                    AS DD17
+		       , TO_CHAR(T.DD18)                                                    AS DD18
+		       , TO_CHAR(T.DD19)                                                    AS DD19
+		       , TO_CHAR(T.DD20)                                                    AS DD20
+		       , TO_CHAR(T.DD21)                                                    AS DD21
+		       , TO_CHAR(T.DD22)                                                    AS DD22
+		       , TO_CHAR(T.DD23)                                                    AS DD23
+		       , TO_CHAR(T.DD24)                                                    AS DD24
+		       , TO_CHAR(T.DD25)                                                    AS DD25
+		       , TO_CHAR(T.DD26)                                                    AS DD26
+		       , TO_CHAR(T.DD27)                                                    AS DD27
+		       , TO_CHAR(T.DD28)                                                    AS DD28
+		       , TO_CHAR(T.DD29)                                                    AS DD29
+		       , TO_CHAR(T.DD30)                                                    AS DD30
+		       , TO_CHAR(T.DD31)                                                    AS DD31
+		       , TO_CHAR(T.TOTALNight300Up)									   			AS TOTALNight300Up
+		   FROM (
+		SELECT    
+		         rr.employee_no                     AS EMPLOYEE_NUMBER                 -- 사번
+		       , em.ASSIGNMENT_CATEGORY             AS ASSIGNMENT_CATEGORY
+		       , em.FULL_NAME_LOCAL                 AS FULL_NAME_LOCAL
+		       , em.ORG_NAME_LOCAL                  AS ORG_NAME_LOCAL
+		       , ''                                 AS PART_UNIT
+		       , em.PROBATION_START_DATE            AS PROBATION_START_DATE
+		       ,cl.time_and_attendance_yyyymm      AS  time_and_attendance_yyyymm  -- 근태년월
+		       ,cl.period_from_date                AS  period_from_date            -- 근태기산시작일
+		       ,cl.period_to_date                  AS  period_to_date              -- 근태기산종료일
+		       ,MAX(DECODE(rr.dd,  '01',  rr.cd))  AS  dd01                        -- 1일 ~ n일(근태기산종료일)
+		       ,MAX(DECODE(rr.dd,  '02',  rr.cd))  AS  dd02
+		       ,MAX(DECODE(rr.dd,  '03',  rr.cd))  AS  dd03
+		       ,MAX(DECODE(rr.dd,  '04',  rr.cd))  AS  dd04
+		       ,MAX(DECODE(rr.dd,  '05',  rr.cd))  AS  dd05
+		       ,MAX(DECODE(rr.dd,  '06',  rr.cd))  AS  dd06
+		       ,MAX(DECODE(rr.dd,  '07',  rr.cd))  AS  dd07
+		       ,MAX(DECODE(rr.dd,  '08',  rr.cd))  AS  dd08
+		       ,MAX(DECODE(rr.dd,  '09',  rr.cd))  AS  dd09
+		       ,MAX(DECODE(rr.dd,  '10',  rr.cd))  AS  dd10
+		       ,MAX(DECODE(rr.dd,  '11',  rr.cd))  AS  dd11
+		       ,MAX(DECODE(rr.dd,  '12',  rr.cd))  AS  dd12
+		       ,MAX(DECODE(rr.dd,  '13',  rr.cd))  AS  dd13
+		       ,MAX(DECODE(rr.dd,  '14',  rr.cd))  AS  dd14
+		       ,MAX(DECODE(rr.dd,  '15',  rr.cd))  AS  dd15
+		       ,MAX(DECODE(rr.dd,  '16',  rr.cd))  AS  dd16
+		       ,MAX(DECODE(rr.dd,  '17',  rr.cd))  AS  dd17
+		       ,MAX(DECODE(rr.dd,  '18',  rr.cd))  AS  dd18
+		       ,MAX(DECODE(rr.dd,  '19',  rr.cd))  AS  dd19
+		       ,MAX(DECODE(rr.dd,  '20',  rr.cd))  AS  dd20
+		       ,MAX(DECODE(rr.dd,  '21',  rr.cd))  AS  dd21
+		       ,MAX(DECODE(rr.dd,  '22',  rr.cd))  AS  dd22
+		       ,MAX(DECODE(rr.dd,  '23',  rr.cd))  AS  dd23
+		       ,MAX(DECODE(rr.dd,  '24',  rr.cd))  AS  dd24
+		       ,MAX(DECODE(rr.dd,  '25',  rr.cd))  AS  dd25
+		       ,MAX(DECODE(rr.dd,  '26',  rr.cd))  AS  dd26
+		       ,MAX(DECODE(rr.dd,  '27',  rr.cd))  AS  dd27
+		       ,MAX(DECODE(rr.dd,  '28',  rr.cd))  AS  dd28
+		       ,MAX(DECODE(rr.dd,  '29',  rr.cd))  AS  dd29
+		       ,MAX(DECODE(rr.dd,  '30',  rr.cd))  AS  dd30
+		       ,MAX(DECODE(rr.dd,  '31',  rr.cd))  AS  dd31		
+		       ,SUM(rr.CD)                         AS  TOTALNight300Up
+		      
+		FROM   (
+		        SELECT time_and_attendance_yyyymm
+		              ,employee_no
+		              ,dd
+		              ,cd	
+		        FROM   (
+		                SELECT ar.time_and_attendance_yyyymm              AS time_and_attendance_yyyymm
+		                      ,ar.employee_no                             AS employee_no
+		                      ,TO_CHAR(ar.time_and_attendance_date, 'DD') AS dd
+		                      ,(ar.normal_night_overtime_hours+nvl(so.normal_night_overtime_hours, 0))         AS CD 		
+		                FROM   tb_att_result_n ar
+	                          ,tb_att_special_ot_result_n so
+	                          ,tb_att_code_c   ac
+		                WHERE  ar.subsidiary_code            = #{subsidiaryCode}    -- 법인코드
+		                AND    ar.time_and_attendance_yyyymm = #{timeAndAttendancdYyyymm}   -- 근태년월
+		                AND    ar.subsidiary_code            = ac.subsidiary_code
+		                AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+		                AND    ar.time_and_attendance_date   = so.time_and_attendance_date(+)
+	                    AND    ar.subsidiary_code            = so.subsidiary_code(+)
+	                    AND    ar.employee_no                = so.employee_no(+)
+	                    AND    'Y'                           = so.confirm_flag(+)
+		               )
+		       ) rr
+		      ,emp_master em
+		      ,tb_att_close_n cl
+		      
+		      
+		WHERE  rr.employee_no                = em.employee_number
+		AND    rr.time_and_attendance_yyyymm = cl.time_and_attendance_yyyymm
+		
+		GROUP BY rr.employee_no, cl.time_and_attendance_yyyymm, cl.perfect_attendance_days, cl.period_from_date, cl.period_to_date, em.ASSIGNMENT_CATEGORY, em.ORG_NAME_LOCAL, em.FULL_NAME_LOCAL, em.PROBATION_START_DATE
+		ORDER BY em.ASSIGNMENT_CATEGORY DESC, rr.employee_no ASC 
+		)T
+    </select>
+    
+    <select id="retrieveExportSessionId" parameterType="LGCOMData" resultType="LGCOMData">
+    	select SESSION_ID from xxlge_export_info where SESSION_ID=#{sessionId} and rownum =1
+    </select>
+    
+    <!-- 임시 테스트 끝 -->
+  
+    <select id="retrieveAllOrgList" parameterType="LGCOMData" resultType="LGCOMData">
+	    SELECT om.organization_id AS CODE
+		      ,om.org_name_local AS NAME
+		  FROM org_master om
+		 WHERE SYSDATE BETWEEN nvl(om.org_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND nvl(om.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+		   AND om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	</select>
+	
+	<!-- 결재권자가 사무직 일근태 수정 시 메일발송처리 -->
+    <select id="applyAttModifiedAlert" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATTCOMM.send_att_modified_alert */
+              lgvatt_transaction_pkg.send_att_modified_alert(#{retCode , mode=OUT, jdbcType=VARCHAR}    	/* po_return_code */,
+                                                             #{errorMessage, mode=OUT, jdbcType=VARCHAR}   /* po_return_msg */,
+                                                             #{applicationUserId}							/* 결재자 : 세션의 로긴 user_id */,
+                                                             #{subsidiaryCode}		/* 세션의 subsidiary_code : LGDVN */,
+                                                             #{employeeNo}									/* 대상자 사번 */,
+                                                             TO_DATE(#{attendanceDate}, 'DDMMYYYY')		/* 실적 근태일자 / 계획일때는 계획 근태일자 */,
+                                                             #{resultType}									/* 실적구분 / 계획일때는 PLAN */,
+                                                             #{languageCode}								/* 세션의 언어코드 또는 생략시 en */
+                                                            )
+        }
+    </select>
+
+</mapper>

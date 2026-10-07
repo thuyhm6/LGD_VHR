@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00130">
+	<!-- 메일 템플릿 마스터 목록 조회 -->
+	<select id="retrieveMailTemplateMasterList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00130.retrieveMailTemplateMasterList */
+		         mail_id
+		       , send_mail_name
+		       , system_code
+		       , module_code
+		       , sender_email_addr
+		       , mail_recipient_mgt_method_code
+		       , mail_recipient_mgt_method_code AS orgin_recp_method_code
+		       , 'Y' AS content_view
+		       , 'Y' AS recipient_view
+		       , use_flag
+		    FROM LGCOM_MAIL_M
+		   WHERE 1 = 1
+		<if test="systemCode != null and systemCode != ''">
+			AND system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+			AND module_code = #{moduleCode}
+		</if>
+		<if test="sendMailName != null and sendMailName != ''">
+			AND send_mail_name = #{sendMailName}
+		</if>
+		<if test="useFlag != null and useFlag != ''">
+			AND use_flag = #{useFlag}
+		</if>
+		ORDER BY mail_id
+	</select>
+
+	<!-- 메일 템플릿 마스터 등록 -->
+	<insert id="insertMailTemplateMasterData" parameterType="java.util.HashMap">
+		/* LGUTLC00130.insertMailTemplateMasterData */
+		INSERT INTO LGCOM_MAIL_M (
+		    mail_id,send_mail_name,system_code,module_code,sender_email_addr,mail_recipient_mgt_method_code,
+		    use_flag,created_by,creation_date,last_updated_by,last_update_date
+		) VALUES (
+		    LGCOM_MAIL_M_SEQ.NEXTVAL,#{sendMailName},#{systemCode},#{moduleCode},#{senderEmailAddr},#{mailRecipientMgtMethodCode},
+		    #{useFlag},#{sessionUserId},SYSDATE,#{sessionUserId},SYSDATE
+		)
+	</insert>
+
+	<!-- 메일 템플릿 마스터 수정 -->
+	<update id="updateMailTemplateMasterData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00130.updateMailTemplateMasterData */
+		       LGCOM_MAIL_M
+		   SET send_mail_name                 = #{sendMailName}
+		     , system_code                    = #{systemCode}
+		     , module_code                    = #{moduleCode}
+		     , sender_email_addr              = #{senderEmailAddr}
+		     , mail_recipient_mgt_method_code = #{mailRecipientMgtMethodCode}
+		     , use_flag                       = #{useFlag}
+		     , last_updated_by                = #{sessionUserId}
+		     , last_update_date               = SYSDATE
+		 WHERE mail_id                        = #{mailId}
+	</update>
+
+	<!-- 메일 템플릿 Content 조회 -->
+	<select id="retrieveMailTemplateContentsData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00130.retrieveMailTemplateContentsData */
+		       a.mail_id
+		     , a.language_code
+		     , a.subject_text
+		     , a.mail_detail_content
+		     , a.etc_attach_file_id
+		     , b.file_id
+		     , b.file_name
+		     , b.file_desc
+		  FROM LGCOM_MAIL_CONTENT_N  a
+		     , LGCOM_ATTACH_FILE_INFO b
+		 WHERE a.mail_id       = #{mailId}
+		   AND a.language_code = #{languageCode}
+		   AND a.etc_attach_file_id = b.file_group_id(+)
+	</select>
+
+	<!-- 메일 템플릿 Content 저장 -->
+	<update id="saveMailTemplateContentsData" parameterType="java.util.HashMap">
+		MERGE INTO /* LGUTLC00130.saveMailTemplateContentsData */
+		           LGCOM_MAIL_CONTENT_N a
+		     USING (SELECT #{mailId} AS mail_id
+		                 , #{languageCode} AS language_code
+		                 , #{subjectText} AS subject_text
+		                 , #{mailDetailContent,jdbcType=CLOB} AS mail_detail_content
+		                 , #{etcAttachFileId} AS etc_attach_file_id
+		                 , #{USER_SESSION.applicationUserId} AS user_id
+		              FROM DUAL
+		          ) b
+		      ON (a.mail_id = b.mail_id AND a.language_code = b.language_code)
+		WHEN NOT MATCHED THEN
+		     INSERT(mail_id,language_code,subject_text,mail_detail_content,etc_attach_file_id,
+		            created_by,creation_date,last_updated_by,last_update_date)
+		     VALUES(b.mail_id,b.language_code,b.subject_text,b.mail_detail_content,b.etc_attach_file_id,
+		            b.user_id,SYSDATE,b.user_id,SYSDATE)
+		WHEN MATCHED THEN
+		     UPDATE SET subject_text        = b.subject_text
+		              , mail_detail_content = b.mail_detail_content
+		              , etc_attach_file_id  = b.etc_attach_file_id
+		              , last_updated_by     = b.user_id
+		              , last_update_date    = SYSDATE
+	</update>
+
+	<!-- 메일 템플릿 Content 삭제 -->
+	<delete id="deleteMailTemplateContentsData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00130.deleteMailTemplateContentsData */
+		            LGCOM_MAIL_CONTENT_N
+		      WHERE mail_id       = #{mailId}
+		        AND language_code = #{languageCode}
+	</delete>
+
+	<!-- 메일 템플릿 Content 저장 -->
+	<update id="deleteMailTemplateContentsAttachFile" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00130.deleteMailTemplateContentsAttachFile */
+		       LGCOM_MAIL_CONTENT_N
+		   SET etc_attach_file_id = NULL
+		     , last_updated_by    = #{USER_SESSION.applicationUserId}
+		     , last_update_date   = SYSDATE
+		 WHERE mail_id            = #{mailId}
+		   AND language_code      = #{languageCode}
+	</update>
+
+	<!-- 메일 템플릿 Text 수신자 목록 조회 -->
+	<select id="retrieveMailTemplateTextRecipientList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00130.retrieveMailTemplateTextRecipientList */
+		         mrn.mail_id
+		       , mrn.mail_recipient_type_code
+		       , mrn.mail_recipient_addr
+		       , mrn.mail_type_code
+		    FROM LGCOM_MAIL_RECIPIENT_N mrn
+		       , (
+		          SELECT common_code
+		               , sort_order_no
+		            FROM LGCOM_COMMON_CODE_C
+		           WHERE code_type_code = 'LGCOM_RECIPIENT_TYPE_CODE'
+		             AND use_flag = 'Y'
+		             AND (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		             AND (apply_end_date IS NULL OR apply_end_date &gt;= TRUNC(SYSDATE))
+		         ) cd
+		   WHERE mrn.mail_id = #{mailId}
+		     AND mrn.mail_recipient_type_code = cd.common_code(+)
+		ORDER BY cd.sort_order_no,mrn.mail_recipient_type_code, mrn.mail_recipient_addr, mrn.mail_type_code
+	</select>
+
+	<!-- 메일 템플릿 Text 수신자 등록 -->
+	<insert id="insertMailTemplateTextRecipientData" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00130.insertMailTemplateTextRecipientData */
+		LGCOM_MAIL_RECIPIENT_N (
+		    mail_id,mail_recipient_type_code,mail_recipient_addr,mail_type_code,
+		    created_by,creation_date,last_updated_by,last_update_date
+		) VALUES (
+		    #{mailId},#{mailRecipientTypeCode},#{mailRecipientAddr},#{mailTypeCode},
+		    #{sessionUserId},SYSDATE,#{sessionUserId},SYSDATE
+		)
+	</insert>
+
+	<!-- 메일 템플릿 Text 수신자 수정 -->
+	<update id="updateMailTemplateTextRecipientData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00130.updateMailTemplateTextRecipientData */
+		       LGCOM_MAIL_RECIPIENT_N
+		   SET mail_type_code           = #{mailTypeCode}
+		     , last_updated_by          = #{sessionUserId}
+		     , last_update_date         = SYSDATE
+		 WHERE mail_id                  = #{mailId}
+		   AND mail_recipient_type_code = #{mailRecipientTypeCode}
+		   AND mail_recipient_addr      = #{mailRecipientAddr}
+	</update>
+
+	<!-- 메일 템플릿 Text 수신자 삭제 -->
+	<delete id="deleteMailTemplateTextRecipientData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00130.deleteMailTemplateTextRecipientData */
+		            LGCOM_MAIL_RECIPIENT_N
+		      WHERE mail_id                  = #{mailId}
+		        AND mail_recipient_type_code = #{mailRecipientTypeCode}
+		        AND mail_recipient_addr      = #{mailRecipientAddr}
+	</delete>
+
+	<!-- 메일 템플릿 SQL 수신자 목록 조회 -->
+	<select id="retrieveMailTemplateSqlRecipientList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00130.retrieveMailTemplateSqlRecipientList */
+		         mrn.mail_id
+		       , mrn.mail_recipient_type_code
+		       , mrn.mail_seq_no
+		       , mrn.mail_type_code
+		       , mrn.sql_text
+		       , mrn.from_sql_text
+		       , mrn.where_sql_text
+		       , mrn.rule_sql_text
+		    FROM LGCOM_MAIL_RECIPIENT_QUERY_N mrn
+		       , (
+		          SELECT common_code
+		               , sort_order_no
+		            FROM LGCOM_COMMON_CODE_C
+		           WHERE code_type_code = 'LGCOM_RECIPIENT_TYPE_CODE'
+		             AND use_flag = 'Y'
+		             AND (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		             AND (apply_end_date IS NULL OR apply_end_date &gt;= TRUNC(SYSDATE))
+		         ) cd
+		   WHERE mrn.mail_id = #{mailId}
+		     AND mrn.mail_recipient_type_code = cd.common_code(+)
+		ORDER BY cd.sort_order_no,mrn.mail_recipient_type_code, mrn.mail_seq_no
+	</select>
+
+	<!-- 메일 템플릿 SQL 수신자 저장 -->
+	<update id="saveMailTemplateSqlRecipientData" parameterType="java.util.HashMap">
+		MERGE INTO /* LGUTLC00130.saveMailTemplateSqlRecipientData */
+		           LGCOM_MAIL_RECIPIENT_QUERY_N a
+		     USING (
+		            SELECT #{mailId}                AS mail_id
+		                 , #{mailRecipientTypeCode} AS mail_recipient_type_code
+		                 , #{mailSeqNo}             AS mail_seq_no
+		                 , #{mailTypeCode}          AS mail_type_code
+		                 , #{sqlText}               AS sql_text
+		                 , #{fromSqlText}           AS from_sql_text
+		                 , #{whereSqlText}          AS where_sql_text
+		                 , #{ruleSqlText}           AS rule_sql_text
+		                 , #{USER_SESSION.applicationUserId} AS user_id
+		              FROM DUAL
+		           ) b
+		        ON (a.mail_id = b.mail_id
+		       AND  a.mail_recipient_type_code = b.mail_recipient_type_code
+		       AND  a.mail_seq_no = b.mail_seq_no)
+		WHEN MATCHED THEN
+		     UPDATE SET mail_type_code   = b.mail_type_code
+		              , sql_text         = b.sql_text
+		              , from_sql_text    = b.from_sql_text
+		              , where_sql_text   = b.where_sql_text
+		              , rule_sql_text    = b.rule_sql_text
+		              , last_updated_by  = b.user_id
+		              , last_update_date = SYSDATE
+		WHEN NOT MATCHED THEN
+		     INSERT(mail_id,mail_recipient_type_code,mail_seq_no,mail_type_code,sql_text,from_sql_text,
+		            where_sql_text,rule_sql_text,created_by,creation_date,last_updated_by,last_update_date)
+		     VALUES(b.mail_id,b.mail_recipient_type_code,(SELECT NVL(MAX(mail_seq_no),0) + 1 FROM LGCOM_MAIL_RECIPIENT_QUERY_N WHERE mail_id = b.mail_id),
+		            b.mail_type_code,b.sql_text,b.from_sql_text,
+		            b.where_sql_text,b.rule_sql_text,b.user_id,SYSDATE,b.user_id,SYSDATE)
+	</update>
+
+	<!-- 메일 템플릿 SQL 수신자 삭제 -->
+	<delete id="deleteMailTemplateSqlRecipientData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00130.deleteMailTemplateSqlRecipientData */
+		            LGCOM_MAIL_RECIPIENT_QUERY_N
+		      WHERE mail_id                  = #{mailId}
+		        AND mail_recipient_type_code = #{mailRecipientTypeCode}
+		        AND mail_seq_no              = #{mailSeqNo}
+	</delete>
+</mapper>

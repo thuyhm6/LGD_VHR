@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTC0009">
+
+	<select id="executeApplyNotApprovedAttReq" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVATTC0009.executeApplyNotApprovedAttReq */
+		       lgvatt_batch_pkg.apply_not_approved_att_req( #{errorCode, mode=OUT, jdbcType=VARCHAR}, 
+		                                                    #{errorBuf,  mode=OUT, jdbcType=VARCHAR} 
+		                                                  ) }
+	</select>
+	
+</mapper>

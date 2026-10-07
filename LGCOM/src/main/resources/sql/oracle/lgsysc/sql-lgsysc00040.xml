@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00040">
+	<!-- 사용자 목록 조회 -->
+	<select id="retrieveUserPopupList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /*LGSYSC00040.retrieveUserPopupList*/
+		         application_user_id AS user_id
+		       , user_name AS employee_no
+		       , full_name_local AS employee_name
+		       , english_full_name AS english_full_name
+		       , position_name AS position_name
+		       , title_name
+		       , department_code
+		       , organization_name_eng AS department_name
+		       , office_phone_number AS office_phone_number
+		       , employee_mobile_phone_no AS mobile_phone_number
+		       , mail_addr
+		       , NVL(full_name_local, english_full_name) || mail_addr AS employee_desc
+		       , organization_name_eng AS team_name
+		    FROM LGCOM_USER_M_V umv
+		   WHERE (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		     AND (apply_end_date IS NULL OR apply_end_date &gt;= TRUNC(SYSDATE))
+		     AND susp_resignation_flag = 'C'
+		<if test="userId != null and userId != ''">
+		     AND application_user_id = #{userId}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+		     AND (UPPER(english_full_name) LIKE UPPER(#{employeeName}) || '%' OR UPPER(full_name_local) LIKE UPPER(#{employeeName}) || '%')
+		</if>
+		<if test="departmentName != null and departmentName != ''">
+		     AND organization_name_eng LIKE '%' || #{departmentName} || '%'
+		</if>
+		<if test="mailAddr != null and mailAddr != ''">
+		     AND UPPER(mail_addr) LIKE UPPER(#{mailAddr}) || '%'
+		</if>
+		ORDER BY employee_name, user_name
+	</select>
+
+	<!-- 기선택된 사용자 목록 조회 -->
+	<select id="retrievePreSelectedUserPopupList" parameterType="java.util.HashMap" resultType="LGCOMData">
+           SELECT /*LGSYSC00040.retrievePreSelectedUserPopupList*/
+                  application_user_id AS user_id
+                 ,user_name AS employee_no
+                 ,full_name_local AS employee_name
+                 ,english_full_name AS english_full_name
+                 ,position_name AS position
+                 ,organization_name_eng AS department_name
+                 ,office_phone_number AS office_phone_number
+                 ,mail_addr
+                 ,NVL(full_name_local, english_full_name) || mail_addr AS employee_desc
+                 ,organization_name_eng AS team_name
+		    FROM LGCOM_USER_M_V
+		   WHERE (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		     AND (apply_end_date IS NULL OR apply_end_date &gt;= TRUNC(SYSDATE))
+		     AND susp_resignation_flag = 'C'
+		<if test="keyValues != null">
+			<choose>
+				<when test="keyType eq 'applicationUserId'.toString()">
+					AND application_user_id IN
+					<foreach collection="keyValues" index="index" open="(" close=")" separator=",">
+						#{keyValues[${index}]}
+					</foreach>
+				</when>
+				<when test="keyType eq 'userName'.toString()">
+					AND user_name IN
+					<foreach collection="keyValues" index="index" open="(" close=")" separator=",">
+						#{keyValues[${index}]}
+					</foreach>
+				</when>
+			</choose>
+		</if>
+		ORDER BY application_user_id
+	</select>
+</mapper>

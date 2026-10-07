@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00008">
+
+    <!-- Payroll Run 리스트 조회 -->
+    <select id="retrievePayrollRunList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00008.retrievePayrollRunList */
+               pce.payroll_calculation_exec_id
+             , pce.payroll_calculation_set_id
+             , pacs.payroll_calculation_set_name
+             , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')  AS payroll_calc_period_value
+             , pce.payroll_type_code                                                AS payroll_type_code
+             , cccm.common_code_name                                                AS payroll_type_name
+             , TO_CHAR(pce.basis_date,'dd/mm/yyyy')                                 AS basis_date
+             , ( SELECT COUNT(*) FROM  tb_pay_calc_set_target_per_n a WHERE a.payroll_calculation_set_id = pce.payroll_calculation_set_id) as employee_count
+             , COUNT(*)                                                             AS total_count
+             , sum(CASE WHEN pcee.error_flag = 'Y' THEN 0 ELSE 1 END  )             AS normal_count
+             , sum(CASE WHEN pcee.error_flag = 'Y' THEN 1 ELSE 0 END  )             AS error_count
+             , TO_CHAR(MAX(pce.creation_date),'dd/mm/yyyy hh24:mi:ss')              AS creation_date
+             ,(SELECT um.user_name FROM lgcom_user_m um WHERE TO_CHAR(um.application_user_id) = pce.creation_user_id) AS created_by
+             , NVL(pce.confirm_flag, 'N')                                           AS confirm_flag
+             , NVL(pce.retroactive_flag, 'N')                                       AS retroactive_flag
+             , TO_CHAR(TO_DATE(pce.retroactive_pay_start_yyyymm,'yyyymm'),'mm/yyyy')   AS retroactive_start_month
+             , TO_CHAR(TO_DATE(pce.retroactive_payroll_end_yyyymm,'yyyymm'),'mm/yyyy') AS retroactive_end_month
+             , pce.adding_up_taxation_flag                                          AS adding_up_taxation_flag
+             , TO_CHAR(TO_DATE(pce.addup_taxation_start_yyyymm,'yyyymm'),'mm/yyyy') AS addup_taxation_start_yyyymm
+
+        FROM   tb_pay_calc_period_basis_n     pcpb
+             , tb_pay_calc_exec_n             pce
+             , lgcom_common_code_multi_lang_c cccm
+             , tb_pay_calc_emp_exec_n         pcee
+             , tb_pay_calc_set_n              pacs
+
+        WHERE  pcpb.payroll_calc_period_value      = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+        AND    pcpb.Subsidiary_Code                = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd,'yyyymmdd') AND to_date(pcpb.end_yyyymmdd,'yyyymmdd')
+        AND    pce.payroll_calculation_set_id      = #{calculationSetId, jdbcType=NUMERIC}
+        AND    pce.payroll_type_code               = #{payrollTypeCode}
+        AND    cccm.code_type_code                 = 'LGVHR_PAY_RUN_TYPE'
+        AND    pce.payroll_type_code               = cccm.common_code
+        AND    cccm.language_code                  = #{USER_SESSION.languageCode}
+        AND    pcee.payroll_calculation_exec_id(+) = pce.payroll_calculation_exec_id
+        AND    pacs.payroll_calculation_set_id     = pce.payroll_calculation_set_id
+
+        GROUP BY pce.payroll_calculation_exec_id
+               , pce.payroll_calculation_set_id
+               , pacs.payroll_calculation_set_name
+               , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')
+               , pce.payroll_type_code
+               , cccm.common_code_name
+               , TO_CHAR(pce.basis_date,'dd/mm/yyyy')
+               , NVL(pce.confirm_flag, 'N')
+               , NVL(pce.retroactive_flag, 'N')
+               , TO_CHAR(TO_DATE(pce.retroactive_pay_start_yyyymm,'yyyymm'),'mm/yyyy')
+               , TO_CHAR(TO_DATE(pce.retroactive_payroll_end_yyyymm,'yyyymm'),'mm/yyyy')
+               , pce.creation_user_id
+               , pce.adding_up_taxation_flag
+               , TO_CHAR(TO_DATE(pce.addup_taxation_start_yyyymm,'yyyymm'),'mm/yyyy')
+        ORDER BY 1 DESC
+    </select>
+
+    <!-- Payroll Run별 대상자 리스트 조회 -->
+    <select id="retrievePayrollRunEmpList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00008.retrievePayrollRunEmpList */
+               pcee.payroll_calculation_exec_id
+             , pcee.employee_no                              AS employee_no
+             , em.full_name_local                            AS employee_name
+             , em.org_name_local                             AS organization_name
+             , TO_CHAR(em.date_hire_subsidiary,'dd/mm/yyyy') AS hire_date
+             , TO_CHAR(em.date_retire,'dd/mm/yyyy')          AS resignation_date
+             , NVL(pcee.error_flag, 'N')                     AS error_flag
+        FROM   tb_pay_calc_emp_exec_n pcee
+             , emp_master em
+        WHERE  pcee.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        <if test="detailEmployeeNo != null and detailEmployeeNo != ''">
+        AND    pcee.employee_no = #{detailEmployeeNo}
+        </if>
+        AND    em.employee_number = pcee.employee_no
+        ORDER BY NVL(pcee.error_flag, 'N') DESC, pcee.employee_no
+    </select>
+
+    <!-- payroll run에 대한 rollback -->
+    <select id="updatePayrollRunRollback" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00008.updatePayrollRunRollback */
+              lgvpay_payroll_run_pkg.rollback_run( #{payrollCalculationExecId, mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_exec_id. (필수)*/
+                                                 , #{calculationSetId        , mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_set_id. (필수)*/
+                                                 , #{employeeNo              , mode=IN,  jdbcType=VARCHAR} /*p_employee_no.(선택) 특정 사람에 대한 롤백인 경우 값 필요. 그외는 필요 없음.*/
+                                                 , #{errbuf                  , mode=OUT, jdbcType=VARCHAR} /*p_errbuf. 오류메세지*/
+                                                 , #{errcode                 , mode=OUT, jdbcType=NUMERIC} /*p_errcode. 0:성공, 그외:실패*/
+                                                 )
+        }
+    </select>
+    
+    <!-- Retroactive payroll run에 대한 rollback -->
+    <select id="updateRetroactivePayrollRunRollback" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00008.updateRetroactivePayrollRunRollback */
+              lgvpay_retro_payroll_run_pkg.rollback_run( #{payrollCalculationExecId, mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_exec_id. (필수)*/
+                                                       , #{calculationSetId        , mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_set_id. (필수)*/
+                                                       , #{employeeNo              , mode=IN,  jdbcType=VARCHAR} /*p_employee_no.(선택) 특정 사람에 대한 롤백인 경우 값 필요. 그외는 필요 없음.*/
+                                                       , #{errbuf                  , mode=OUT, jdbcType=VARCHAR} /*p_errbuf. 오류메세지*/
+                                                       , #{errcode                 , mode=OUT, jdbcType=NUMERIC} /*p_errcode. 0:성공, 그외:실패*/
+                                                       )
+        }
+    </select>
+
+    <!-- payroll run에 대한 retry -->
+    <select id="updatePayrollRunRetry" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00008.updatePayrollRunRetry */
+              lgvpay_payroll_run_pkg.retry_run( #{payrollCalculationExecId            , mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_exec_id. (필수)*/
+                                              , #{calculationSetId                    , mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_set_id. (필수)*/
+                                              , #{employeeNo                          , mode=IN,  jdbcType=VARCHAR} /*p_employee_no. (필수) 재실행할 사번.*/
+                                              , #{LGVHR_PROJECT_SESSION.subsidiaryCode, mode=IN,  jdbcType=VARCHAR} /*p_subsidiary_code. (필수) 법인코드.*/
+                                              , #{USER_SESSION.applicationUserId      , mode=IN,  jdbcType=VARCHAR} /*p_user_id. (필수) 로그인 사용자 application_user_id. who column 저장용.*/
+                                              , #{errbuf                              , mode=OUT, jdbcType=VARCHAR} /*p_errbuf. 오류메세지*/
+                                              , #{errcode                             , mode=OUT, jdbcType=NUMERIC} /*p_errcode. 0:성공, 그외:실패*/
+                                              )
+        }
+    </select>
+
+    <!-- Retroactive payroll run에 대한 retry -->
+    <select id="updateRetroactivePayrollRunRetry" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00008.updateRetroactivePayrollRunRetry */
+              lgvpay_retro_payroll_run_pkg.retry_run( #{payrollCalculationExecId             , mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_exec_id. (필수)*/
+                                                    , #{calculationSetId                     , mode=IN,  jdbcType=NUMERIC} /*p_payroll_calculation_set_id. (필수)*/
+                                                    , #{employeeNo                           , mode=IN,  jdbcType=VARCHAR} /*p_employee_no. (필수) 재실행할 사번.*/
+                                                    , #{LGVHR_PROJECT_SESSION.subsidiaryCode , mode=IN,  jdbcType=VARCHAR} /*p_subsidiary_code. (필수) 법인코드.*/
+                                                    , #{USER_SESSION.applicationUserId       , mode=IN,  jdbcType=VARCHAR} /*p_user_id. (필수) 로그인 사용자 application_user_id. who column 저장용.*/
+                                                    , #{retroactiveStartMonth                , mode=IN,  jdbcType=VARCHAR} /*p_start_yyyymm (필수) 소급급여월기간start.*/
+                                                    , #{retroactiveEndMonth                  , mode=IN,  jdbcType=VARCHAR} /*p_end_yyyymm (필수) 소급급여월기간end.*/
+                                                    , #{errbuf                               , mode=OUT, jdbcType=VARCHAR} /*p_errbuf. 오류메세지*/
+                                                    , #{errcode                              , mode=OUT, jdbcType=NUMERIC} /*p_errcode. 0:성공, 그외:실패*/
+                                                    )
+        }
+    </select>
+
+    <!-- 확정된 급여실행ID조회 -->
+    <select id="retrievePayrollCalculationExecConfirmData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH temp AS (
+            /* payroll_calculation_exec_id 로 paymonth, paytype, calculation_set_id 조회 */
+            SELECT /* LGVPAY00008.retrievePayrollCalculationExecConfirmData */
+                   pce.payroll_calculation_exec_id
+                 , pce.payroll_type_code
+                 , pce.payroll_calculation_set_id
+                 , pcpb.payroll_calc_period_value /* pay month */
+            FROM   tb_pay_calc_exec_n pce
+                 , tb_pay_calc_period_basis_n pcpb
+            WHERE  pce.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+            AND    pcpb.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd, 'yyyymmdd') AND to_date(pcpb.end_yyyymmdd, 'yyyymmdd')
+        )
+        SELECT MAX(CASE WHEN NVL(pce.confirm_flag, 'N') = 'Y' THEN pce.payroll_calculation_exec_id ELSE NULL END) AS payroll_calculation_exec_id
+        FROM   tb_pay_calc_period_basis_n pcpb
+             , tb_pay_calc_exec_n pce
+             , temp
+        WHERE  pcpb.subsidiary_code           = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    pcpb.payroll_calc_period_value = temp.payroll_calc_period_value
+        AND    pce.basis_date BETWEEN TO_DATE( pcpb.start_yyyymmdd,'YYYYMMDD') AND TO_DATE(pcpb.end_yyyymmdd,'YYYYMMDD')
+        AND    pce.payroll_type_code          = temp.payroll_type_code
+        AND    pce.payroll_calculation_set_id = temp.payroll_calculation_set_id
+    </select>
+
+    <!-- 확정여부 수정 -->
+    <update id="updateConfirmPayrollCalculationExec" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00008.updateConfirmPayrollCalculationExec */
+               tb_pay_calc_exec_n
+        SET    confirm_flag                           = #{confirmFlag}                                    /* 확정여부 */
+        WHERE  payroll_calculation_exec_id            = #{payrollCalculationExecId, jdbcType=NUMERIC}     /* 급여산출실행아이디 */
+    </update>
+
+</mapper>

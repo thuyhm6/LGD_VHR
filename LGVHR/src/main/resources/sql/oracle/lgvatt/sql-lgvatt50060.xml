@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT50060">
+	<!-- Search employee unpaid leave -->
+	<select id="retrieveEmpULWarning" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+		  	SELECT /*LGVATT50060.retrieveEmpULWarning*/
+				   em.organization_id                                           AS employee_org
+		           ,em.employee_number                                           AS employee_no
+		           ,em.full_name_local                                           AS employee_name
+		           ,em.grade_title                                               AS employee_grade
+		           ,em.attribute10                                               AS actual_shift_code
+		           ,em.assignment_category                                       AS employee_category
+		           ,TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY')               AS date_hire_subsidiary
+				   ,TO_CHAR(EU.START_DATE, 'DD/MM/YYYY') as START_DATE
+				   ,TO_CHAR(EU.END_DATE, 'DD/MM/YYYY') as END_DATE
+				   ,EU.TOTAL_DAYS
+				   ,EU.SEND_EMAIL_FLAG
+				   ,EU.MANAGER_NO_1
+				   ,EU.MANAGER_EMAIL_1
+				   ,(select full_name_local from emp_master where employee_number = eu.MANAGER_NO_1) as MANAGER_NAME_1
+				   ,EU.MANAGER_NO_2
+				   ,EU.MANAGER_EMAIL_2
+				   ,EU.MANAGER_NO_3
+				   ,EU.MANAGER_EMAIL_3
+				   ,EU.NOTE
+				   ,EU.REMARK
+				   ,(select local_language_full_name from lgcom_user_m where application_user_id = eu.creation_user_id) as  CREATION_USER_ID
+				   ,TO_CHAR(EU.CREATION_DATE, 'DD/MM/YYYY hh24:mi') as CREATION_DATE
+				   ,(select local_language_full_name from lgcom_user_m where application_user_id = eu.LAST_UPDATE_USER_ID) as LAST_UPDATE_USER_ID
+				   ,TO_CHAR(EU.LAST_UPDATE_DATE, 'DD/MM/YYYY hh24:mi') as LAST_UPDATE_DATE
+		    FROM TB_ATT_EMP_UL_WARNING EU, emp_master em
+		    WHERE em.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			AND eu.employee_no = em.employee_number
+            AND eu.START_DATE >= to_date(#{atendanceStartDate}, 'dd/mm/yyyy') 
+            AND eu.END_DATE   <= to_date(#{atendanceEndDate}, 'dd/mm/yyyy')
+            ]]>
+            <if test="managerNo != null and managerNo != ''">
+			   AND eu.manager_no_1 = #{managerNo}
+			</if>
+            <if test="shiftCode != null and shiftCode != ''">
+			   AND em.attribute10 = #{shiftCode}
+			</if>
+			<if test="categoryTitle != null and categoryTitle != ''">
+				   AND em.assignment_category = #{categoryTitle}
+			</if>
+			<if test="orgId != null and orgId != ''">
+				   AND em.organization_id = #{orgId}
+			</if>
+			<if test="empNo != null and empNo != ''">
+				   AND em.employee_number = UPPER(#{empNo})
+			</if>
+			<if test="empName != null and empName != ''">
+				   AND UPPER(em.full_name_local) LIKE '%' || UPPER(#{empName}) || '%'
+			</if>
+			<if test="sendEmailFlag != null and sendEmailFlag != ''">
+				   AND EU.SEND_EMAIL_FLAG = #{sendEmailFlag}
+			</if>
+			ORDER BY eu.employee_no, eu.START_DATE asc
+	</select>
+	
+	<!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVATT50060.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10 , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+                                     , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Employee No' AS EMPLOYEE_NO
+                    , 'Employee Name' AS EMPLOYEE_NAME_LOCAL
+                    , 'Employee Grade' AS EMPLOYEE_GRADE
+                    , 'Employee Category' AS EMPLOYEE_CATEGORY
+                    , 'Date Hire Subsidiary' AS DATE_HIRE_SUBSIDIARY
+                    , 'Start Date' AS START_DATE
+                    , 'End Date' AS END_DATE
+                    , 'Total Days' AS TOTAL_DAYS
+                    , 'Manager No 1' AS MANAGER_NO_1
+                    , 'Manager Email 1' AS MANAGER_EMAIL_1
+                    , 'Manager Name 1' AS MANAGER_NAME_1
+                    , 'Note' AS NOTE
+                    , 'Remark' AS REMARK
+                    , 'Send Email Flag' AS SEND_EMAIL_FLAG
+                    , 'Creation User Id' AS CREATION_USER_ID
+                    , 'Creation Date' AS CREATION_DATE
+                    , 'Last Update User Id' AS LAST_UPDATE_USER_ID
+                    , 'Last Update Date' AS LAST_UPDATE_DATE
+
+               FROM DUAL
+               UNION ALL
+               <![CDATA[
+			  	SELECT #{sessionId}
+                       ,#{USER_SESSION.applicationUserId}
+                       ,SYSDATE
+                       ,2 AS ORDER_BY
+                       ,'KO16KSC5601'
+			           ,em.employee_number                                           AS employee_no
+			           ,em.full_name_local                                           AS employee_name
+			           ,em.grade_title                                               AS employee_grade
+			           ,em.assignment_category                                       AS employee_category
+			           ,TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY')               AS date_hire_subsidiary
+					   ,TO_CHAR(EU.START_DATE, 'DD/MM/YYYY') as START_DATE
+					   ,TO_CHAR(EU.END_DATE, 'DD/MM/YYYY') as END_DATE
+					   ,TO_CHAR(EU.TOTAL_DAYS)
+					   ,EU.MANAGER_NO_1
+					   ,EU.MANAGER_EMAIL_1
+					   ,(select full_name_local from emp_master where employee_number = eu.MANAGER_NO_1) as MANAGER_NAME_1
+					   ,EU.NOTE
+					   ,EU.REMARK
+					   ,TO_CHAR(EU.SEND_EMAIL_FLAG)
+					   ,(select local_language_full_name from lgcom_user_m where application_user_id = eu.creation_user_id) as  CREATION_USER_ID
+					   ,TO_CHAR(EU.CREATION_DATE, 'DD/MM/YYYY hh24:mi') as CREATION_DATE
+					   ,(select local_language_full_name from lgcom_user_m where application_user_id = eu.LAST_UPDATE_USER_ID) as LAST_UPDATE_USER_ID
+					   ,TO_CHAR(EU.LAST_UPDATE_DATE, 'DD/MM/YYYY hh24:mi') as LAST_UPDATE_DATE
+			    FROM TB_ATT_EMP_UL_WARNING EU, emp_master em
+			    WHERE em.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+				AND eu.employee_no = em.employee_number
+	            AND eu.START_DATE >= to_date(#{atendanceStartDate}, 'dd/mm/yyyy') 
+	            AND eu.END_DATE   <= to_date(#{atendanceEndDate}, 'dd/mm/yyyy')
+	            ]]>
+	            <if test="managerNo != null and managerNo != ''">
+				   AND eu.manager_no_1 = #{managerNo}
+				</if>
+	            <if test="shiftCode != null and shiftCode != ''">
+				   AND em.attribute10 = #{shiftCode}
+				</if>
+				<if test="categoryTitle != null and categoryTitle != ''">
+					   AND em.assignment_category = #{categoryTitle}
+				</if>
+				<if test="orgId != null and orgId != ''">
+					   AND em.organization_id = #{orgId}
+				</if>
+				<if test="empNo != null and empNo != ''">
+					   AND em.employee_number = UPPER(#{empNo})
+				</if>
+				<if test="empName != null and empName != ''">
+					   AND UPPER(em.full_name_local) LIKE '%' || UPPER(#{empName}) || '%'
+				</if>
+				<if test="sendEmailFlag != null and sendEmailFlag != ''">
+					   AND EU.SEND_EMAIL_FLAG = #{sendEmailFlag}
+				</if>
+              ) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    </insert>
+	
+	<!-- 휴일 수정 -->
+    <update id="cancelSendEmail" parameterType="LGCOMData">
+        UPDATE /*LGVATT50060.cancelSendEmail*/
+               TB_ATT_EMP_UL_WARNING 
+        SET    SEND_EMAIL_FLAG                 = #{sendEmailFlag}             
+             , last_update_user_id             = #{applicationUserId}            					/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  employee_no = #{employeeNo}
+           AND to_char(START_DATE, 'dd/mm/yyyy') = #{startDate} 
+           AND to_char(END_DATE, 'dd/mm/yyyy')   = #{endDate}
+    </update>
+    
+    <update id="updateEmpUlWarning" parameterType="LGCOMData">
+        UPDATE /*LGVATT50060.updateEmpUlWarning*/
+               TB_ATT_EMP_UL_WARNING 
+        SET    REMARK                 = #{remark}             
+             , last_update_user_id             = #{applicationUserId}            					/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  employee_no = #{employeeNo}
+           AND to_char(START_DATE, 'dd/mm/yyyy') = #{startDate} 
+           AND to_char(END_DATE, 'dd/mm/yyyy')   = #{endDate}
+    </update>
+    
+    <select id="retrieveSendEmailInfo" parameterType="LGCOMData" resultType="LGCOMData">
+         SELECT /* LGVATT50060.retrieveSendEmailInfo */
+               mc.mail_id
+             , cc.common_code_desc sender_name
+             , cc.code_data2_value as sender
+             , cc.code_data3_value as value3
+             , cc.code_data4_value as value4
+             , cc.code_data5_value as value5
+             , mc.subject_text        as subject
+             , mc.mail_detail_content as mail_content
+             from  lgcom_common_code_c cc
+                   , lgcom_mail_content_n mc
+        WHERE  cc.code_type_code = 'LGVHR_MAIL_TEMPLATE_LIST'
+        AND    cc.common_code    = #{emailInfo}
+        AND    mc.mail_id        = TO_NUMBER(cc.CODE_DATA1_VALUE)
+    </select>
+    
+    <select id="retrieveManagerEmailList" parameterType="LGCOMData" resultType="LGCOMData">
+         SELECT /* LGVATT50060.retrieveManagerEmailList */
+               DISTINCT
+               w.manager_no_1 AS manager_no
+               ,e.full_name_local AS manager_name
+               ,w.manager_email_1 AS manager_email
+               FROM tb_att_emp_ul_warning w
+               JOIN emp_master e ON w.manager_no_1 = e.employee_number
+               WHERE w.manager_no_1 IS NOT NULL
+    </select>
+    
+</mapper>

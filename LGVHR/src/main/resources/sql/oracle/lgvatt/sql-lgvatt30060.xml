@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT30060">
+
+	<!-- Line Worker Plan&Result Retrieve -->
+	<select id="retrieveMonthlyAttList" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+			SELECT to_char(ar.time_and_attendance_date, 'dd/mm/yyyy') AS attendance_ymd
+			      ,ar.a_day_of_the_week_code                    AS screen_week_name
+			      ,em.organization_id                           AS employee_org
+			      ,ar.employee_no                               AS employee_no
+			      ,em.full_name_local                           AS employee_name
+			      ,em.grade_title                               AS employee_grade
+			      ,ac.time_and_attendance_type_code             AS actual_attendance_type
+			      ,ar.time_and_attendance_code                  AS actual_attendance_detail
+			      ,ar.time_attend_detail_code                   AS actual_attend_detail_reason                   
+			      ,ar.shift_type_code                           AS actual_shift_code
+			      ,ar.night_shift_flag                          AS actual_day_night
+			      ,ar.evening_meal_flag                         AS actual_dinner_chk
+			      ,ar.work_start_time                           AS actual_start_tm
+			      ,NVL(ar.overtime_sum_hours, 0)                AS actual_o_t
+			      ,NVL(ar.weekday_overtime_hours, 0)            AS weekday
+			      ,NVL(ar.holiday_overtime_hours, 0)            AS weekday_holiday
+			      ,NVL(ar.public_holiday_overtime_hours, 0)     AS public_holiday
+			      ,NVL(ar.weekday_night_overtime_hours, 0)      AS at_night_weekday
+			      ,NVL(ar.weekday_ot_af_night_work_hours, 0)    AS at_night_weekday_after_o_t
+			      ,NVL(ar.holiday_night_overtime_hours, 0)      AS at_night_weekday_holiday 
+			      ,NVL(ar.public_holiday_night_ot_hours, 0)     AS at_night_public_holiday
+			      ,NVL(ar.normal_night_overtime_hours, 0)       AS night_normal
+			      ,NVL(ar.tardy_hours, 0)                       AS deduction_lateness
+			      ,NVL(ar.early_leave_hours, 0)                 AS deduction_leaving_early
+			      ,NVL(ar.going_out_hours, 0)                   AS deduction_going_out
+			      , NVL(ar.tardy_hours, 0)
+			       +NVL(ar.early_leave_hours, 0)
+			       +NVL(ar.going_out_hours, 0)                  AS deduction_sub_total
+			      ,NVL(so.overtime_sum_hours, 0)                AS special_o_t
+			      ,ar.base_time_attend_apply_flag               AS base_att_flag
+			  FROM tb_att_result_n            ar
+			      ,emp_master                 em
+			      ,tb_att_special_ot_result_n so
+			      ,tb_att_code_c              ac
+			 WHERE ar.employee_no = em.employee_number
+			   AND ar.employee_no = so.employee_no(+)
+			   AND ar.time_and_attendance_date = so.time_and_attendance_date(+)
+			   AND ar.time_and_attendance_code = ac.time_and_attendance_code
+			   AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			   AND ar.time_and_attendance_date BETWEEN to_date(#{fromDate}, 'dd/mm/yyyy') AND to_date(#{toDate}, 'dd/mm/yyyy')
+			   AND em.organization_id = #{orgId}
+			   AND 'Y' = so.confirm_flag(+)			   
+		]]>
+		<if test="shiftCode != null and shiftCode != ''">
+			   AND ar.shift_type_code = #{shiftCode}
+		</if>
+		<if test="baseAttend != null and baseAttend != ''">
+			   AND ar.base_time_attend_apply_flag = #{baseAttend}
+		</if>
+		<if test="empNo != null and empNo != ''">
+			   AND ar.employee_no = UPPER(#{empNo})
+		</if>
+		<if test="empName != null and empName != ''">
+			   AND UPPER(em.full_name_local) LIKE '%' || UPPER(#{empName}) || '%'
+		</if>
+			 ORDER BY ar.employee_no, ar.time_and_attendance_date
+	</select>
+	
+</mapper>

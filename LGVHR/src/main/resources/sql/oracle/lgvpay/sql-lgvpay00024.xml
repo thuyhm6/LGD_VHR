@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00024">
+    <!-- CSV 다운로드 -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00024.createDirectCSVDownloadData */
+		       gubun
+		      ,pay_month_mmyyyy
+		      ,employee_no
+		      ,full_name
+		      ,organization_code
+		      ,organization_name
+		      ,employment_category_name
+		      ,grade_type_name
+		      ,grade_title_code
+		      ,grade_name
+		      ,job_group_name
+		      ,job_family_name
+		      ,job_series_name
+		      ,position_name
+		      ,hire_yyyymmdd
+		      ,absence_leave_yyyymmdd
+		      ,resignation_yyyymmdd
+		      ,probation_start_date
+		      ,probation_end_date
+		      ,aggr_payroll_item_desc
+		      ,payroll_item_desc
+		      ,different_amount
+		FROM (SELECT '1'                                                                      gubun
+		            ,'Pay Month(MM/YYYY)'                                                     pay_month_mmyyyy
+		            ,'Employee No'                                                            employee_no
+		            ,'Employee Name'                                                          full_name
+		            ,'Organization Code'                                                      organization_code
+		            ,'Organization Name'                                                      organization_name
+		            ,'Emp. Category'                                                          employment_category_name
+		            ,'Grade Type'                                                             grade_type_name
+		            ,'Grade'                                                                  grade_title_code
+		            ,'Job Title'                                                              grade_name
+		            ,'Job Group'                                                              job_group_name
+		            ,'Job Family'                                                             job_family_name
+		            ,'Job Series'                                                             job_series_name
+		            ,'Position'                                                               position_name
+		            ,'Hire Date'                                                              hire_yyyymmdd
+		            ,'Suspension Date'                                                        absence_leave_yyyymmdd
+		            ,'Resignation Date'                                                       resignation_yyyymmdd
+		            ,'Probation Start Date'                                                   probation_start_date
+		            ,'Probation End Date'                                                     probation_end_date
+		            ,'Aggr. Item Desc.'                                                       aggr_payroll_item_desc
+		            ,'Payroll Item Desc.'                                                     payroll_item_desc
+		            ,'Different Amount'                                                       different_amount
+		      FROM DUAL
+		      UNION ALL
+		      SELECT '2'                                                                      gubun
+		            ,TO_CHAR(pce.basis_date,'MM/YYYY')                                        pay_month_mmyyyy
+		            ,rad.employee_no                                                          employee_no
+		            ,em.full_name_local                                                       full_name
+		            ,om.acc_org_code                                                          organization_code
+		            ,om.org_name_local                                                        organization_name
+		            ,lgvhr_common_pkg.decode_lookup('IF_EMP_CAT', ea.assignment_category)     employment_category_name
+		            ,ea.grade_type                                                            grade_type_name
+		            ,ea.grade                                                                 grade_title_code
+		            ,lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', ea.grade_title) grade_name
+		            ,ea.job_group                                                             job_group_name
+		            ,ea.job_family                                                            job_family_name
+		            ,ea.job_detail                                                            job_series_name
+		            ,lgvhr_common_pkg.decode_lookup('IF_POSITION', ea.position)               position_name
+		            ,to_char(em.date_hire_subsidiary, 'YYYYMMDD')                             hire_yyyymmdd
+		            ,to_char(em.date_absesce_leave, 'YYYYMMDD')                               absence_leave_yyyymmdd
+		            ,to_char(em.date_retire, 'YYYYMMDD')                                      resignation_yyyymmdd
+		            ,to_char(em.probation_start_date, 'YYYY-MM-DD')                           probation_start_date
+		            ,to_char(em.probation_end_date, 'YYYY-MM-DD')                             probation_end_date
+		            ,ppi2.detail_desc                                                         aggr_payroll_item_desc
+		            ,ppi.detail_desc                                                          payroll_item_desc
+		            ,TO_CHAR(rad.retroact_act_pay_diff_amount)                                different_amount
+		      FROM   emp_master                       em
+		            ,emp_assig                        ea
+		            ,org_master                       om
+		            ,tb_pay_calc_exec_n               pce
+		            ,tb_retro_actual_pay_diff_n       rad
+		            ,tb_pay_payroll_item_m            ppi
+		            ,tb_pay_payroll_item_m            ppi2
+		      WHERE  em.employee_number               = rad.employee_no
+		      AND    em.employee_number               = ea.employee_number
+		      AND    least(nvl(em.date_retire, pce.basis_date), pce.basis_date)  
+		                                BETWEEN ea.assignment_start_date
+		                                AND     to_date(ea.attribute1, 'YYYYMMDD')
+		      AND    ea.organization_id               = om.organization_id
+		      AND    rad.payroll_calculation_exec_id  = pce.payroll_calculation_exec_id
+		      AND    ppi.payroll_item_id              = rad.payroll_item_id
+		      AND  ( ppi.end_yyyymmdd IS NULL OR
+		             ppi.end_yyyymmdd > TO_CHAR(pce.basis_date,'yyyymmdd'))
+		      AND    ppi.aggr_retroactive_pay_item_id = ppi2.payroll_item_id(+)
+         <if test="payrollCalculationExecId != null and payrollCalculationExecId != ''">
+              AND    rad.payroll_calculation_exec_id = #{payrollCalculationExecId}
+         </if>
+         <if test="searchPayMonth != null and searchPayMonth != ''">
+              AND    TRUNC(pce.basis_date, 'MONTH') = TO_DATE(#{searchPayMonth}, 'YYYYMM')
+         </if>
+         <if test="payType != null and payType != ''">
+              AND    lgvhr_common_pkg.decode_lookup('LGVHR_PAY_RUN_TYPE', pce.payroll_type_code, 'D', #{USER_SESSION.languageCode})  = #{payType}
+         </if>
+         <if test="employeeNo != null and employeeNo != ''">
+              AND    rad.employee_no  = #{employeeNo}
+         </if>
+         <if test="employeeName != null and employeeName != ''">
+              AND    UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+         </if>
+        )
+        ORDER BY gubun, employee_no asc
+    </select>
+
+</mapper>

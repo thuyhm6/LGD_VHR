@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT60060">
+	<select id="createExcelActualAttendance" parameterType="LGCOMData"
+		resultType="LGCOMData">
+		INSERT INTO /* LGVATT60060.createExcelActualAttendance */
+		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		, ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3
+		)
+
+		SELECT #{sessionId} AS SESSION_ID
+		, #{sessionUserId} AS CREATED_BY
+		, SYSDATE AS CREATION_DATE
+		, ROWNUM+1 AS ORDER_BY  
+		, 'KO16KSC5602' AS CHARACTER_SET_NAME
+		, 'Employee No' AS "Employee No"
+		, 'Attendance Code' AS "Attendance Code"
+		, 'Code Count' AS "Code Count"
+		FROM DUAL
+		UNION ALL
+		select
+		#{sessionId} AS SESSION_ID
+		, #{sessionUserId} AS CREATED_BY
+		, SYSDATE AS CREATION_DATE
+		, NULL AS ORDER_BY
+		, 'KO16KSC5602' AS CHARACTER_SET_NAME
+		, EMPLOYEE_NO
+		, TIME_AND_ATTENDANCE_CODE
+		, to_char(count(*)) as Code_count
+		from tb_att_result_n
+		where 
+		<!-- EMPLOYEE_NO IN (SELECT E.EMPLOYEE_NUMBER FROM EMP_MASTER E WHERE E.STATUS = 'Active Assignment') -->
+		TO_CHAR(TIME_AND_ATTENDANCE_DATE, 'YYYYMMDD') between
+		TO_CHAR(TO_DATE(#{fromDateActual},'DD/MM/YYYY'), 'YYYYMMDD') and
+		TO_CHAR(TO_DATE(#{toDateActual},'DD/MM/YYYY'), 'YYYYMMDD')
+		group by EMPLOYEE_NO, TIME_AND_ATTENDANCE_CODE
+	</select>
+
+	<select id="createExcelPlanAttendance" parameterType="LGCOMData"
+		resultType="LGCOMData">
+		INSERT INTO /* LGVATT60060.createExcelPlanAttendance */
+		XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		, ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3
+		)
+
+		SELECT #{sessionId} AS SESSION_ID
+		, #{sessionUserId} AS CREATED_BY
+		, SYSDATE AS CREATION_DATE
+		, ROWNUM+1 AS ORDER_BY
+		, 'KO16KSC5602' AS CHARACTER_SET_NAME
+		, 'Employee No' AS "Employee No"
+		, 'Attendance Code' AS "Attendance Code"
+		, 'Code Count' AS "Code Count"
+		FROM DUAL
+		UNION ALL
+		select
+		#{sessionId} AS SESSION_ID
+		, #{sessionUserId} AS CREATED_BY
+		, SYSDATE AS CREATION_DATE
+		, NULL AS ORDER_BY 
+		, 'KO16KSC5602' AS CHARACTER_SET_NAME
+		, EMPLOYEE_NO
+		, TIME_AND_ATTENDANCE_CODE
+		, to_char(count(*)) as Code_count
+		from tb_att_result_n
+		where 
+		<!-- EMPLOYEE_NO IN (SELECT E.EMPLOYEE_NUMBER FROM EMP_MASTER E WHERE E.STATUS = 'Active Assignment') -->
+		TO_CHAR(TIME_AND_ATTENDANCE_DATE, 'YYYYMMDD') between
+		TO_CHAR(TO_DATE(#{fromDatePlan},'DD/MM/YYYY'), 'YYYYMMDD') and
+		TO_CHAR(TO_DATE(#{toDatePlan},'DD/MM/YYYY'), 'YYYYMMDD')
+		group by EMPLOYEE_NO, TIME_AND_ATTENDANCE_CODE
+	</select>
+
+</mapper>

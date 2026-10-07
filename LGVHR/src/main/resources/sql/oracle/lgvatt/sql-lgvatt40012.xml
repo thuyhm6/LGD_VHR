@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT40012">
+	
+	<select id="retrieveAttendanceData" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+			SELECT em.org_name_local                                   AS organization_name
+			      ,tar.employee_no                                     AS employee_no
+			      ,em.full_name_local                                  AS employee_name
+			      ,TO_CHAR(tar.time_and_attendance_date, 'DD/MM/YYYY') AS time_and_attendance_date
+			      ,TO_CHAR(tar.time_and_attendance_date, 'DDMMYYYY')   AS attendance_yyyymmdd_result
+			      ,TO_CHAR(tai.check_in_date,  'HH24:MI')              AS in_time
+			      ,TO_CHAR(tai.check_out_date, 'HH24:MI')              AS out_time
+			      ,tar.shift_type_code                                 AS shift_type_code
+			      ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_DAY_NIGHT_FLAG', tar.night_shift_flag) FROM dual)                    AS night_shift_name
+			      ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_TYPE_CODE', tac.time_and_attendance_type_code) FROM dual) AS time_and_attendance_type_name
+      		      ,tar.time_and_attendance_code                        AS time_and_attendance_code
+			      ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', tar.time_attend_detail_code) FROM dual)     AS time_attend_detail_name
+			      ,tar.work_start_time                                 AS work_start_time
+			      ,tar.tardy_hours                                     AS tardy_hours
+			      ,tar.early_leave_hours                               AS early_leave_hours
+			      ,tar.going_out_hours                                 AS going_out_hours
+			      ,tar.overtime_sum_hours                              AS overtime_sum_hours
+			      ,tar.time_attend_input_reason_desc                   AS time_attend_input_reason_desc
+			      ,(SELECT full_name_local FROM emp_master WHERE employee_number = las.approver1_no) AS approver1_name
+			      ,(SELECT full_name_local FROM emp_master WHERE employee_number = las.approver2_no) AS approver2_name
+			      ,lgvhr_common_pkg.decode_lookup('LGVHR_ATT_APPROVAL_STATUS', lgvatt_common_pkg.get_approval_status(tar.approval_request_id, tar.request_code, #{LGVHR_PROJECT_SESSION.employeeNo})) AS approval_status
+			
+			      ,tar.evening_meal_flag                               AS evening_meal_flag
+			      ,tar.weekday_overtime_hours                          AS weekday_overtime_hours
+			      ,tar.holiday_overtime_hours                          AS holiday_overtime_hours
+			      ,tar.public_holiday_overtime_hours                   AS public_holiday_overtime_hours
+			      ,tar.weekday_night_overtime_hours                    AS weekday_night_overtime_hours
+			      ,tar.weekday_ot_af_night_work_hours                  AS weekday_ot_af_night_work_hours
+			      ,tar.holiday_night_overtime_hours                    AS holiday_night_overtime_hours
+			      ,tar.public_holiday_night_ot_hours                   AS public_holiday_night_ot_hours
+			      ,tar.normal_night_overtime_hours                     AS normal_night_overtime_hours
+			      ,em.assignment_category                              AS emp_cat
+			      ,em.grade_title                                      AS grade_title_code
+			      ,tar.base_time_attend_apply_flag                     AS base_time_attend_apply_flag
+			      ,lar.status_code                                     AS approval_status_code
+			      ,las.approver1_no                                    AS approver1_no
+			      ,las.approver2_no                                    AS approver2_no
+			      ,lar.request_master_id                               AS request_master_id
+                  ,lar.request_code                                    AS request_code
+                  ,CASE WHEN TO_CHAR(tar.time_and_attendance_date, 'YYYYMM') BETWEEN ran.min_yyyymm AND ran.max_yyyymm 
+                        THEN 'Y'
+                        ELSE 'N'
+                   END AS approval_enable_flag
+                  ,lgvatt_common_pkg.get_approval_status(lar.request_master_id, lar.request_code, #{LGVHR_PROJECT_SESSION.employeeNo}) AS approval_stat_cd
+			FROM   (
+						SELECT t.*
+			              FROM   emp_master t
+			                    ,(
+			                      SELECT DISTINCT o.*
+			                      FROM   org_master o
+			                      WHERE  o.org_start_date <= TRUNC(SYSDATE) 
+			                      AND    (o.org_end_date IS NULL OR o.org_end_date >= TRUNC(SYSDATE))
+			                      START WITH o.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}     /* 변수: 세션 법인코드 */
+		]]>
+			              <if test="orgName == null or orgName == ''">
+			                      AND        o.organization_id IN (SELECT t.organization_id 
+			                                                        FROM emp_master t 
+			                                                       WHERE t.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode} 
+			                                                         AND t.supervisor = #{LGVHR_PROJECT_SESSION.employeeNo} )  /* 변수: 세션 로긴자 사번 */
+			              </if>
+			              <if test="orgName != null and orgName != ''">
+			                      AND        o.organization_id = #{orgName}
+			              </if>
+			                      CONNECT BY NOCYCLE 
+			                              PRIOR o.organization_id = o.parent_org_id
+			                      AND     PRIOR o.subsidiary_code = o.subsidiary_code              
+			                     ) o
+			              WHERE  t.organization_id = o.organization_id
+			              AND    t.assignment_category = 'LGD_OW'
+			      <if test="employeeNo != null and employeeNo != ''">
+			              AND t.employee_number like '%' || UPPER(#{employeeNo}) || '%'
+			      </if>
+			      <if test="employeeName != null and employeeName != ''">
+			              AND UPPER(t.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+			      </if>
+			       ) em
+		<![CDATA[
+			      ,tb_att_result_n          tar
+			      ,tb_att_code_c            tac
+			      ,tb_att_idcard_acs_time_n tai
+			      ,lgcom_approval_request_n lar
+			      ,(
+			        SELECT request_master_id                                   AS request_master_id
+			              ,request_code                                        AS request_code
+			              ,MAX(DECODE(approval_seqs, 1, user_no))              AS approver1_no
+			              ,MAX(DECODE(approval_seqs, 2, user_no))              AS approver2_no
+			              ,MAX(DECODE(approval_seqs, 1, approval_status_code)) AS approval1_status_code
+			              ,MAX(DECODE(approval_seqs, 2, approval_status_code)) AS approval2_status_code
+			        FROM   lgcom_approval_status_n
+			        WHERE  approval_action_code = 'APPROVAL'
+			        GROUP BY request_master_id, request_code
+			       ) las
+			      ,(SELECT lgvatt_common_pkg.get_curr_att_yyyymm(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'FIRST') AS min_yyyymm,  /* 입력/결재 가능한 처음 년월 */
+                           lgvatt_common_pkg.get_curr_att_yyyymm(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'FINAL') AS max_yyyymm   /* 입력/결재 가능한 최종 년월 */
+                    FROM dual
+			       ) ran
+			WHERE  em.employee_number           = tar.employee_no
+			AND    tar.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}  /* 변수: 세션 법인코드 */
+			AND    tar.time_and_attendance_date BETWEEN TO_DATE(#{fromDate}, 'DD/MM/YYYY') AND TO_DATE(#{toDate}, 'DD/MM/YYYY')  /* 변수: 화면선택한 일자 : 범위일경우 차례대로 */
+			AND    tar.subsidiary_code          = tac.subsidiary_code
+			AND    tar.time_and_attendance_code = tac.time_and_attendance_code
+			AND    tar.approval_request_id      = lar.request_master_id(+)
+			AND    tar.request_code             = lar.request_code(+)
+			AND    lar.request_master_id        = las.request_master_id(+)
+			AND    lar.request_code             = las.request_code(+)
+			AND    tar.employee_no              = tai.employee_no(+)
+			AND    tar.time_and_attendance_date = tai.time_and_attendance_date(+)
+		]]>
+		<if test="approvaStatusCode != null and approvaStatusCode != ''">
+			AND    lgvatt_common_pkg.get_approval_status(lar.request_master_id, lar.request_code, #{LGVHR_PROJECT_SESSION.employeeNo}) = #{approvaStatusCode}
+        </if>
+			ORDER BY tar.time_and_attendance_date  /* 여러날짜일때 일자별로 먼저 조회 */
+			        ,em.org_name_local
+			        ,tar.employee_no
+	    
+	</select>
+	
+	<select id="retrieveUnderOrgList" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+			SELECT DISTINCT o.organization_id AS code, o.org_name_local AS name
+			FROM   org_master o
+			WHERE  o.org_start_date <= TRUNC(SYSDATE) 
+			AND    (o.org_end_date IS NULL OR o.org_end_date >= TRUNC(SYSDATE))
+			START WITH o.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}     /* 변수: 세션 법인코드 */
+			AND        o.organization_id IN (
+			                                SELECT t.organization_id 
+			                                  FROM emp_master t 
+			                                 WHERE t.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode} 
+			                                   AND t.supervisor = #{LGVHR_PROJECT_SESSION.employeeNo}
+			                               )  /* 변수: 세션 로긴자 사번 */
+			CONNECT BY NOCYCLE 
+			        PRIOR o.organization_id = o.parent_org_id
+			AND     PRIOR o.subsidiary_code = o.subsidiary_code
+		]]>
+	</select>
+
+</mapper>

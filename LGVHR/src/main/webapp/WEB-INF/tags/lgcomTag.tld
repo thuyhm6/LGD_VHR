@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<taglib xmlns="http://java.sun.com/xml/ns/javaee"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-jsptaglibrary_2_1.xsd"
+        version="2.1">
+	<description>LG COM 2016</description>
+	<display-name>LGCOM</display-name>
+	<tlib-version>1.2</tlib-version>
+	<short-name>lgcom</short-name>
+	<uri>/WEB-INF/tags/lgcomTag.tld</uri>
+
+	<!-- <tag>
+		<name>authorize</name> 커스텀 태그의 이름
+        <tagclass>test.security.AuthorizeTag</tagclass>태그 핸들러 클래스
+        <bodycontent>JSP</bodycontent> 바디 부분의 컨텐츠 타입 기술. 없으면 empty로 입력
+        <attribute> 태그의 속성 기능을 부여
+            <name>grades</name> 속성명
+            <required>true</required> 필수 입력 여부 true : 필수
+            <rtexprvalue>true</rtexprvalue> 표현식(<%= %>) 사용 여부
+        </attribute>
+	</tag> -->
+
+	<tag>
+		<description>
+			Retrieves the message with the given code, or text if code isn't resolvable.
+			The HTML escaping flag participates in a page-wide or application-wide setting
+			(i.e. by HtmlEscapeTag or a "defaultHtmlEscape" context-param in web.xml).
+		</description>
+
+		<name>message</name>
+<!-- 	<tag-class>org.springframework.web.servlet.tags.MessageTag</tag-class>  -->
+		<tag-class>com.lgd.lgcom.framework.tags.LGCOMTag</tag-class>
+		<body-content>JSP</body-content>
+
+		<attribute>
+			<name>code</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+		<attribute>
+			<name>arguments</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+		
+		<attribute>
+			<name>argumentSeparator</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+		<attribute>
+			<name>text</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+		<attribute>
+			<name>var</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+		<attribute>
+			<name>scope</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+		<attribute>
+			<name>htmlEscape</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+		<attribute>
+			<name>javaScriptEscape</name>
+			<required>false</required>
+			<rtexprvalue>true</rtexprvalue>
+		</attribute>
+
+	</tag>
+
+</taglib>

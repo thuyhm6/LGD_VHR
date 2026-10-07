@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00032">
+    <!-- 급여대상자 조회 -->
+    <select id="retrievePaidLeaveHours" parameterType="LGCOMData" resultType="LGCOMData">
+	    SELECT /* LGVPAY00032.retrievePaidLeaveHours */
+		     pld.employee_no AS employee_no
+		    ,pld.payment_yyyymm AS payment_yyyymm
+		    ,pld.paid_leave_detail_code AS paid_leave_detail_code
+		    ,NVL(pld.paid_leave_days, 0) AS paid_leave_days
+		    ,NVL(pld.paid_leave_hours, 0) AS paid_leave_hours
+		    ,NVL(pld.perfect_work_days, 0) AS perfect_work_days
+		    ,NVL(pld.perfect_work_hours, 0) AS perfect_work_hours
+		    ,NVL(pld.extra_hours, 0) AS extra_hours
+		    ,NVL(pld.base_salary, 0) AS base_salary
+		    ,NVL(pld.position_allowance, 0) AS position_allowance
+		    ,NVL(pld.qualification_allowance, 0) AS qualification_allowance
+		    ,NVL(pld.job_allowance, 0) AS job_allowance
+		    ,NVL(pld.adjustment_allowance_1, 0) AS adjustment_allowance_1
+		    ,NVL(pld.adjustment_allowance_2, 0) AS adjustment_allowance_2
+		    ,NVL(pld.adjustment_allowance_3, 0) AS adjustment_allowance_3
+		    ,NVL(encouragement_incentive_base, 0) AS encouragement_incentive_base
+		    ,NVL(attendance_incentive_base, 0) AS attendance_incentive_base
+		    ,NVL(bus_deduct_amount, 0) AS bus_deduct_amount
+		    ,NVL(menstruation_base, 0) AS menstruation_base
+		    , -ROUND(pld.qualification_allowance / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours, 0) AS adj_qualification_amt
+		    , (pld.qualification_allowance + (-ROUND(pld.qualification_allowance / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours, 0))) AS qualification_amount
+		    , CASE WHEN pld.perfect_work_hours >= (192) THEN pld.encouragement_incentive_base 
+		        ELSE ROUND((pld.encouragement_incentive_base / NULLIF(pld.perfect_work_hours, 0)) * pld.perfect_work_hours, 0)
+		        END AS encouragement_incentive
+		    , -ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) AS deduct_transport_pl_days
+		    , CASE WHEN (CASE 
+		                WHEN pld.bus_deduct_amount IS NOT NULL THEN pld.bus_deduct_amount + ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		                ELSE ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		            END) > 400000 
+		          THEN 400000 
+		          ELSE (CASE WHEN pld.bus_deduct_amount IS NOT NULL THEN pld.bus_deduct_amount + ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		                  ELSE ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		              END)
+		            END AS deduct_transport_amount
+		    , ROUND(pld.extra_hours * ROUND(pld.base_salary / 192, 0) * 1.5, 0) AS actual_extra_hour_amount
+		    , -ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0) AS deduct_att_incentive
+		    , (CASE WHEN ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0) = 0 THEN 0
+		            ELSE pld.attendance_incentive_base - ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0)
+		        END) AS deduct_att_incentive_amt
+		    , -ROUND((pld.menstruation_base / NULLIF(pld.perfect_work_hours, 0)) * pld.paid_leave_hours, 0) AS menstruation_adjustment
+		    , ROUND(pld.menstruation_base + (-ROUND((pld.menstruation_base / NULLIF(pld.perfect_work_hours, 0)) * pld.paid_leave_hours, 0)), 0) AS menstruation_up_manual
+		
+		FROM TB_PAY_PAID_LEAVE_DETAIL_N pld
+		WHERE pld.payment_yyyymm = #{payMonth}
+		<if test="employeeNo != null and employeeNo != ''">
+            AND pld.employee_no = #{employeeNo}
+       </if>
+		ORDER BY pld.EMPLOYEE_NO
+    </select>
+
+    <!-- CSV 다운로드 -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00032.createDirectCSVDownloadData */
+              pld.employee_no AS employee_no
+		    ,pld.payment_yyyymm AS payment_yyyymm
+		    ,pld.paid_leave_detail_code AS paid_leave_detail_code
+		    ,NVL(pld.paid_leave_days, 0) AS paid_leave_days
+		    ,NVL(pld.paid_leave_hours, 0) AS paid_leave_hours
+		    ,NVL(pld.perfect_work_days, 0) AS perfect_work_days
+		    ,NVL(pld.perfect_work_hours, 0) AS perfect_work_hours
+		    ,NVL(pld.extra_hours, 0) AS extra_hours
+		    ,NVL(pld.base_salary, 0) AS base_salary
+		    ,NVL(pld.position_allowance, 0) AS position_allowance
+		    ,NVL(pld.qualification_allowance, 0) AS qualification_allowance
+		    ,NVL(pld.job_allowance, 0) AS job_allowance
+		    ,NVL(pld.adjustment_allowance_1, 0) AS adjustment_allowance_1
+		    ,NVL(pld.adjustment_allowance_2, 0) AS adjustment_allowance_2
+		    ,NVL(pld.adjustment_allowance_3, 0) AS adjustment_allowance_3
+		    ,NVL(encouragement_incentive_base, 0) AS encouragement_incentive_base
+		    ,NVL(attendance_incentive_base, 0) AS attendance_incentive_base
+		    ,NVL(bus_deduct_amount, 0) AS bus_deduct_amount
+		    ,NVL(menstruation_base, 0) AS menstruation_base
+		    , -ROUND(pld.qualification_allowance / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours, 0) AS adj_qualification_amt
+		    , (pld.qualification_allowance + (-ROUND(pld.qualification_allowance / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours, 0))) AS qualification_amount
+		    , CASE WHEN pld.perfect_work_hours >= (192) THEN pld.encouragement_incentive_base 
+		        ELSE ROUND((pld.encouragement_incentive_base / NULLIF(pld.perfect_work_hours, 0)) * pld.perfect_work_hours, 0)
+		        END AS encouragement_incentive
+		    , -ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) AS deduct_transport_pl_days
+		    , CASE WHEN (CASE 
+		                WHEN pld.bus_deduct_amount IS NOT NULL THEN pld.bus_deduct_amount + ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		                ELSE ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		            END) > 400000 
+		          THEN 400000 
+		          ELSE (CASE WHEN pld.bus_deduct_amount IS NOT NULL THEN pld.bus_deduct_amount + ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		                  ELSE ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+		              END)
+		            END AS deduct_transport_amount
+		    , ROUND(pld.extra_hours * ROUND(pld.base_salary / 192, 0) * 1.5, 0) AS actual_extra_hour_amount
+		    , -ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0) AS deduct_att_incentive
+		    , (CASE WHEN ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0) = 0 THEN 0
+		            ELSE pld.attendance_incentive_base - ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0)
+		        END) AS deduct_att_incentive_amt
+		    , -ROUND((pld.menstruation_base / NULLIF(pld.perfect_work_hours, 0)) * pld.paid_leave_hours, 0) AS menstruation_adjustment
+		    , ROUND(pld.menstruation_base + (-ROUND((pld.menstruation_base / NULLIF(pld.perfect_work_hours, 0)) * pld.paid_leave_hours, 0)), 0) AS menstruation_up_manual
+		
+		FROM TB_PAY_PAID_LEAVE_DETAIL_N pld
+		WHERE pld.payment_yyyymm = #{payMonth}
+		<if test="employeeNo != null and employeeNo != ''">
+            AND pld.employee_no = #{employeeNo}
+       </if>
+		ORDER BY pld.EMPLOYEE_NO
+    </select>
+
+  
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVPAY00032.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10 , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+                                     , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20, ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24
+                                     , ATTRIBUTE25, ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30, ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Employee No' AS EMPLOYEE_NO
+					, 'Payment Yyyymm' AS PAYMENT_YYYYMM
+					, 'Paid Leave Detail Code' AS PAID_LEAVE_DETAIL_CODE
+					, 'Paid Leave Days' AS PAID_LEAVE_DAYS
+					, 'Paid Leave Hours' AS PAID_LEAVE_HOURS
+					, 'Perfect Work Days' AS PERFECT_WORK_DAYS
+					, 'Perfect Work Hours' AS PERFECT_WORK_HOURS
+					, 'Extra Hours' AS EXTRA_HOURS
+					, 'Base Salary' AS BASE_SALARY
+					, 'Position Allowance' AS POSITION_ALLOWANCE
+					, 'Qualification Allowance' AS QUALIFICATION_ALLOWANCE
+					, 'Job Allowance' AS JOB_ALLOWANCE
+					, 'Adjustment Allowance 1' AS ADJUSTMENT_ALLOWANCE_1
+					, 'Adjustment Allowance 2' AS ADJUSTMENT_ALLOWANCE_2
+					, 'Adjustment Allowance 3' AS ADJUSTMENT_ALLOWANCE_3
+					, 'Encouragement Incentive Base' AS ENCOURAGEMENT_INCENTIVE_BASE
+					, 'Attendance Incentive Base' AS ATTENDANCE_INCENTIVE_BASE
+					, 'Bus Deduct Amount' AS BUS_DEDUCT_AMOUNT
+					, 'Menstruation Base' AS MENSTRUATION_BASE
+					, 'Adj Qualification Amt' AS ADJ_QUALIFICATION_AMT
+					, 'Qualification Amount' AS QUALIFICATION_AMOUNT
+					, 'Encouragement Incentive' AS ENCOURAGEMENT_INCENTIVE
+					, 'Deduct Transport Pl Days' AS DEDUCT_TRANSPORT_PL_DAYS
+					, 'Deduct Transport Amount' AS DEDUCT_TRANSPORT_AMOUNT
+					, 'Actual Extra Hour Amount' AS ACTUAL_EXTRA_HOUR_AMOUNT
+					, 'Deduct Att Incentive' AS DEDUCT_ATT_INCENTIVE
+					, 'Deduct Att Incentive Amt' AS DEDUCT_ATT_INCENTIVE_AMT
+					, 'Menstruation Adjustment' AS MENSTRUATION_ADJUSTMENT
+					, 'Menstruation Up Manual' AS MENSTRUATION_UP_MANUAL
+               FROM DUAL
+               UNION ALL
+               SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+                     pld.employee_no AS employee_no
+				    ,pld.payment_yyyymm AS payment_yyyymm
+				    ,pld.paid_leave_detail_code AS paid_leave_detail_code
+				    ,NVL(pld.paid_leave_days, 0) AS paid_leave_days
+				    ,NVL(pld.paid_leave_hours, 0) AS paid_leave_hours
+				    ,NVL(pld.perfect_work_days, 0) AS perfect_work_days
+				    ,NVL(pld.perfect_work_hours, 0) AS perfect_work_hours
+				    ,NVL(pld.extra_hours, 0) AS extra_hours
+				    ,NVL(pld.base_salary, 0) AS base_salary
+				    ,NVL(pld.position_allowance, 0) AS position_allowance
+				    ,NVL(pld.qualification_allowance, 0) AS qualification_allowance
+				    ,NVL(pld.job_allowance, 0) AS job_allowance
+				    ,NVL(pld.adjustment_allowance_1, 0) AS adjustment_allowance_1
+				    ,NVL(pld.adjustment_allowance_2, 0) AS adjustment_allowance_2
+				    ,NVL(pld.adjustment_allowance_3, 0) AS adjustment_allowance_3
+				    ,NVL(encouragement_incentive_base, 0) AS encouragement_incentive_base
+				    ,NVL(attendance_incentive_base, 0) AS attendance_incentive_base
+				    ,NVL(bus_deduct_amount, 0) AS bus_deduct_amount
+				    ,NVL(menstruation_base, 0) AS menstruation_base
+				    , -ROUND(pld.qualification_allowance / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours, 0) AS adj_qualification_amt
+				    , (pld.qualification_allowance + (-ROUND(pld.qualification_allowance / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours, 0))) AS qualification_amount
+				    , CASE WHEN pld.perfect_work_hours >= (192) THEN pld.encouragement_incentive_base 
+				        ELSE ROUND((pld.encouragement_incentive_base / NULLIF(pld.perfect_work_hours, 0)) * pld.perfect_work_hours, 0)
+				        END AS encouragement_incentive
+				    , -ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) AS deduct_transport_pl_days
+				    , CASE WHEN (CASE 
+				                WHEN pld.bus_deduct_amount IS NOT NULL THEN pld.bus_deduct_amount + ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+				                ELSE ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+				            END) > 400000 
+				          THEN 400000 
+				          ELSE (CASE WHEN pld.bus_deduct_amount IS NOT NULL THEN pld.bus_deduct_amount + ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+				                  ELSE ROUND((400000 / NULLIF(pld.perfect_work_days, 0)) * pld.paid_leave_days, 0) 
+				              END)
+				            END AS deduct_transport_amount
+				    , ROUND(pld.extra_hours * ROUND(pld.base_salary / 192, 0) * 1.5, 0) AS actual_extra_hour_amount
+				    , -ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0) AS deduct_att_incentive
+				    , (CASE WHEN ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0) = 0 THEN 0
+				            ELSE pld.attendance_incentive_base - ROUND((250000 / NULLIF(pld.perfect_work_hours, 0) * pld.paid_leave_hours), 0)
+				        END) AS deduct_att_incentive_amt
+				    , -ROUND((pld.menstruation_base / NULLIF(pld.perfect_work_hours, 0)) * pld.paid_leave_hours, 0) AS menstruation_adjustment
+				    , ROUND(pld.menstruation_base + (-ROUND((pld.menstruation_base / NULLIF(pld.perfect_work_hours, 0)) * pld.paid_leave_hours, 0)), 0) AS menstruation_up_manual
+				
+				FROM TB_PAY_PAID_LEAVE_DETAIL_N pld
+				WHERE pld.payment_yyyymm = #{payMonth}
+				<if test="employeeNo != null and employeeNo != ''">
+		            AND pld.employee_no = #{employeeNo}
+		       </if>
+              ) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    </insert>
+    
+
+</mapper>

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT60020">
+<select id="createExcelAllApprovalPermission" parameterType="LGCOMData" resultType="LGCOMData">
+      INSERT INTO /* LGVATTCOMM.createExcelAllApprovalPermission */  
+        XXLGE_EXPORT_INFO (SESSION_ID,  CREATED_BY,  CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                         , ATTRIBUTE1,  ATTRIBUTE2,  ATTRIBUTE3,  ATTRIBUTE4,  ATTRIBUTE5
+                         , ATTRIBUTE6,  ATTRIBUTE7,  ATTRIBUTE8,  ATTRIBUTE9,  ATTRIBUTE10
+                         , ATTRIBUTE11
+                          )
+      
+      SELECT   #{sessionId}                       AS SESSION_ID
+             , #{sessionUserId}                   AS CREATED_BY
+             , SYSDATE                            AS CREATION_DATE
+             , ROWNUM+1                           AS ORDER_BY       
+             , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+             , TO_CHAR(ROWNUM)                    AS ROWNO
+             , 'Employee No'                      AS "Employee No"
+             , 'Activity'                         AS "Activity"
+             , 'User Function Name'               AS "User Function Name"
+             , 'Role Name'                        AS "Role Name"
+             , 'Role End Date'                    AS "Role End Date"
+             , 'Employee ID'                      AS "Employee ID"   /* 컬럼값이 확인 안됨 */
+             , 'User Name'                        AS "User Name"
+             , 'Title'                            AS "Title" 
+             , 'Position'                         AS "Position" 
+             , 'Test Result'                      AS "Test Result"                                           
+      FROM   DUAL
+      UNION ALL
+      select
+     	 #{sessionId}                       AS SESSION_ID
+       , #{sessionUserId}                   AS CREATED_BY
+       , SYSDATE                            AS CREATION_DATE
+       , ROWNUM+1                           AS ORDER_BY       
+       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+       , TO_CHAR(ROWNUM)                    AS ROWNO,
+      u.user_name as "Employee No",
+      mm.SYSTEM_CODE || ' ' || mm.MODULE_CODE AS "Activity",
+      MENU_DESC AS "User Function Name",
+      ur.role_code AS "Role Name",
+      TO_CHAR(NVL(ur.APPLY_END_DATE, TO_DATE('30/12/9999', 'DD/MM/YYYY')), 'DD/MM/YYYY') AS "Role End Date",
+      u.user_name AS "Employee ID",
+      u.LOCAL_LANGUAGE_FULL_NAME AS "User Name",
+      u.GRADE_TITLE_NAME AS "Title",
+      u.POSITION_NAME AS "Position",
+      CASE WHEN POSITION_NAME IS NULL THEN 'Y' ELSE 'N' END AS "Test Result"
+      from
+      lgcom_menu_m mm,
+      lgcom_role_menu_n rm,
+      lgcom_user_role_n ur,
+      lgcom_user_m u
+      where
+      1 = 1
+      and rm.menu_id = mm.menu_id
+      and rm.role_code = ur.role_code
+      and ur.application_user_id = u.application_user_id
+      and DISPLAY_FLAG = 'Y'
+      and USE_FLAG = 'Y'
+      and MENU_NAME LIKE '%Approval%'
+      and HIGH_MENU_ID = 'M_LGVATT_1038'
+      and NVL(ur.APPLY_END_DATE, TO_DATE('30/12/9999', 'DD/MM/YYYY')) > TO_DATE(#{timeAndAttendancdYyyymm},'DD/MM/YYYY')
+      and ur.role_code IN ('VN_ORG_MANAGER', 'VN_UNIT_LEADER_USER')
+
+    </select>
+    
+    <select id="createExcelAllHRMPermission" parameterType="LGCOMData" resultType="LGCOMData">
+      INSERT INTO /* LGVATTCOMM.createExcelAllHRMPermission */  
+        XXLGE_EXPORT_INFO (SESSION_ID,  CREATED_BY,  CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                         , ATTRIBUTE1,  ATTRIBUTE2,  ATTRIBUTE3,  ATTRIBUTE4,  ATTRIBUTE5
+                         , ATTRIBUTE6,  ATTRIBUTE7,  ATTRIBUTE8,  ATTRIBUTE9
+                          )
+      
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO
+		       , 'Role Name'                        AS "Role Name"
+		       , 'Role End Date'                    AS "Role End Date"
+		       , 'User Name'                        AS "User Name"
+		       , 'Title'                        	AS "Title"
+		       , 'Position'                    		AS "Position"
+		       , 'Job Group'                     	AS "Job Group"
+		       , 'Job Detail'                       AS "Job Detail"
+		       , 'Test Result'                      AS "Test Result"                                     
+		FROM   DUAL
+		UNION ALL
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO,
+		ur.role_code AS "Role Name",
+		TO_CHAR(NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')), 'DD/MM/YYYY') AS "Role End Date",
+		u.LOCAL_LANGUAGE_FULL_NAME AS "User Name",
+		u.GRADE_TITLE_NAME AS "Title",
+		u.POSITION_NAME AS "Position",
+		em.job_group AS "Job Group",
+		em.job_detail AS "Job Detail",
+		CASE WHEN em.job_group = 'HR' THEN 'N' ELSE 'Y' END AS "Test Result"
+		from
+		lgcom_user_role_n ur,
+		vhr_mgr.lgcom_user_m u,
+		emp_master em
+		where
+		1 = 1
+		and ur.role_code IN ('VN_ATT_HR_PIC', 'VN_ATT_MASTER_USER', 'VN_PAY_MASTER_USER', 'VN_PAY_SYSTEM_MASTER_USER')
+		and em.status != 'Terminate Assignment'
+		and ur.application_user_id = u.application_user_id
+		and u.user_name = em.employee_number
+		and NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')) > TO_DATE(#{timeAndAttendancdYyyymm}, 'DD/MM/YYYY')
+    </select>
+    
+    
+    <select id="createExcelVNATTFSEUSER" parameterType="LGCOMData" resultType="LGCOMData">
+      INSERT INTO /* LGVATTCOMM.createExcelVNATTFSEUSER */  
+        XXLGE_EXPORT_INFO (SESSION_ID,  CREATED_BY,  CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                         , ATTRIBUTE1,  ATTRIBUTE2,  ATTRIBUTE3,  ATTRIBUTE4,  ATTRIBUTE5
+                         , ATTRIBUTE6,  ATTRIBUTE7,  ATTRIBUTE8,  ATTRIBUTE9, ATTRIBUTE10
+                          )
+      
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO
+		       , 'Role Name'                        AS "Role Name"
+		       , 'Role End Date'                    AS "Role End Date"
+		       , 'User ID'                          AS "User ID"
+		       , 'User Name'                        AS "User Name"
+		       , 'Title'                          AS "Title"
+		       , 'Position'                       AS "Position"
+		       , 'FSE Flag'                      AS "FSE Flag"
+		       , 'Supporter Flag'                       AS "Supporter Flag"
+		       , 'Test Result'                      AS "Test Result"                                     
+		FROM   DUAL
+		    UNION ALL
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO,
+		ur.role_code AS "Role Name",
+		TO_CHAR(NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')), 'DD/MM/YYYY') AS "Role End Date",
+		u.USER_NAME AS "User ID",
+		u.LOCAL_LANGUAGE_FULL_NAME AS "User Name",
+		u.GRADE_TITLE_NAME AS "Title",
+		u.POSITION_NAME AS "Position",
+		em.fse_yn AS "FSE Flag",
+		em.flsa_yn AS "Supporter Flag",
+		CASE WHEN em.fse_yn = 'Y' OR em.flsa_yn = 'Y' THEN 'N' ELSE 'Y' END AS "Test Result"
+		from
+		lgcom_user_role_n ur,
+		vhr_mgr.lgcom_user_m u,
+		emp_master em
+		where
+		1 = 1
+		and ur.role_code = 'VN_ATT_FSE_USER'
+		and ur.application_user_id = u.application_user_id
+		and u.user_name = em.employee_number
+		and NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')) > TO_DATE(#{timeAndAttendancdYyyymm}, 'DD/MM/YYYY')
+    </select>
+    
+    
+    <select id="createExcelVNLineWorkPICUser" parameterType="LGCOMData" resultType="LGCOMData">
+      INSERT INTO /* LGVATTCOMM.createExcelVNLineWorkPICUser */  
+        XXLGE_EXPORT_INFO (SESSION_ID,  CREATED_BY,  CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                         , ATTRIBUTE1,  ATTRIBUTE2,  ATTRIBUTE3,  ATTRIBUTE4,  ATTRIBUTE5
+                         , ATTRIBUTE6,  ATTRIBUTE7
+                          )
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO
+		       , 'Role Name'                        AS "Role Name"
+		       , 'Role End Date'                    AS "Role End Date"
+		       , 'User Name'                        AS "User Name"
+		       , 'Title'                          AS "Title"
+		       , 'Position'                       AS "Position"
+		       , 'Test Result'                      AS "Test Result"                                     
+		FROM   DUAL
+		    UNION ALL
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO,
+		ur.role_code AS "Role Name",
+		to_char(NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')), 'DD/MM/YYYY') AS "Role End Date",
+		u.LOCAL_LANGUAGE_FULL_NAME AS "User Name",
+		u.GRADE_TITLE_NAME AS "Title",
+		u.POSITION_NAME AS "Position",
+		CASE WHEN TIME_ATTEND_CONTACT_USER_ID IS NULL THEN 'Y' ELSE 'N' END AS "Test Result"
+		from lgcom_user_role_n ur, lgcom_user_m u, emp_master em,
+		(select distinct (TIME_ATTEND_CONTACT_USER_ID) from tb_att_contract_n
+		where NVL(EFFECTIVE_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')) > TO_DATE(#{timeAndAttendancdYyyymm}, 'DD/MM/YYYY')) ac
+		where u.user_name = em.employee_number
+		and ur.application_user_id = u.application_user_id
+		and u.user_name = ac.TIME_ATTEND_CONTACT_USER_ID (+)
+		and em.STATUS != 'Terminate Assignment'
+		and ROLE_CODE = 'VN_LINE_WORK_PIC_USER'
+		and NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')) > TO_DATE(#{timeAndAttendancdYyyymm}, 'DD/MM/YYYY')
+    </select>
+    
+    
+     
+    <select id="createExcelVNOfficeWorkUser" parameterType="LGCOMData" resultType="LGCOMData">
+      INSERT INTO /* LGVATTCOMM.createExcelVNOfficeWorkUser */  
+        XXLGE_EXPORT_INFO (SESSION_ID,  CREATED_BY,  CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                         , ATTRIBUTE1,  ATTRIBUTE2,  ATTRIBUTE3,  ATTRIBUTE4,  ATTRIBUTE5
+                         , ATTRIBUTE6,  ATTRIBUTE7, ATTRIBUTE8
+                          )
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO
+		       , 'Role Name'                        AS "Role Name"
+		       , 'Role End Date'                    AS "Role End Date"
+		       , 'User Name'                        AS "User Name"
+		       , 'Title'                          AS "Title"
+		       , 'Position'                       AS "Position"
+		       , 'Assignment Category'                       AS "Assignment Category"
+		       , 'Test Result'                      AS "Test Result"                                     
+		FROM   DUAL
+		    UNION ALL
+		SELECT   #{sessionId}                       AS SESSION_ID
+		       , #{sessionUserId}                   AS CREATED_BY
+		       , SYSDATE                            AS CREATION_DATE
+		       , ROWNUM+1                           AS ORDER_BY       
+		       , 'KO16KSC5602'                      AS CHARACTER_SET_NAME
+		       , TO_CHAR(ROWNUM)                    AS ROWNO,
+		ur.role_code AS "Role Name",
+		TO_CHAR(NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')), 'DD/MM/YYYY') AS "Role End Date",
+		u.LOCAL_LANGUAGE_FULL_NAME AS "User Name",
+		u.GRADE_TITLE_NAME AS "Title",
+		u.POSITION_NAME AS "Position",
+		ASSIGNMENT_CATEGORY AS "Assignment Category",
+		CASE WHEN ASSIGNMENT_CATEGORY = 'LGD_LW'  THEN 'Y' ELSE 'N' END AS "Test Result"
+		from lgcom_user_role_n ur, lgcom_user_m u,
+		emp_master em
+		where ur.application_user_id = u.application_user_id
+		and u.user_name = em.employee_number
+		and ROLE_CODE = 'VN_OFFICE_WORK_USER'
+		and NVL(ur.APPLY_END_DATE, TO_DATE('31/12/9999', 'DD/MM/YYYY')) > TO_DATE(#{timeAndAttendancdYyyymm}, 'DD/MM/YYYY')
+    </select>
+    
+</mapper>

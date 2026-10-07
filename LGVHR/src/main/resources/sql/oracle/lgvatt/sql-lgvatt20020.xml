@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- HMT_20210323 Replace ELSE 8 END by lgvpay_info_pkg.get_type_work_hours(subsidiary_code,trunc(to_date(#{actualDate}, 'dd/mm/yyyy')),'21','1A',8,'perfect_work_hours')--> 
+
+<mapper namespace="LGVATT20020">
+
+    <!-- 요청서 작성 시 필요한 기본정보를 조회한다.(재량권 번호, 요청서번호) -->
+    <select id="retrieveRequestDocBaseInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20020.retrieveRequestDocBaseInfo */
+               cc.code_data1_value   AS arm_no
+             , cc.parent_common_code AS request_code /* LGCOM 결재의 문서유형코드LGCOM_APPROVAL_REQUEST_CODE와 매핑 */
+        FROM   lgcom_common_code_c cc
+        WHERE  cc.code_type_code = 'LGVCOM_APPROVAL_REQUEST_CODE'
+        AND    cc.common_code    = 'ATT0004' /* 사무직 수정요청서 결재요청 */
+    </select>
+
+    <!-- 수정요청 가능한 근태일자 체크 -->
+    <select id="retrieveModifyDateCheck" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20020.retrieveModifyDateCheck */
+               CASE WHEN TO_DATE(REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY') =  rs.enable_date THEN 'Y' ELSE 'N' END AS modify_enable_flag /* 수정요청서에서 선택 가능일자 여부 */
+             , CASE WHEN TO_DATE(REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY') =  rs.enable_date AND
+                         (
+                            SELECT COUNT(1)
+                            FROM   tb_att_update_req_n      aur
+                                 , lgcom_approval_request_n larn
+                            WHERE  aur.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                            AND    aur.time_and_attendance_date = TO_DATE(REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY')
+                            AND    aur.employee_no              = #{LGVHR_PROJECT_SESSION.employeeNo}
+                            AND    aur.data_old_new_type_code   = 'NEW'
+                            AND    larn.request_master_id       = aur.approval_request_id
+                            AND    larn.request_code            = aur.request_code
+                            AND    larn.request_no              = aur.request_no
+                            AND    larn.status_code             IN ('20', '30') /* 20:결재요청,30:결재중 */
+                         ) = 0 THEN 'Y' ELSE 'N' END AS modify_enable_flag1 /* 수정요청서에서 선택 가능일자 중 요청중인 건이 있으면 N으로 리턴 */
+        FROM   (SELECT lgvatt_common_pkg.get_att_close_time(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'UPD_SEL', TO_DATE(REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY')) AS enable_date /* 일근태 수정 가능일자 */
+                FROM dual
+               ) rs
+    </select>
+
+    <!-- 사무직 수정요청서 요청가능한 시간인지 체크 -->
+    <select id="retrieveRequestEnableTimeCheck"  parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT  /* LGVATT20020.retrieveRequestEnableTimeCheck */
+                <![CDATA[
+                CASE WHEN SYSDATE < rs.limit_date THEN 'Y' ELSE 'N' END AS request_enable_flag /* 수정요청가능여부 */
+                ]]>
+              , TO_CHAR(rs.limit_date, 'HH24:MI')            AS request_limit_date /* 수정요청마감시간 */
+        FROM   (SELECT lgvatt_common_pkg.get_att_close_time(NVL(#{subsidiaryCode}, #{LGVHR_PROJECT_SESSION.subsidiaryCode}), 'UPD_REQ', TO_DATE(REPLACE(#{yyyymmdd}, '/', ''), 'DDMMYYYY')) AS limit_date /* 요청가능 시간 */
+                FROM dual
+               ) rs
+    </select>
+
+    <!-- 사무직 수정요청서 결재 가능한 시간인지 체크 -->
+    <select id="retrieveApprovalEnableTimeCheck"  parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20020.retrieveApprovalEnableTimeCheck */
+                <![CDATA[
+                CASE WHEN rs.approval_enable_count > 0 AND rs.approval_disable_count = 0 THEN 'Y' ELSE 'N' END AS approval_enable_flag /* 결재 가능여부 */
+                ]]>
+        FROM   (
+                SELECT
+                       <![CDATA[
+                       SUM(CASE WHEN SYSDATE < lgvatt_common_pkg.get_att_close_time(aur.subsidiary_code, 'UPD_APR', aur.time_and_attendance_date) THEN 1 ELSE 0 END) AS approval_enable_count /* 수정요청 근태일자 중 결재가능 건수 */
+                     , SUM(CASE WHEN SYSDATE < lgvatt_common_pkg.get_att_close_time(aur.subsidiary_code, 'UPD_APR', aur.time_and_attendance_date) THEN 0 ELSE 1 END) AS approval_disable_count /* 수정요청 근태일자 중 결재불가능 건수 */
+                       ]]>
+                FROM   tb_att_update_req_n aur
+                WHERE  aur.approval_request_id = #{requestMasterId}
+                AND    aur.request_code        = #{requestCode}
+               ) rs
+    </select>
+
+    <!-- 근태일자에 대한 실적근태 조회; Add HMT_20210410 month ot total with month ot limit -->
+    <select id="retrieveAttendanceResultData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20020.retrieveAttendanceResultData */
+               ar.time_and_attendance_yyyymm                                                                     AS attendance_yyyymm   /* 근태년월 */
+             , TO_CHAR(ar.time_and_attendance_date, 'DD/MM/YYYY')                                                AS attendance_yyyymmdd /* 근태일자 */
+             , ar.a_day_of_the_week_code                                                                         AS week_name           /* 요일명 */
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_DAY_OF_WEEK', ar.a_day_of_the_week_code, NULL, #{USER_SESSION.languageCode}) FROM dual)  AS screen_week_name    /* 화면에 보여줄 요일명 */
+             , ac.time_and_attendance_type_code                                                                  AS attendance_type     /* 근태유형명 */
+             , ar.time_and_attendance_code                                                                       AS attendance_code     /* 근태코드 */
+             , ac.time_and_attendance_short_name                                                                 AS attendance_name     /* 근태명 */
+             , ar.shift_type_code                                                                                AS shift_type_code     /* 교대유형코드 */
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', ar.shift_type_code, NULL, #{USER_SESSION.languageCode}) AS FROM dual)  AS shift_type_name     /* 교대유형명 */
+             , ar.work_start_time                    AS work_start_time    /* 근무시작시간 */
+             , ar.work_start_time                    AS work_start_time_ori /* 근무시작시간. 값 초기화시 사용 */
+             ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN'), 'HH24:MI') FROM dual) AS in_time /* 출근시간 */
+             ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT'), 'HH24:MI') FROM dual) AS out_time /* 퇴근시간 */
+             ,lgvatt_ot_calculation_pkg.get_ot_total(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, ar.time_and_attendance_date, 'month_total_ot_yyyymm') AS month_total_overtime
+             ,lgvatt_ot_level_pkg.get_ot_level(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_yyyymm, 'request_lower_limit') as overtime_limit
+             , ar.night_shift_flag                   AS night_shift_flag   /* 야근여부 */
+             , ar.evening_meal_flag                  AS evening_meal_flag  /* 저녁식사여부 */
+             , ar.overtime_sum_hours                 AS overtime_sum_hours /* 연장근무합계시간수 */
+             , ar.weekday_overtime_hours                                   /* 평일연장근무시간수 */
+             , ar.holiday_overtime_hours                                   /* 휴일연장근무시간수 */
+             , ar.public_holiday_overtime_hours                            /* 공공휴일연장근무시간수 */
+             , ar.weekday_night_overtime_hours                             /* 평일야간연장근무시간수 */
+             , ar.weekday_ot_af_night_work_hours                           /* 평일연장근무후야간근무시간수 */
+             , ar.holiday_night_overtime_hours                             /* 휴일야간연장근무시간수 */
+             , ar.public_holiday_night_ot_hours                            /* 공공휴일야간연장근무시간수 */
+             , ar.normal_night_overtime_hours                              /* 정상야간연장근무시간수 */
+             , ar.tardy_hours                                              /* 지각시간수 */
+             , ar.early_leave_hours                                        /* 조퇴시간수 */
+             , ar.going_out_hours                                          /* 외출시간수 */
+             , ar.special_bonus_hours                                      /* 특별보너스시간수 */
+             , ar.helpcall_support_hours                                   /* 헬프콜지원시간수 */
+             , 'OLD'                                AS data_old_new_type_code /* 데이터변경전변경후구분코드 */
+             , 'Old'                                AS data_old_new_type_name /* 데이터변경전변경후구분코드명 */
+             , ar.approval_request_id                                      /* 승인요청아이디 */
+             , ar.time_attend_detail_code                                  /* 근태상세코드 */
+             , ar.time_attend_input_reason_desc                            /* 근태입력사유설명 */
+             , ac.update_enable_flag    /* 수정가능 근태코드여부 */
+             , (CASE WHEN EXISTS (select 1 from tb_att_flexible_result_n fl where fl.PROGRESS_STATUS_CODE = '40' AND fl.employee_no = ar.employee_no and fl.time_and_attendance_date = ar.time_and_attendance_date) then 'X'
+                     WHEN ar.shift_type_code IN ('2A','2B') THEN 'T' -- HMS_20260601 Add 2A,2B Shift
+                   ELSE lgvatt_common_pkg.get_holiday_flag(ar.subsidiary_code, ar.shift_type_code, ar.time_and_attendance_date) END)             AS  holiday_flag  /* 휴일여부 */
+             /*
+                근태 입력 화면 승인 화면 IDP Check-In Check-Out Time
+                 => 1부제 : 08:00 이후 출근, 17:00 이전 퇴근의 경우에 적색으로 표시.
+                 => 2부제 : Day( 08:00 이후 출근, 20:00 이전 퇴근의 경우에 적색
+                               Night(20:00 이후 출근, 08:00 이전 퇴근 적색 표시
+                 => 출근시간 : work_start_time
+                 => 퇴근시간 : 단부제[출근시간+9시간], 교대제[출근시간+12시간]
+             */
+             <![CDATA[
+             ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN' ) >= TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI') + INTERVAL '-5' MINUTE THEN 'Y'
+                           ELSE 'N'
+                      END
+               FROM   dual) AS in_time_red_flag /* 출근시간 적색표시여부 */
+             ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') <  TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')+TO_DSINTERVAL(DECODE(ar.shift_type_code, '1A', '0 09:00:00', '0 12:00:00')) THEN 'Y'
+                           ELSE 'N'
+                      END
+               FROM   dual) AS out_time_red_flag /* 퇴근시간 적색표시여부 */
+             ]]>
+             
+             ,ac.attendance_days AS attend_days
+
+        FROM   tb_att_result_n          ar /* 실적근태 */
+             , tb_att_code_c            ac /* 근태코드 */
+        WHERE  ar.subsidiary_code             = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    ar.employee_no                 = #{LGVHR_PROJECT_SESSION.employeeNo}
+        AND    ar.time_and_attendance_date    = TO_DATE(REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY')
+        AND    ac.subsidiary_code             = ar.subsidiary_code
+        AND    ac.time_and_attendance_code    = ar.time_and_attendance_code
+        ORDER BY ar.time_and_attendance_date
+    </select>
+
+    <!-- 수정요청서 내용 조회 -->
+    <select id="retrieveResultUpdateReqList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20020.retrieveResultUpdateReqList */
+               aur.request_no                                        /* 요청번호 */
+             , aur.request_seq_no                                    /* 요청일련순서번호 */
+             , aur.request_date                                      /* 요청일자 */
+             , TO_CHAR(aur.time_and_attendance_date, 'DD/MM/YYYY')   AS attendance_yyyymmdd  /* 근태일자 */
+             , acn.a_day_of_the_week_code                                                                         AS week_name           /* 요일명 */
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_DAY_OF_WEEK', acn.a_day_of_the_week_code, NULL, #{USER_SESSION.languageCode}) FROM dual)  AS screen_week_name    /* 화면에 보여줄 요일명 */
+             , aur.employee_no                                       /* 사원번호 */
+             , aur.shift_type_code                                   /* 교대유형코드 */
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', aur.shift_type_code, NULL, #{USER_SESSION.languageCode}) AS FROM dual)  AS shift_type_name
+             , ac.time_and_attendance_type_code                      AS attendance_type  /* 근태유형코드 */
+             , aur.time_and_attendance_code                          AS attendance_code  /* 근태코드 */
+             , aur.work_hours                                        /* 근무시간수 */
+             , aur.work_start_time                                   /* 근무시작시간 */
+             ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(aur.subsidiary_code, aur.employee_no, aur.time_and_attendance_date, 'IN'), 'HH24:MI') FROM dual) AS in_time /* 출근시간 */
+             ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(aur.subsidiary_code, aur.employee_no, aur.time_and_attendance_date, 'OUT'), 'HH24:MI') FROM dual) AS out_time /* 퇴근시간 */
+             , aur.night_shift_flag                                  /* 야근여부 */
+             , aur.evening_meal_flag                                 /* 저녁식사여부 */
+             , aur.overtime_sum_hours                                /* 연장근무합계시간수 */
+             , aur.weekday_overtime_hours                            /* 평일연장근무시간수 */
+             , aur.holiday_overtime_hours                            /* 휴일연장근무시간수 */
+             , aur.public_holiday_overtime_hours                     /* 공공휴일연장근무시간수 */
+             , aur.weekday_night_overtime_hours                      /* 평일야간연장근무시간수 */
+             , aur.weekday_ot_af_night_work_hours                    /* 평일연장근무후야간근무시간수 */
+             , aur.holiday_night_overtime_hours                      /* 휴일야간연장근무시간수 */
+             , aur.public_holiday_night_ot_hours                     /* 공공휴일야간연장근무시간수 */
+             , aur.normal_night_overtime_hours                       /* 정상야간연장근무시간수 */
+             , aur.tardy_hours                                       /* 지각시간수 */
+             , aur.early_leave_hours                                 /* 조퇴시간수 */
+             , aur.going_out_hours                                   /* 외출시간수 */
+             , aur.special_bonus_hours                               /* 특별보너스시간수 */
+             , aur.helpcall_support_hours                            /* 헬프콜지원시간수 */
+             , aur.data_old_new_type_code                            /* 데이터변경전변경후구분코드 */
+             , DECODE(aur.data_old_new_type_code, 'OLD', 'Old', 'New') AS data_old_new_type_name /* 데이터변경전변경후구분코드명 */
+             , aur.update_request_reason_desc                        /* 생성사용자아이디 */
+             , aur.approval_request_id                               /* 수정요청사유설명 */
+             , aur.request_code                                      /* 승인요청아이디 */
+             , aur.progress_status_code                              /* 요청코드 */
+             , aur.time_attend_detail_code                           /* 진행상태코드 */
+             , aur.time_attend_input_reason_desc                     /* 근태상세코드 */
+             , aur.time_attend_update_reason_desc                    /* 근태입력사유설명 */
+             , ac.update_enable_flag                                 /* 수정가능 근태코드여부 */
+             , (SELECT lgvatt_common_pkg.get_holiday_flag(aur.subsidiary_code, aur.shift_type_code, aur.time_and_attendance_date) FROM DUAL) AS holiday_flag  /* 휴일여부 */
+             /*
+                근태 입력 화면 승인 화면 IDP Check-In Check-Out Time
+                 => 1부제 : 08:00 이후 출근, 17:00 이전 퇴근의 경우에 적색으로 표시.
+                 => 2부제 : Day( 08:00 이후 출근, 20:00 이전 퇴근의 경우에 적색
+                               Night(20:00 이후 출근, 08:00 이전 퇴근 적색 표시
+                 => 출근시간 : work_start_time
+                 => 퇴근시간 : 단부제[출근시간+9시간], 교대제[출근시간+12시간]
+             */
+             <![CDATA[
+             ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(aur.subsidiary_code, aur.employee_no, aur.time_and_attendance_date, 'IN' ) >= TO_DATE(TO_CHAR(aur.time_and_attendance_date, 'YYYYMMDD')||aur.work_start_time, 'YYYYMMDDHH24:MI') + INTERVAL '-5' MINUTE THEN 'Y'
+                           ELSE 'N'
+                      END
+               FROM   dual) AS in_time_red_flag /* 출근시간 적색표시여부 */
+             ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(aur.subsidiary_code, aur.employee_no, aur.time_and_attendance_date, 'OUT') <  TO_DATE(TO_CHAR(aur.time_and_attendance_date, 'YYYYMMDD')||aur.work_start_time, 'YYYYMMDDHH24:MI')+TO_DSINTERVAL(DECODE(aur.shift_type_code, '1A', '0 09:00:00', '0 12:00:00')) THEN 'Y'
+                           ELSE 'N'
+                      END
+               FROM   dual) AS out_time_red_flag /* 퇴근시간 적색표시여부 */
+             ]]>
+        FROM   tb_att_update_req_n aur /* 수정요청 내용 */
+             , tb_att_code_c       ac  /* 근태코드 */
+             , tb_att_calendar_n   acn /* 근태캘린더(요일코드 조회용) */
+        WHERE  aur.subsidiary_code            = #{LGVHR_PROJECT_SESSION.subsidiaryCode} /* 해외법인코드 */
+        AND    aur.approval_request_id        = #{requestMasterId}                      /* 요청번호 */
+        AND    aur.request_code               = #{requestCode}                          /* 요청일련순서번호 */
+        AND    ac.subsidiary_code             = aur.subsidiary_code
+        AND    ac.time_and_attendance_code    = aur.time_and_attendance_code
+        AND    acn.subsidiary_code            = aur.subsidiary_code
+        AND    acn.time_and_attendance_date   = aur.time_and_attendance_date
+        ORDER BY aur.time_and_attendance_date, DECODE(aur.data_old_new_type_code, 'OLD', 1, 2)
+    </select>
+
+    <!-- 수정요청서 등록 -->
+    <insert id="insertResultUpdateReqDetailList" parameterType="LGCOMData">
+        INSERT /* LGVATT20020.insertResultUpdateReqDetailList */
+        INTO   tb_att_update_req_n(
+               request_no                                        /* 요청번호 */
+             , request_seq_no                                    /* 요청일련순서번호 */
+             , request_date                                      /* 요청일자 */
+             , subsidiary_code                                   /* 해외법인코드 */
+             , time_and_attendance_date                          /* 근태일자 */
+             , employee_no                                       /* 사원번호 */
+             , shift_type_code                                   /* 교대유형코드 */
+             , time_and_attendance_code                          /* 근태코드 */
+             , work_hours                                        /* 근무시간수 */
+             , work_start_time                                   /* 근무시작시간 */
+             , night_shift_flag                                  /* 야근여부 */
+             , evening_meal_flag                                 /* 저녁식사여부 */
+             , overtime_sum_hours                                /* 연장근무합계시간수 */
+             , weekday_overtime_hours                            /* 평일연장근무시간수 */
+             , holiday_overtime_hours                            /* 휴일연장근무시간수 */
+             , public_holiday_overtime_hours                     /* 공공휴일연장근무시간수 */
+             , weekday_night_overtime_hours                      /* 평일야간연장근무시간수 */
+             , weekday_ot_af_night_work_hours                    /* 평일연장근무후야간근무시간수 */
+             , holiday_night_overtime_hours                      /* 휴일야간연장근무시간수 */
+             , public_holiday_night_ot_hours                     /* 공공휴일야간연장근무시간수 */
+             , normal_night_overtime_hours                       /* 정상야간연장근무시간수 */
+             , tardy_hours                                       /* 지각시간수 */
+             , early_leave_hours                                 /* 조퇴시간수 */
+             , going_out_hours                                   /* 외출시간수 */
+             , special_bonus_hours                               /* 특별보너스시간수 */
+             , helpcall_support_hours                            /* 헬프콜지원시간수 */
+             , data_old_new_type_code                            /* 데이터변경전변경후구분코드 */
+             , update_request_reason_desc                        /* 생성사용자아이디 */
+             , approval_request_id                               /* 수정요청사유설명 */
+             , request_code                                      /* 승인요청아이디 */
+             , progress_status_code                              /* 요청코드 */
+             , time_attend_detail_code                           /* 진행상태코드 */
+             , time_attend_input_reason_desc                     /* 근태상세코드 */
+             , time_attend_update_reason_desc                    /* 근태입력사유설명 */
+             , creation_user_id                                  /* 근태수정사유설명 */
+             , creation_date                                     /* 생성일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+        ) VALUES (
+               #{approvalMasterData.requestNo}                  /* request_no => 요청번호 */
+             , sq_tb_att_update_req_id.nextval                  /* request_seq_no => 요청일련순서번호 */
+             , SYSDATE                                          /* request_date => 요청일자 */
+             , #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* subsidiary_code => 해외법인코드 */
+             , TO_DATE( REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY' )   /* time_and_attendance_date => 근태일자 */
+             , #{LGVHR_PROJECT_SESSION.employeeNo}              /* employee_no => 사원번호 */
+             , #{shiftTypeCode}                                 /* shift_type_code => 교대유형코드 */
+             , #{attendanceCode}                                /* time_and_attendance_code => 근태코드 */
+             , (SELECT CASE WHEN attendance_days = 1 
+	                        THEN CASE WHEN #{shiftTypeCode} LIKE '3%' THEN 9.5 
+	                        ELSE lgvpay_info_pkg.get_type_work_hours(subsidiary_code,TO_DATE( REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY' ),'21','1A',8,'perfect_work_hours') END /*HMT_20210323*/
+	                        WHEN attendance_days = 0.5
+	                        THEN CASE WHEN #{shiftTypeCode} LIKE '3%' THEN 4 
+	                        ELSE lgvpay_info_pkg.get_type_work_hours(subsidiary_code,TO_DATE( REPLACE(#{attendanceYyyymmdd}, '/', ''), 'DDMMYYYY' ),'21','1A',8,'perfect_work_hours')/2 END /*HMT_20210323*/
+	                        ELSE 0
+	                        END 
+	            FROM   tb_att_code_c
+	            WHERE  subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	            AND    time_and_attendance_code = #{attendanceCode})  /* work_hours => 근무시간수 */
+             , #{workStartTime}                                 /* work_start_time => 근무시작시간 */
+             , #{nightShiftFlag}                                /* night_shift_flag => 야근여부 */
+             , #{eveningMealFlag}                               /* evening_meal_flag => 저녁식사여부 */
+             , #{overtimeSumHours, jdbcType=NUMERIC}            /* overtime_sum_hours => 연장근무합계시간수 */
+             , #{weekdayOvertimeHours, jdbcType=NUMERIC}        /* weekday_overtime_hours => 평일연장근무시간수 */
+             , #{holidayOvertimeHours, jdbcType=NUMERIC}        /* holiday_overtime_hours => 휴일연장근무시간수 */
+             , #{publicHolidayOvertimeHours, jdbcType=NUMERIC}  /* public_holiday_overtime_hours => 공공휴일연장근무시간수 */
+             , #{weekdayNightOvertimeHours, jdbcType=NUMERIC}   /* weekday_night_overtime_hours => 평일야간연장근무시간수 */
+             , #{weekdayOtAfNightWorkHours, jdbcType=NUMERIC}   /* weekday_ot_af_night_work_hours => 평일연장근무후야간근무시간수 */
+             , #{holidayNightOvertimeHours, jdbcType=NUMERIC}   /* holiday_night_overtime_hours => 휴일야간연장근무시간수 */
+             , #{publicHolidayNightOtHours, jdbcType=NUMERIC}   /* public_holiday_night_ot_hours => 공공휴일야간연장근무시간수 */
+             , #{normalNightOvertimeHours, jdbcType=NUMERIC}    /* normal_night_overtime_hours => 정상야간연장근무시간수 */
+             , #{tardyHours, jdbcType=NUMERIC}                  /* tardy_hours => 지각시간수 */
+             , #{earlyLeaveHours, jdbcType=NUMERIC}             /* early_leave_hours => 조퇴시간수 */
+             , #{goingOutHours, jdbcType=NUMERIC}               /* going_out_hours => 외출시간수 */
+             , #{specialBonusHours, jdbcType=NUMERIC}           /* special_bonus_hours => 특별보너스시간수 */
+             , #{helpcallSupportHours, jdbcType=NUMERIC}        /* helpcall_support_hours => 헬프콜지원시간수 */
+             , #{dataOldNewTypeCode}                            /* data_old_new_type_code => 데이터변경전변경후구분코드 */
+             , #{updateRequestReasonDesc}                       /* update_request_reason_desc => 생성사용자아이디 */
+             , #{approvalRequestId, jdbcType=NUMERIC}           /* approval_request_id => 수정요청사유설명 */
+             , #{requestCode}                                   /* request_code => 승인요청아이디 */
+             , NVL(#{progressStatusCode}, '10')                 /* progress_status_code => 요청코드 */
+             , #{timeAttendDetailCode}                          /* time_attend_detail_code => 진행상태코드 */
+             , #{timeAttendInputReasonDesc}                     /* time_attend_input_reason_desc => 근태상세코드 */
+             , #{timeAttendUpdateReasonDesc}                    /* time_attend_update_reason_desc => 근태입력사유설명 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 근태수정사유설명 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+        )
+    </insert>
+
+    <!-- 수정요청서 공통결재요청아이디, 요청코드, 결재상태 변경 -->
+    <update id="updateResultUpdateReqApprovalInfo" parameterType="LGCOMData">
+        UPDATE /* LGVATT20020.updateResultUpdateReqApprovalInfo */
+               tb_att_update_req_n
+        SET    (approval_request_id, request_code, progress_status_code) = (SELECT request_master_id, request_code, status_code FROM lgcom_approval_request_n WHERE request_master_id = #{requestMasterId} AND request_code = #{requestCode})     /* 승인요청아이디, 요청코드, 진행상태코드 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+        WHERE  request_no                             = #{requestNo}                                      /* 요청번호 */
+    </update>
+
+    <!-- 수정요청서 결재상태 변경 -->
+    <update id="updateResultUpdateReqApprovalStatusInfo" parameterType="LGCOMData">
+        UPDATE /* LGVATT20020.updateResultUpdateReqApprovalStatusInfo */
+               tb_att_update_req_n aur
+        SET    aur.progress_status_code                   = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = aur.approval_request_id AND request_code = aur.request_code)     /* 승인요청아이디, 요청코드, 진행상태코드 */
+             , aur.last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+             , aur.last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+        WHERE  aur.approval_request_id                    = #{requestMasterId}
+        AND    aur.request_code                           = #{requestCode}
+    </update>
+
+    <!-- 수정요청서에 연차(AL), 반일년차(HL) 가 등록되었는지 여부 체크 -->
+    <select id="retrieveAnualLeaveUseFlag" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20020.retrieveAnualLeaveUseFlag */
+               aur.employee_no
+             , DECODE(COUNT(1), 0, 'N', 'Y') AS anual_leave_use_flag
+        FROM   tb_att_update_req_n aur
+        WHERE  aur.approval_request_id      = #{requestMasterId}
+        AND    aur.request_code             = #{requestCode}
+        AND    aur.time_and_attendance_code in ('HL', 'HL_FN', 'HL_SN', 'AL') /* 연차, 반일년차 */
+        GROUP BY aur.employee_no
+    </select>
+    
+</mapper>

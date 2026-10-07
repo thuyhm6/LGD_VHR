@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="Board">
+	<!-- 게시판 속성 조회 -->
+	<select id="retrieveBoardMasterData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT bulletin_board_id
+		     , system_code
+		     , bulletin_board_title
+		     , bulletin_board_type_code
+		     , bb_short_reply_enabled_flag
+		     , bb_reply_enabled_flag
+		     , bb_attach_file_enable_flag
+		     , bb_use_flag
+		  FROM LGCOM_BOARD_MASTER_M
+		 WHERE bulletin_board_id = #{bulletinBoardId}
+	</select>
+
+	<!-- 게시판 조회수 수정 -->
+	<update id="updateBoardHitCount" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		   SET bulletin_board_inquiry_count = (NVL(bulletin_board_inquiry_count,0) + 1)
+		 WHERE bulletin_board_id = #{bulletinBoardId}
+		   AND bulletin_board_no = #{bulletinBoardNo}
+	</update>
+
+	<!-- 게시판 상세내역 조회 -->
+	<select id="retrieveBoardDetail" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT a.bulletin_board_id
+		     , a.bulletin_board_no
+		     , a.system_code
+		     , a.bulletin_board_title
+		     , a.bb_body_content
+		     , TO_CHAR(a.period_from_date,'YYYY-MM-DD') AS period_from_date
+		     , TO_CHAR(a.period_to_date,'YYYY-MM-DD') AS period_to_date
+		     , a.bb_top_post_flag
+		     , a.notice_type_code
+		     , a.pop_up_alarm_flag
+		     , a.bulletin_board_inquiry_count AS hit_count
+		     , TO_CHAR(a.creation_date,'YYYY-MM-DD') AS wrie_date
+		     , a.created_by AS writer_id
+		     , NVL(b.full_name_local,b.english_full_name) AS writer_name
+		     , f1.file_seq_no AS attach_file1_id
+		     , f1.attach_file_name AS attach_file1_name
+		     , f1.file_size AS attach_file1_size
+		     , f1.system_attach_file_name AS attach_system_file1_name
+		     , f2.file_seq_no AS attach_file2_id
+		     , f2.attach_file_name AS attach_file2_name
+		     , f2.file_size AS attach_file2_size
+		     , f2.system_attach_file_name AS attach_system_file2_name
+		     , f3.file_seq_no AS attach_file3_id
+		     , f3.attach_file_name AS attach_file3_name
+		     , f3.file_size AS attach_file3_size
+		     , f3.system_attach_file_name AS attach_system_file3_name
+		     , a.bulletin_board_parent_id
+		     , a.bulletin_board_level_seqs
+		     , a.bb_reply_level_depth
+		  FROM LGCOM_BOARD_N             a
+		     , LGCOM_USER_M_V            b
+		     , LGCOM_BOARD_ATTACH_FILE_N f1
+		     , LGCOM_BOARD_ATTACH_FILE_N f2
+		     , LGCOM_BOARD_ATTACH_FILE_N f3
+		 WHERE a.bulletin_board_id = #{bulletinBoardId}
+		   AND a.bulletin_board_no = #{bulletinBoardNo}
+		   AND a.delete_flag       = 'N'
+		   AND a.created_by        = b.application_user_id(+)
+		   AND a.attach_file1_id   = f1.file_seq_no(+)
+		   AND a.bulletin_board_no = f1.bulletin_board_no(+)
+		   AND f1.use_flag(+)      = 'Y'
+		   AND a.attach_file2_id   = f2.file_seq_no(+)
+		   AND a.bulletin_board_no = f2.bulletin_board_no(+)
+		   AND f2.use_flag(+)      = 'Y'
+		   AND a.attach_file3_id   = f3.file_seq_no(+)
+		   AND a.bulletin_board_no = f3.bulletin_board_no(+)
+		   AND f3.use_flag(+)      = 'Y'
+	</select>
+
+	<!-- 게시글 덧글 목록 조회 -->
+	<select id="retrieveBoardShortReplyList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT bulletin_board_short_reply_no
+		       , bulletin_board_no
+		       , registrant_name
+		       , REPLACE(REPLACE(bb_short_reply_content,chr(13),'<br>'),chr(10),'<br>') AS bb_short_reply_content
+		       , TO_CHAR(creation_date,'YYYY-MM-DD') AS creation_date
+		       , CASE WHEN created_by = #{USER_SESSION.applicationUserId} THEN 'Y' ELSE 'N' END AS own_comment
+		    FROM LGCOM_BOARD_SHORT_REPLY_N
+		   WHERE bulletin_board_no = #{bulletinBoardNo}
+		ORDER BY bulletin_board_no, bulletin_board_short_reply_no DESC
+	]]>
+	</select>
+
+	<!-- 게시글 삭제 Flag 수정 -->
+	<update id="deleteBoardData" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		   SET delete_flag       = 'Y'
+		     , last_updated_by   = #{USER_SESSION.applicationUserId}
+		     , last_update_date  = SYSDATE
+		 WHERE bulletin_board_no IN (          SELECT bulletin_board_no
+		                                         FROM LGCOM_BOARD_N
+		                                   START WITH bulletin_board_no = #{bulletinBoardNo}
+		                             CONNECT BY PRIOR bulletin_board_no = bulletin_board_parent_id)
+	</update>
+
+	<!-- 게시글 저장 -->
+	<update id="updateBoardReplyCount" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		<choose>
+			<when test="replyFlag eq 'plus'.toString()">
+		   SET bb_reply_level_depth = bb_reply_level_depth + 1
+			</when>
+			<when test="replyFlag eq 'minus'.toString()">
+		   SET bb_reply_level_depth = bb_reply_level_depth - 1
+			</when>
+		</choose>
+		     , last_updated_by      = #{USER_SESSION.applicationUserId}
+		     , last_update_date     = SYSDATE
+		 WHERE bulletin_board_no    = #{bulletinBoardParentId}
+	</update>
+
+	<!-- 게시글 덧글 수정 -->
+	<update id="updateBoardShortReply" parameterType="java.util.HashMap">
+		MERGE INTO LGCOM_BOARD_SHORT_REPLY_N a
+		     USING (
+		            SELECT #{bulletinBoardShortReplyNo} AS bulletin_board_short_reply_no
+		                 , #{bulletinBoardNo} AS bulletin_board_no
+		                 , #{USER_SESSION.fullNameLocal} registrant_name
+		                 , #{bbShortReplyContent} AS bb_short_reply_content
+		              FROM DUAL
+		           ) b
+		       ON (a.bulletin_board_short_reply_no = b.bulletin_board_short_reply_no)
+		WHEN NOT MATCHED THEN
+		     INSERT (bulletin_board_short_reply_no,bulletin_board_no,registrant_name,bb_short_reply_content,
+		             created_by,creation_date,last_updated_by,last_update_date)
+		     VALUES (LGCOM_BOARD_SHORT_REPLY_N_SEQ.NEXTVAL,b.bulletin_board_no,b.registrant_name,b.bb_short_reply_content,
+		             #{USER_SESSION.applicationUserId},SYSDATE,#{USER_SESSION.applicationUserId},SYSDATE)
+		WHEN MATCHED THEN
+		     UPDATE SET bb_short_reply_content = #{bbShortReplyContent}
+		              , last_updated_by        = #{USER_SESSION.applicationUserId}
+		              , last_update_date       = SYSDATE
+	</update>
+
+	<!-- 게시글 덧글 삭제 -->
+	<delete id="deleteBoardShortReply" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_BOARD_SHORT_REPLY_N
+		      WHERE bulletin_board_short_reply_no = #{bulletinBoardShortReplyNo}
+	</delete>
+
+	<!-- 게시판 첨부목록 조회 -->
+	<select id="retrieveBoardAttachFileList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT file_seq_no
+		       , bulletin_board_no
+		       , attach_file_name
+		       , system_attach_file_name
+		       , file_size
+		       , file_desc
+		    FROM LGCOM_BOARD_ATTACH_FILE_N
+		   WHERE bulletin_board_no = #{bulletinBoardNo}
+		     AND use_flag          = 'Y'
+		ORDER BY file_seq_no
+	</select>
+
+	<!-- 게시판 첨부파일 정보 조회 -->
+	<select id="retrieveBoardAttachFile" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT file_seq_no
+		     , bulletin_board_no
+		     , attach_file_name
+		     , system_attach_file_name
+		     , file_size
+		     , file_desc
+		  FROM LGCOM_BOARD_ATTACH_FILE_N
+		 WHERE file_seq_no = #{fileSeqNo}
+		   AND use_flag    = 'Y'
+	</select>
+
+	<!-- 신규 게시판 번호 조회 -->
+	<select id="retrieveNextBulletinBoardNo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT LGCOM_BOARD_N_SEQ.NEXTVAL AS next_bulletin_board_no
+		  FROM DUAL
+	</select>
+
+	<!-- 신규 첨부파일번호 조회 -->
+	<select id="retrieveNextBoardAttachFileSeqNo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT LGCOM_BOARD_ATTACH_FILE_N_SEQ.NEXTVAL AS next_file_seq_no
+		  FROM DUAL
+	</select>
+
+	<!-- 첨부파일을 등록한다. -->
+	<update id="saveBoardAttachFile" parameterType="java.util.HashMap">
+		MERGE INTO LGCOM_BOARD_ATTACH_FILE_N a
+		     USING (
+		            SELECT #{fileSeqNo} AS file_seq_no
+		                 , #{bulletinBoardNo} AS bulletin_board_no
+		                 , #{attachFileName} AS attach_file_name
+		                 , #{systemAttachFileName} AS system_attach_file_name
+		                 , #{fileSize} AS file_size
+		                 , #{creationUserId} AS user_id
+		              FROM DUAL
+		           ) b
+		        ON (a.file_seq_no = b.file_seq_no)
+		WHEN NOT MATCHED THEN
+		    INSERT (file_seq_no,bulletin_board_no,attach_file_name,system_attach_file_name,file_size,
+		            file_desc,use_flag,created_by,creation_date,last_updated_by,last_update_date)
+			VALUES (b.file_seq_no,b.bulletin_board_no,b.attach_file_name,b.system_attach_file_name,b.file_size,
+			        NULL,'Y',b.user_id,SYSDATE,b.user_id,SYSDATE)
+		WHEN MATCHED THEN
+			UPDATE SET attach_file_name        = b.attach_file_name
+			         , system_attach_file_name = b.system_attach_file_name
+			         , file_size               = b.file_size
+			         , last_updated_by         = b.user_id
+			         , last_update_date        = SYSDATE
+	</update>
+
+	<!-- 게시번호로 첨부파일 삭제 -->
+	<update id="deleteBoardAttachFileList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_ATTACH_FILE_N
+		   SET use_flag          = 'N'
+		     , last_updated_by   = #{USER_SESSION.applicationUserId}
+		     , last_update_date  = SYSDATE
+		 WHERE bulletin_board_no = #{bulletinBoardNo}
+	</update>
+
+	<!-- 게시번호로 첨부파일 삭제 -->
+	<update id="deleteAttachFileListFromBoard" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		   SET attach_file1_id   = NULL
+		     , attach_file2_id   = NULL
+		     , attach_file3_id   = NULL
+		     , last_updated_by   = #{USER_SESSION.applicationUserId}
+		     , last_update_date  = SYSDATE
+		 WHERE bulletin_board_no = #{bulletinBoardNo}
+	</update>
+
+	<!-- 첨부파일번호로 첨부파일 삭제 -->
+	<update id="deleteBoardAttachFile" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_ATTACH_FILE_N
+		   SET use_flag          = 'N'
+		     , last_updated_by   = #{USER_SESSION.applicationUserId}
+		     , last_update_date  = SYSDATE
+		 WHERE file_seq_no       = #{fileSeqNo}
+		   AND bulletin_board_no = #{bulletinBoardNo}
+	</update>
+
+	<!-- 게시번호로 첨부파일 삭제 -->
+	<update id="deleteAttachFileFromBoard" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		   SET attach_file1_id   = DECODE(attach_file1_id,#{fileSeqNo},NULL,attach_file1_id)
+		     , attach_file2_id   = DECODE(attach_file2_id,#{fileSeqNo},NULL,attach_file2_id)
+		     , attach_file3_id   = DECODE(attach_file3_id,#{fileSeqNo},NULL,attach_file3_id)
+		     , last_updated_by   = #{USER_SESSION.applicationUserId}
+		     , last_update_date  = SYSDATE
+		 WHERE bulletin_board_no = #{bulletinBoardNo}
+	</update>
+
+	<!-- 게시글 첨부아이디 변경 -->
+	<update id="updateBoardAttachData" parameterType="java.util.HashMap">
+		UPDATE LGCOM_BOARD_N
+		   SET attach_file1_id   = DECODE(#{attachFile1Id},-1,NULL,#{attachFile1Id})
+			 , attach_file2_id   = DECODE(#{attachFile2Id},-1,NULL,#{attachFile2Id})
+			 , attach_file3_id   = DECODE(#{attachFile3Id},-1,NULL,#{attachFile3Id})
+			 , last_updated_by   = #{USER_SESSION.applicationUserId}
+			 , last_update_date  = SYSDATE
+		 WHERE bulletin_board_no = #{bulletinBoardNo}
+	</update>
+</mapper>

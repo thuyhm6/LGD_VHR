@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- HMT_20211018     Add year ot total and special ot detail--> 
+<mapper namespace="LGVATT20010">
+	<!-- 조직리스트 조회. 조직책임자는 하위부서 목록, 부서원은 소속부서만 조회 -->
+	<select id="retrieveOrgList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20010.retrieveOrgList */
+               org.organization_id  as code
+             , org.org_name         as name
+             , org.parent_org_id
+             , org.org_type
+             ,(
+               SELECT xmlagg(XMLELEMENT(x, '/', om.organization_id) ORDER BY LEVEL DESC).extract('//text()').getstringval()
+               FROM   org_master om
+               START WITH om.organization_id = org.organization_id
+               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+               CONNECT BY PRIOR om.parent_org_id = om.organization_id
+               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+              ) AS org_id_path /* 조직의 상하위 구조로 정렬하기 위해 조직의 상위조직을 역으로 조회하여 구성한다. */
+        FROM  (
+               SELECT
+                      om.organization_id
+                    , om.org_name_local AS org_name
+                    , om.parent_org_id
+                    , LPAD(om.org_type, 3, '0') AS org_type
+               FROM   emp_master em
+                    , org_master om
+               WHERE  em.employee_number = #{LGVHR_PROJECT_SESSION.employeeNo}
+               AND    om.organization_id = em.organization_id
+               UNION
+               SELECT 
+                      om.organization_id
+                    , om.org_name_local AS org_name
+                    , om.parent_org_id
+                    , LPAD(om.org_type, 3, '0') AS org_type
+               FROM   org_master om
+               START WITH om.organization_id IN (SELECT om.organization_id
+                                                 FROM   org_master om
+                                                 WHERE  trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+                                                 AND om.org_manager_number = #{LGVHR_PROJECT_SESSION.employeeNo}
+                                             )
+               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+               CONNECT BY PRIOR om.organization_id = om.parent_org_id
+               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+        <if test="isPicFlag != null and isPicFlag != ''">
+	           UNION
+               SELECT om.organization_id
+                    , om.org_name_local AS org_name
+                    , om.parent_org_id
+                    , LPAD(om.org_type, 3, '0') AS org_type
+               FROM   tb_att_contract_n tac
+                    , emp_master em
+                    , org_master om
+               WHERE  tac.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo}
+               AND    em.assignment_category = 'LGD_OW'
+               AND    om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+               AND    om.subsidiary_code = em.subsidiary_code
+               AND    om.organization_id = em.organization_id
+               AND    om.organization_id = tac.organization_id 
+               AND    om.subsidiary_code = tac.subsidiary_code
+	    </if>
+        ) org
+        <![CDATA[
+        WHERE  org.org_type <= (SELECT code_data1_value FROM lgcom_common_code_c cc WHERE cc.code_type_code = 'LGVHR_ATT_COMMON_CODE' AND cc.common_code = 'DAILY_LOWER_ORG_TYPE' ) /* 하위 부서원 조회 가능한 조직 타입코드 */
+        ]]>
+        ORDER BY org_id_path
+	</select>
+    
+    <!-- 부서원 리스트 조회 -->
+    <select id="retrieveOrgEmployeeList" parameterType="LGCOMData" resultType="LGCOMData">
+		WITH ORG_LIST AS (
+	        SELECT /* LGVATT20010.retrieveOrgList */
+	               org.organization_id
+	             , org.org_name
+	             , org.parent_org_id
+	             , org.org_type
+	             ,(
+	               SELECT xmlagg(XMLELEMENT(x, '/', om.organization_id) ORDER BY LEVEL DESC).extract('//text()').getstringval()
+	               FROM   org_master om
+	               START WITH om.organization_id = org.organization_id
+	               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+	               CONNECT BY PRIOR om.parent_org_id = om.organization_id
+	               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+	              ) AS org_id_path /* 조직의 상하위 구조로 정렬하기 위해 조직의 상위조직을 역으로 조회하여 구성한다. */
+	        FROM  (
+	               SELECT 
+	                      om.organization_id
+	                    , om.org_name_local AS org_name
+	                    , om.parent_org_id
+	                    , LPAD(om.org_type, 3, '0') AS org_type
+	               FROM   org_master om
+	               START WITH om.organization_id IN (SELECT om.organization_id
+	                                                 FROM   org_master om
+	                                                 WHERE  trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+	                                                 AND om.org_manager_number = #{LGVHR_PROJECT_SESSION.employeeNo}
+	                                             )
+	               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+	               CONNECT BY PRIOR om.organization_id = om.parent_org_id
+	               AND        trunc(sysdate) BETWEEN trunc(om.org_start_date) AND trunc(NVL(om.org_end_date, SYSDATE))
+	               UNION
+	               SELECT
+	                      om.organization_id
+	                    , om.org_name_local AS org_name
+	                    , om.parent_org_id
+	                    , LPAD(om.org_type, 3, '0') AS org_type
+	               FROM   emp_master em
+	                    , org_master om
+	               WHERE  em.employee_number = #{LGVHR_PROJECT_SESSION.employeeNo}
+	               AND    om.organization_id = em.organization_id
+	        <if test="isPicFlag != null and isPicFlag != ''">
+		           UNION
+	               SELECT om.organization_id
+	                    , om.org_name_local AS org_name
+	                    , om.parent_org_id
+	                    , LPAD(om.org_type, 3, '0') AS org_type
+	               FROM   tb_att_contract_n tac
+	                    , emp_master em
+	                    , org_master om
+	               WHERE  tac.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo}
+	               AND    em.assignment_category = 'LGD_OW'
+	               AND    om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	               AND    om.subsidiary_code = em.subsidiary_code
+	               AND    om.organization_id = em.organization_id
+	               AND    om.organization_id = tac.organization_id 
+	               AND    om.subsidiary_code = tac.subsidiary_code
+		    </if>
+	        ) org
+	        <![CDATA[
+	        WHERE  org.org_type <= (SELECT code_data1_value FROM lgcom_common_code_c cc WHERE cc.code_type_code = 'LGVHR_ATT_COMMON_CODE' AND cc.common_code = 'DAILY_LOWER_ORG_TYPE' ) /* 하위 부서원 조회 가능한 조직 타입코드 */
+	        ]]>
+	        ORDER BY org_id_path
+		)
+	    SELECT /* LGVATT20010.retrieveOrgEmployeeList */
+	           em.employee_number   AS code
+	         , em.full_name_local || '  ' || (SELECT lgvhr_common_pkg.decode_lookup(cc.code_type_code, cc.common_code, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS name
+	         , em.grade_title
+	         , org.organization_id AS p_code
+	    FROM   emp_master em
+	         , org_list   org
+	         , lgcom_common_code_c cc
+	    WHERE  subsidiary_code    = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	    AND    em.organization_id = org.organization_id
+	    AND    em.assignment_category = 'LGD_OW' /* 사무직 부서원만 조회 */
+	    AND    em.fse_yn = 'N' /* FSE 제외 */
+	    AND    em.flsa_yn = 'N' /* 단기파견자 제외 */
+	    <![CDATA[
+	    AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+	    ]]>
+	    <if test="checkEmployeeNo != null and checkEmployeeNo != ''">
+	    AND    em.employee_number = #{checkEmployeeNo}
+	    </if>
+	    AND    cc.code_type_code(+) = 'IF_VIETNAM_GRADE_TITLE'
+	    AND    cc.common_code(+)    = em.grade_title
+	    ORDER BY NVL(cc.sort_order_no, 10000), em.full_name_local
+    </select>
+    
+    <!-- 근태년월별 근태 캘린더 조회 -->
+    <select id="retrieveAttendanceDateList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20010.retrieveAttendanceDateList */
+               aca.time_and_attendance_yyyymm                         AS attendance_yyyymm
+             , TO_CHAR(aca.time_and_attendance_date, 'DDMMYYYY')      AS attendance_yyyymmdd
+             , TO_NUMBER(TO_CHAR(aca.time_and_attendance_date, 'DD')) AS attendance_day
+             , DECODE(MAX(aca.time_and_attendance_date) OVER (PARTITION BY 1), aca.time_and_attendance_date, 'Y', NULL) AS last_day_flag /* 마지막날인지 체크 */
+             , TO_CHAR(aca.time_and_attendance_date, 'D')             AS week_day
+             , aca.a_day_of_the_week_code                             AS week_name
+             , aca.holiday_code
+             , aca.holiday_flag
+        FROM   tb_att_close_n acl
+             , tb_att_calendar_n aca
+        WHERE  acl.subsidiary_code            = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    acl.time_and_attendance_yyyymm = #{attendanceYyyymm}
+        AND    aca.subsidiary_code            = acl.subsidiary_code
+        AND    aca.time_and_attendance_yyyymm = acl.time_and_attendance_yyyymm
+        ORDER BY aca.time_and_attendance_date
+    </select>
+    
+    <!-- 일근태 계획/실적 조회 -->
+    <select id="retrieveAttendancePlanNResultList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20010.retrieveAttendancePlanNResultList */
+               TO_CHAR(ap.time_and_attendance_date, 'DDMMYYYY')                                        AS attendance_yyyymmdd /* 근태일 */
+             , ap.time_and_attendance_code                                                             AS att_code_plan     /* 근태코드(계획) */
+             , ar.time_and_attendance_code                                                             AS att_code_rslt     /* 근태코드(실적) */
+             , ac_p.time_and_attendance_short_name                                                     AS att_name_plan     /* 근태명(계획) */
+             , ac_r.time_and_attendance_short_name                                                     AS att_name_rslt     /* 근태명(실적) */
+             , lgvatt_common_pkg.get_work_hours(ap.subsidiary_code, ap.employee_no, ap.time_and_attendance_date) AS work_hours_plan   /* 근무시간수(계획) */
+             , NVL(ar.work_hours, 0) - (NVL(ar.tardy_hours, 0)
+                                      + NVL(ar.early_leave_hours, 0) 
+                                      + NVL(ar.going_out_hours, 0))                                    AS work_hours_rslt   /* 근무시간수(실적) */   /* 2018.01.31 박귀희 : Deduction 항목 차감 */
+             , ap.overtime_sum_hours                                                                   AS overtime_sum_hours_plan /* 연장근무합계시간수(계획) */
+             , ar.overtime_sum_hours                                                                   AS overtime_sum_hours_rslt /* 연장근무합계시간수(실적) */ 
+             ,lgvatt_ot_calculation_pkg.get_ot_total(ap.subsidiary_code,ap.employee_no,
+                           ap.time_and_attendance_date, ap.time_and_attendance_date,'special_ot_n')    AS special_ot_n /*HMT_20211018 special ot not confirm*/
+             ,lgvatt_ot_calculation_pkg.get_ot_total(ap.subsidiary_code,ap.employee_no,
+                           ap.time_and_attendance_date, ap.time_and_attendance_date,'special_ot_y')    AS special_ot_y /*HMT_20211018 special ot confirm*/
+             ,(SELECT DECODE(MAX(lasn.approval_status_code) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs), '3', 'Y', 'N') /* 결재자 결재완료(3)이면 Y, 결재미완료이면 N, 결재자가 없는 경우 NULL */
+               FROM   lgcom_approval_request_n larn
+                    , lgcom_approval_status_n  lasn
+               WHERE  larn.request_master_id = ap.approval_request_id
+               AND    larn.request_code      = ap.request_code
+               AND    lasn.request_master_id = larn.request_master_id
+               AND    lasn.request_code      = larn.request_code
+               AND    lasn.approval_action_code = 'APPROVAL'
+               GROUP BY larn.request_master_id, larn.request_code
+               HAVING COUNT(lasn.user_no) > 1  AND MIN(lasn.approval_seqs) = 1 /* 결재자가 1명 이상인 요청서의 1차 결재자 */
+              )                                                                                        AS "1st_approval_status_plan" /* 1차결재상태(계획)  */
+             ,(SELECT DECODE(MAX(lasn.approval_status_code) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs), '3', 'Y', 'N') /* 결재자 결재완료(3)이면 Y, 결재미완료이면 N, 결재자가 없는 경우 NULL */
+               FROM   lgcom_approval_request_n larn
+                    , lgcom_approval_status_n  lasn
+               WHERE  larn.request_master_id = ar.approval_request_id
+               AND    larn.request_code      = ar.request_code
+               AND    lasn.request_master_id = larn.request_master_id
+               AND    lasn.request_code      = larn.request_code
+               AND    lasn.approval_action_code = 'APPROVAL'
+               GROUP BY larn.request_master_id, larn.request_code
+               HAVING COUNT(lasn.user_no) > 1  AND MIN(lasn.approval_seqs) = 1 /* 결재자가 1명 이상인 요청서의 1차 결재자 */
+              )                                                                                        AS "1st_approval_status_rslt" /* 1차결재상태(실적)  */
+             ,(SELECT DECODE(MAX(lasn.approval_status_code) KEEP (DENSE_RANK LAST ORDER BY lasn.approval_seqs), '3', 'Y', 'N') /* 결재자 결재완료(3)이면 Y, 결재미완료이면 N, 결재자가 없는 경우 NULL */
+               FROM   lgcom_approval_request_n larn
+                    , lgcom_approval_status_n  lasn
+               WHERE  larn.request_master_id = ap.approval_request_id
+               AND    larn.request_code      = ap.request_code
+               AND    lasn.request_master_id = larn.request_master_id
+               AND    lasn.request_code      = larn.request_code
+               AND    lasn.approval_action_code = 'APPROVAL'
+               GROUP BY larn.request_master_id, larn.request_code
+               HAVING COUNT(lasn.user_no) = MAX(lasn.approval_seqs) /* 최종 결재자 */
+              )                                                                                        AS final_approval_status_plan /* 최종결재상태(계획)  */
+             ,(SELECT DECODE(MAX(lasn.approval_status_code) KEEP (DENSE_RANK LAST ORDER BY lasn.approval_seqs), '3', 'Y', 'N') /* 결재자 결재완료이면 Y, 결재미완료이면 N, 결재자가 없는 경우 NULL */
+               FROM   lgcom_approval_request_n larn
+                    , lgcom_approval_status_n  lasn
+               WHERE  larn.request_master_id = ar.approval_request_id
+               AND    larn.request_code      = ar.request_code
+               AND    lasn.request_master_id = larn.request_master_id
+               AND    lasn.request_code      = larn.request_code
+               AND    lasn.approval_action_code = 'APPROVAL'
+               GROUP BY larn.request_master_id, larn.request_code
+               HAVING COUNT(lasn.user_no) = MAX(lasn.approval_seqs) /* 최종 결재자 */
+              )                                                                                        AS final_approval_status_rslt /* 최종결재상태(실적)  */
+
+        FROM   tb_att_plan_n   ap   /* 계획근태 */
+             , tb_att_result_n ar   /* 실적근태 */
+             , tb_att_code_c   ac_p /* 근태코드(계획) */
+             , tb_att_code_c   ac_r /* 근태코드(실적) */
+        WHERE  ap.subsidiary_code               = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    ap.time_and_attendance_yyyymm    = #{attendanceYyyymm}
+        AND    ap.employee_no                   = #{employeeNo}
+        AND    ar.subsidiary_code(+)            = ap.subsidiary_code
+        AND    ar.employee_no(+)                = ap.employee_no
+        AND    ar.time_and_attendance_date(+)   = ap.time_and_attendance_date
+        AND    ac_p.subsidiary_code             = ap.subsidiary_code
+        AND    ac_p.time_and_attendance_code    = ap.time_and_attendance_code
+        AND    ac_r.subsidiary_code(+)          = ar.subsidiary_code
+        AND    ac_r.time_and_attendance_code(+) = ar.time_and_attendance_code
+        ORDER BY ap.time_and_attendance_date
+    </select>
+    
+    <!-- 월근태Summary 조회 -->
+    <select id="retrieveMonthlyAttendanceSummaryData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20010.retrieveMonthlyAttendanceSummaryData */
+               rs.employee_no
+             , rs.time_and_attendance_yyyymm
+             , TO_CHAR(rs.working_time_hours  , 'FM9990.0') AS working_time_hours /* normal time */
+             , TO_CHAR(rs.night_hours         , 'FM9990.0') AS night_hours  /* night time */
+             , TO_CHAR(rs.overtime_hours      , 'FM9990.0') AS overtime_hours /* overtime */
+             , TO_CHAR(rs.night_overtime_hours, 'FM9990.0') AS night_overtime_hours /* overtime at night */
+             , TO_CHAR(rs.paid_vacation_days  , 'FM9990.0'  ) AS paid_vacation_days /* paid leave */
+             , TO_CHAR(rs.absence_days        , 'FM9990.0'  ) AS absence_days /* absence */
+             , TO_CHAR(rs.tardy_hours         , 'FM9990.0') AS tardy_hours /* lateness */
+             , TO_CHAR(rs.going_out_hours     , 'FM9990.0') AS going_out_hours /* going out */
+             , TO_CHAR(rs.early_leave_hours   , 'FM9990.0') AS early_leave_hours /* leaving early */
+             , TO_CHAR(rs.unpaid_vacation_days, 'FM9990.0'  ) AS unpaid_vacation_days /* unpaid leave */
+             , TO_CHAR(rs.absence_leave_days  , 'FM9990.0'  ) AS absence_leave_days /* suspension */
+             , TO_CHAR(lgvatt_ot_calculation_pkg.get_ot_total(#{LGVHR_PROJECT_SESSION.subsidiaryCode},rs.employee_no,
+                                 to_date(rs.time_and_attendance_yyyymm, 'YYYYMM'), LAST_DAY(to_date(rs.time_and_attendance_yyyymm, 'YYYYMM')),'year_total_ot_result'), 'FM9990.0') AS year_ot  /* HMT_20211018 */
+
+             , TO_CHAR(NVL(prev.residual_annual_leave_days, 0) + NVL(curr.curr_month_accu_creation_days, 0),                                  'FM9990.0')    AS total_creation_days           -- 총생성 (Total Annual Leave of This year)
+             , TO_CHAR(NVL(prev.residual_annual_leave_days, 0),                                                                               'FM9990.0')    AS prev_year_carr_fwd_days       -- 전년이월 (Accumulation from Last Year)
+             , TO_CHAR(NVL(curr.curr_month_accu_creation_days, 0),                                                                            'FM9990.0')    AS curr_year_accu_creation_days  -- 당년누적생성 (Create at This Year)
+             , TO_CHAR(NVL(curr.curr_month_use_days, 0),                                                                                      'FM9990.0')    AS curr_month_use_days           -- 당월사용 (Used Annual Leave at This Month)
+             , TO_CHAR(NVL(curr.total_residual_days, 0),                                                                                      'FM9990.0')    AS total_residual_days           -- 총잔여 (Remained Annual Leave of This Year)
+             , TO_CHAR(GREATEST(0, NVL(prev.residual_annual_leave_days, 0) - NVL(curr.total_residual_days, 0)),                               'FM9990.0')    AS carr_fwd_residual_days        -- 이월잔여 
+             , TO_CHAR(NVL(curr.total_residual_days, 0) - GREATEST(0, NVL(prev.residual_annual_leave_days, 0) - NVL(curr.total_use_days, 0)), 'FM9990.0')    AS curr_year_residual_days       -- 당년잔여
+             
+        FROM   TABLE(CAST(lgvatt_common_pkg.get_att_result_monthly(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, #{employeeNo}, #{attendanceYyyymm}) AS lgvatt_result_monthly_tbl))  rs
+             ,(SELECT #{employeeNo}                                                                                                            AS employee_no
+                    , #{attendanceYyyymm}                                                                                                      AS time_and_attendance_yyyymm     -- 년월
+                    , TO_CHAR(ADD_MONTHS(TO_DATE(MAX(time_and_attendance_yyyymm), 'YYYYMM'), -12), 'YYYY') || '12'                             AS prev_dec_yyyymm                -- 전년12월
+                    , NVL(SUM(NVL(occur_basic_annual_leave_days, 0) + NVL(occur_monthly_ann_lv_days, 0) + NVL(annual_calibration_days, 0)), 0) AS curr_month_accu_creation_days  -- 당월누적 생성일수
+                    , NVL(SUM(NVL(use_annual_leave_days, 0)), 0)                                                                               AS total_use_days                 -- 총 사용일수
+                    , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{attendanceYyyymm}, use_annual_leave_days,      0)), 0)                      AS curr_month_use_days            -- 당월 사용일수
+                    , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{attendanceYyyymm}, residual_annual_leave_days, 0)), 0)                      AS total_residual_days            -- 총 남은일수
+               FROM   tb_att_annual_leave_n
+               WHERE  subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+               AND    employee_no = #{employeeNo}
+               AND    time_and_attendance_yyyymm BETWEEN SUBSTR(#{attendanceYyyymm}, 1, 4) || '01' AND #{attendanceYyyymm}
+               ) curr
+             , tb_att_annual_leave_n prev
+
+        WHERE  rs.employee_no                = curr.employee_no(+)
+        AND    rs.time_and_attendance_yyyymm = curr.time_and_attendance_yyyymm(+)
+        AND    curr.employee_no              = prev.employee_no(+)
+        AND    curr.prev_dec_yyyymm          = prev.time_and_attendance_yyyymm(+)
+    </select>
+
+    <!-- 2018.03.12 [베트남 급여근태 고도화] 근태실적 미입력 여부 조회. Let's에서 직접 호출되는 경우 실적 미입력된 경우만 팝업 띄워주기 위함. -->
+    <select id="retireveDirectOpenData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20010.retireveDirectOpenData */
+               CASE WHEN count(ar.employee_no) > 0 THEN 'Y' ELSE 'N' END AS popup_open_flag /* 사무직 일근태 입력 팝업 오픈 여부 */
+
+        FROM   tb_att_result_n          ar /* 실적근태 */
+             , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TRUNC(SYSDATE), 'RESULT') AS lgvatt_input_date_tbl)) dt /* 입력일에 따른 입력가능 일자 조회 */
+             , emp_master               em
+        WHERE  ar.subsidiary_code             = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    ar.employee_no                 = #{LGVHR_PROJECT_SESSION.employeeNo}
+        AND    dt.time_and_attendance_date    = ar.time_and_attendance_date
+        AND    dt.inquery_enable_flag         = 'Y' /* 조회가능한 날짜만 조회 */
+
+        /* 근태실적 입력 가능 일 중 실적 미입력된 건이 있는지 체크 */
+        AND    dt.input_enable_flag           = 'Y' /* 입력가능일 */
+        AND    ar.approval_request_id         IS NULL
+        AND    ar.request_code                IS NULL
+        AND    ar.base_time_attend_apply_flag = 'Y' /* 기본근태 */
+        AND    em.subsidiary_code             = ar.subsidiary_code
+        AND    em.employee_number             = ar.employee_no
+        AND    NVL(em.fse_yn, 'N')            = 'N'
+        AND    NVL(em.flsa_yn, 'N')           = 'N'
+        AND    em.assignment_category         = 'LGD_OW' /* 사무직만 */
+        AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+        AND    NVL(#{container}, 'N')         = 'Y'
+        AND    NVL(#{letsFg}, 'N')            = 'Y' /* Let's에서 직접호출된 경우 */
+        <![CDATA[
+        AND    SYSDATE < (SELECT lgvatt_common_pkg.get_att_close_time(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'INPUT', SYSDATE, NVL(#{LGVHR_PROJECT_SESSION.shiftTypeCode}, '1A')) AS limit_date FROM DUAL) /* 근태 입력 가능 시간까지만 띄우도록 */
+        ]]>
+
+    </select>
+  
+</mapper>

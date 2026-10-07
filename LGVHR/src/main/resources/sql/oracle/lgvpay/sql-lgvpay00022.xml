@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00022">
+
+    <!-- Payroll Run 리스트 조회 -->
+    <select id="retrievePayrollRunList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00022.retrievePayrollRunList */
+               pce.payroll_calculation_exec_id
+             , pce.payroll_calculation_set_id
+             , pacs.payroll_calculation_set_name
+             , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')  AS payroll_calc_period_value
+             , pce.payroll_type_code                                                AS payroll_type_code
+             , cccm.common_code_name                                                AS payroll_type_name
+             , TO_CHAR(pce.basis_date,'dd/mm/yyyy')                                 AS basis_date
+             , SUM(CASE WHEN pcee.error_flag = 'Y' THEN 0 ELSE 1 END  )             AS normal_count
+             , TO_CHAR(MAX(pce.creation_date),'dd/mm/yyyy hh24:mi:ss')              AS creation_date
+             ,(SELECT um.user_name FROM lgcom_user_m um WHERE TO_CHAR(um.application_user_id) = pce.creation_user_id) AS created_by
+
+        FROM   tb_pay_calc_period_basis_n     pcpb
+             , tb_pay_calc_exec_n             pce
+             , lgcom_common_code_multi_lang_c cccm
+             , tb_pay_calc_emp_exec_n         pcee
+             , tb_pay_calc_set_n              pacs
+
+        WHERE  pcpb.payroll_calc_period_value      = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+        AND    pcpb.subsidiary_Code                = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd,'yyyymmdd') AND to_date(pcpb.end_yyyymmdd,'yyyymmdd')
+        AND    NVL(pce.confirm_flag, 'N')          = 'Y' /* 확정 건 */
+        AND    cccm.code_type_code                 = 'LGVHR_PAY_RUN_TYPE'
+        AND    pce.payroll_type_code               = cccm.common_code
+        AND    cccm.language_code                  = #{USER_SESSION.languageCode}
+        AND    pcee.payroll_calculation_exec_id(+) = pce.payroll_calculation_exec_id
+        AND    pacs.payroll_calculation_set_id     = pce.payroll_calculation_set_id
+
+        GROUP BY pce.payroll_calculation_exec_id
+               , pce.payroll_calculation_set_id
+               , pacs.payroll_calculation_set_name
+               , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')
+               , pce.payroll_type_code
+               , cccm.common_code_name
+               , TO_CHAR(pce.basis_date,'dd/mm/yyyy')
+               , pce.creation_user_id
+        ORDER BY 1 DESC
+    </select>
+
+</mapper>

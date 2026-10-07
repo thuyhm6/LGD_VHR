@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00120">
+	<!-- 메뉴 Tree 목록 조회 -->
+	<select id="retrieveMenuTreeList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00120.retrieveMenuTreeList */
+		         menu_id
+		       , menu_name
+		       , system_code
+		       , module_code
+		       , high_menu_id
+		       , program_id
+		       , program_name
+		       , url_addr as menu_url_addr
+		       , menu_level_no
+		       , sort_order_no
+		       , display_flag
+		       , pop_up_screen_flag
+		    FROM LGCOM_MENU_M_V
+		   WHERE system_code = #{systemCode}
+		     AND display_flag = 'Y'
+		     AND language_code = #{USER_SESSION.languageCode}		     
+		<if test="moduleCode != null and moduleCode != ''" >
+			AND module_code = #{moduleCode}
+		</if>
+		ORDER BY menu_order_by
+	</select>
+
+	<!-- 프로그램별 언어별 Manual 조회 -->
+	<select id="retrieveMenuManualData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00120.retrieveMenuManualData */
+		       mm.menu_id
+		     , mm.menu_name
+		     , pm.program_id
+		     , pm.program_name
+		     , pmn.language_code
+		     , pmn.article_write_content AS manual_content
+		     , pmn.etc_attach_file_id AS attach_file_id
+		     , adi.file_id
+		     , adi.file_name
+		  FROM LGCOM_PROGRAM_USE_HELP_N pmn
+		     , LGCOM_PROGRAM_M          pm
+		     , LGCOM_MENU_M_V           mm
+		     , LGCOM_ATTACH_FILE_INFO  adi
+		 WHERE pmn.program_id         = pm.program_id
+		   AND pmn.program_id         = mm.program_id
+		   AND pmn.etc_attach_file_id = adi.file_group_id(+)
+		   AND mm.menu_id             = #{manualMenuId}
+		   AND pmn.program_id         = #{manualProgramId}
+		   AND pmn.language_code      = #{manualLanguageCode}
+		   AND mm.language_code = #{USER_SESSION.languageCode}
+	</select>
+
+	<!-- Manual 정보 저장 -->
+	<update id="saveManualData" parameterType="java.util.HashMap">
+		MERGE INTO /* LGUTLC00120.saveManualData */
+		           LGCOM_PROGRAM_USE_HELP_N a
+		     USING (
+		            SELECT #{manualProgramId} AS program_id
+		                 , #{manualLanguageCode} AS language_code
+		                 , #{manualContent,jdbcType=CLOB} AS article_write_content
+		                 , #{manualAttachFileId} AS etc_attach_file_id
+		                 , #{USER_SESSION.applicationUserId} AS user_id
+		              FROM DUAL
+		           ) b
+		        ON (a.program_id = b.program_id AND a.language_code = b.language_code)
+		WHEN MATCHED THEN
+		     UPDATE SET article_write_content = b.article_write_content
+		              , etc_attach_file_id    = b.etc_attach_file_id
+		              , last_updated_by       = b.user_id
+		              , last_update_date      = SYSDATE
+		WHEN NOT MATCHED THEN
+		     INSERT(program_id,language_code,article_write_content,etc_attach_file_id,
+		            created_by,creation_date,last_updated_by,last_update_date)
+		     VALUES(b.program_id,b.language_code,b.article_write_content,b.etc_attach_file_id,
+		            b.user_id,SYSDATE,b.user_id,SYSDATE)
+	</update>
+
+	<delete id="deleteManualData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00120.deleteManualData */
+		            LGCOM_PROGRAM_USE_HELP_N
+		      WHERE program_id    = #{manualProgramId}
+		        AND language_code = #{manualLanguageCode}
+	</delete>
+
+	<update id="updateManualAttachFileId" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00120.updateManualAttachFileId */
+		       LGCOM_PROGRAM_USE_HELP_N
+		   SET etc_attach_file_id = NULL
+		     , last_updated_by    = #{USER_SESSION.applicationUserId}
+		     , last_update_date   = SYSDATE
+		  WHERE program_id        = #{manualProgramId}
+		    AND language_code     = #{manualLanguageCode}
+	</update>
+
+	<!-- 프로그램별 Manual 조회 -->
+	<select id="retrieveMenuManualViewData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00120.retrieveMenuManualViewData */
+		         NVL(mul.program_id,mst.program_id) AS program_id
+		       , NVL(mul.language_code,mst.language_code) AS language_code
+		       , mul.article_write_content AS manual_content
+		       , mul.etc_attach_file_id
+		       , mul.file_id
+		       , mul.file_name
+		       , CASE WHEN (mul.article_write_content IS NULL OR LENGTH(mul.article_write_content) = 0) AND (mul.file_id IS NULL OR mul.file_id &lt; 0) THEN 'N' ELSE 'Y' END AS exist_manual
+		    FROM (
+		          SELECT #{manualProgramId} AS program_id
+		               , common_code AS language_code
+		               , sort_order_no
+		            FROM LGCOM_COMMON_CODE_C
+		           WHERE code_type_code = 'LGCOM_LANGUAGE_CODE'
+		             AND use_flag       = 'Y'
+		             AND (apply_start_date IS NULL OR apply_start_date &lt;= SYSDATE)
+		             AND (apply_end_date IS NULL OR apply_end_date &gt;= SYSDATE)
+		         ) mst
+		       , (
+		          SELECT puh.program_id
+		               , puh.language_code
+		               , puh.article_write_content
+		               , puh.etc_attach_file_id
+		               , adi.file_id
+		               , adi.file_name
+		            FROM LGCOM_PROGRAM_USE_HELP_N puh
+		               , LGCOM_ATTACH_FILE_INFO    adi
+		           WHERE puh.etc_attach_file_id = adi.file_group_id(+)
+		             AND puh.program_id = #{manualProgramId}
+		         ) mul
+		   WHERE mst.program_id = mul.program_id(+)
+		     AND mst.language_code = mul.language_code(+)
+		ORDER BY mst.SORT_ORDER_NO, mst.program_id
+	</select>
+</mapper>

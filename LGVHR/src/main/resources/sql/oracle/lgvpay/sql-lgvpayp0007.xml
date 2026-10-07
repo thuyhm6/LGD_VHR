@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0007">
+
+    <!-- Payroll Item Property List 조회 -->
+    <select id="retrievePayrollItemPropertyList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0007.retrievePayrollItemPropertyList */
+               ccc.common_code       AS payroll_calc_method_code
+             , cccm.common_code_name AS payroll_calc_method_name
+             , pcm.payroll_apply_flag
+        FROM  tb_pay_calc_mthd_n pcm
+            , lgcom_common_code_c ccc
+            , lgcom_common_code_multi_lang_c cccm
+        WHERE pcm.payroll_item_id = #{payrollItemId, jdbcType=NUMERIC}
+        AND   ccc.code_type_code  = 'LGDVH_PAY_ITEM_METHOD_CODE'
+        AND   cccm.code_type_code = ccc.code_type_code
+        AND   cccm.common_code    = ccc.common_code
+        AND   ccc.common_code     = pcm.payroll_calc_method_code
+        AND   cccm.language_code  = #{USER_SESSION.languageCode}
+        ORDER BY ccc.sort_order_no
+    </select>
+
+    <!-- 급여항목Property 수정 -->
+    <update id="updatePayrollItemProperty" parameterType="LGCOMData">
+        UPDATE /* LGVPAYP0007.updatePayrollItemProperty */
+               tb_pay_calc_mthd_n
+        SET    payroll_apply_flag                     = #{payrollApplyFlag}                               /* 급여적용여부 */
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+        AND    payroll_calc_method_code               = #{payrollCalcMethodCode}                          /* 급여산출방법코드 */
+    </update>
+
+</mapper>

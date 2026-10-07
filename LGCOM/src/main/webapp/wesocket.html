@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="/lgcom/static/ext/jquery-1.12.4.min.js"></script>
+<script type="text/javascript" src="/lgcom/static/ext/websocket/sockjs.min.js"></script>
+
+<script type="text/javascript">
+	var sock = new SockJS('http://wcfw-local.lgdisplay.com:8080/lgcom/websocket');
+	sock.onopen = function() {
+		$('#console').append('websocket opened' + '<br>');
+	};
+
+	sock.onmessage = function(message) {
+		$('#console').append('receive message : ' + message.data + '<br>');
+	};
+
+	sock.onclose = function(event) {
+		$('#console').append('websocket closed : ' + event);
+	};
+
+	function messageSend() {
+		sock.send($('#message').val());
+	}
+</script>
+</head>
+<body>
+	<input type="text" id="message" />
+	<input type="button" value="Àü¼Û" onclick="messageSend();" />
+	<div id="console" ></div>
+</body>
+</html>

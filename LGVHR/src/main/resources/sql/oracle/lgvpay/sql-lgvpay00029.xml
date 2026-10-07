@@ -1,0 +1,591 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00029">
+    <!-- 급여대상자 조회 -->
+    <select id="retrieveSeveranceAllowanceList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00029.retrieveSeveranceAllowanceList */
+             EMPLOYEE_NO, EMPLOYEE_NAME, ORGANIZATION_NAME, GRADE_CODE
+          , TO_CHAR(START_DATE, 'DD/MM/YYYY') AS START_DATE
+          , TO_CHAR(PROBATION_START_DATE, 'DD/MM/YYYY') AS PROBATION_START_DATE
+          , TO_CHAR(PROBATION_END_DATE, 'DD/MM/YYYY') AS PROBATION_END_DATE
+          , MATERNITY_TIMES AS MATERNITY_TIMES
+          , SEVERANCE_ALLOWANCE_ID AS SEVERANCE_ALLOWANCE_ID
+          , PAYMENT_YYYYMM AS PAYMENT_YYYYMM
+          , TO_CHAR(PERIOD_1ST_FROM, 'DD/MM/YYYY') AS PERIOD_1ST_FROM
+          , TO_CHAR(PERIOD_1ST_TO, 'DD/MM/YYYY') AS PERIOD_1ST_TO
+          , TO_CHAR(PERIOD_2ND_FROM, 'DD/MM/YYYY') AS PERIOD_2ND_FROM
+          , TO_CHAR(PERIOD_2ND_TO, 'DD/MM/YYYY') AS PERIOD_2ND_TO
+          , TO_CHAR(PERIOD_3RD_FROM, 'DD/MM/YYYY') AS PERIOD_3RD_FROM
+          , TO_CHAR(PERIOD_3RD_TO, 'DD/MM/YYYY') AS PERIOD_3RD_TO
+          , TO_CHAR(PERIOD_4TH_FROM, 'DD/MM/YYYY') AS PERIOD_4TH_FROM
+          , TO_CHAR(PERIOD_4TH_TO, 'DD/MM/YYYY') AS PERIOD_4TH_TO
+          , TO_CHAR(RESIGNATION_DATE, 'DD/MM/YYYY') AS RESIGNATION_DATE
+          , working_years,
+           <![CDATA[
+          CASE WHEN (working_years < 1 OR (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)) = 0) 
+          THEN 'N' ELSE 'Y' END AS flag_yn ,
+           ]]>
+           salary_1st, salary_2nd, salary_3rd, salary_4th, salary_5th, salary_6th, average_salary,
+          CASE WHEN flag_yn = 'N' THEN '0'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 42 THEN '4 years'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 36 THEN '3.5 years'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 30 THEN '3 years'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 24 THEN '2.5 years'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 18 THEN '2 years'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 12 THEN '1.5 years'
+               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 6 THEN '1 year'
+               ELSE '6 months' END AS period_for_cal ,
+          ROUND(CASE WHEN flag_yn = 'N' THEN 0 WHEN period_for_cal = '4 years' THEN average_salary * 2 WHEN period_for_cal = '3.5 years' THEN average_salary * 1.75 
+                     WHEN period_for_cal = '3 years' THEN average_salary * 1.5 
+                       WHEN period_for_cal = '2.5 years' THEN average_salary * 1.25 
+                         WHEN period_for_cal = '2 years' THEN average_salary * 1 
+                           WHEN period_for_cal = '1.5 years' THEN average_salary * 0.75 
+                             WHEN period_for_cal = '1 year' THEN average_salary * 0.5 
+                               ELSE average_salary * 0.25 END,0) AS payment ,
+             ACC_ORG_CODE, BANK_ACCOUNT_NUMBER, BANK_NAME,  leaving_reason, maternity_1_day, maternity_2_day, maternity_3_day, maternity_4_day, probation_day, adjust_day, 
+           (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)) AS total_day, 
+           ROUND(((NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)))/30,0) AS paid_month, note, confirm_flag
+        FROM (
+        SELECT
+          employee_no
+          ,EM.FULL_NAME_ENGLISH AS employee_name
+          ,EM.ASSIGNMENT_CATEGORY AS 
+          ,em.org_name_local      AS organization_name
+          ,em.grade   AS grade_code
+          ,EM.DATE_HIRE_SUBSIDIARY AS start_date
+          ,EM.PROBATION_START_DATE AS probation_start_date
+          ,EM.PROBATION_END_DATE probation_end_date
+          ,severance_allowance_id
+          ,payment_yyyymm
+          ,period_1st_from
+          ,period_1st_to
+          ,period_2nd_from
+          ,period_2nd_to
+          ,period_3rd_from
+          ,period_3rd_to
+          ,period_4th_from
+          ,period_4th_to
+          ,EM.DATE_RETIRE AS resignation_date
+          ,EM.ACC_ORG_CODE
+          ,em.ACCOUNT_NUMBER AS BANK_ACCOUNT_NUMBER
+          ,EM.BANK_NAME AS BANK_NAME
+          ,flag_yn
+          ,salary_1st
+          ,salary_2nd
+          ,salary_3rd
+          ,salary_4th
+          ,salary_5th
+          ,salary_6th
+          ,period_for_cal
+          ,payment
+          ,leaving_reason
+          ,note
+          ,confirm_flag
+          ,CASE WHEN ((NVL2(period_1st_from,1,0) + NVL2(period_1st_to,1,0) + NVL2(period_2nd_from,1,0) + NVL2(period_2nd_to,1,0) + NVL2(period_3rd_from,1,0) + NVL2(period_3rd_to,1,0) + NVL2(period_4th_from,1,0) + NVL2(period_4th_to,1,0))/2) != 0 
+               THEN ((NVL2(period_1st_from,1,0) + NVL2(period_1st_to,1,0) + NVL2(period_2nd_from,1,0) + NVL2(period_2nd_to,1,0) + NVL2(period_3rd_from,1,0) + NVL2(period_3rd_to,1,0) + NVL2(period_4th_from,1,0) + NVL2(period_4th_to,1,0))/2) 
+               ELSE NULL END AS maternity_times
+          ,ROUND((EM.DATE_RETIRE - EM.DATE_HIRE_SUBSIDIARY + 1) / 365, 3) AS working_years
+          ,NVL(ROUND((NVL(salary_1st,0) + NVL(salary_2nd,0) + NVL(salary_3rd,0) + NVL(salary_4th,0) + NVL(salary_5th,0) + NVL(salary_6th,0))/
+          NULLIF((CASE WHEN salary_1st IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN salary_2nd IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN salary_3rd IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN salary_4th IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN salary_5th IS NOT NULL THEN 1 ELSE 0 END)
+          + (CASE WHEN salary_6th IS NOT NULL THEN 1 ELSE 0 END)
+          , 0), 0), 0) AS average_salary
+          ,CASE WHEN period_1st_from IS NOT NULL THEN period_1st_to - period_1st_from + 1 ELSE 0 END AS maternity_1_day
+          ,CASE WHEN period_2nd_from IS NOT NULL THEN period_2nd_to - period_2nd_from + 1 ELSE 0 END AS maternity_2_day
+          ,CASE WHEN period_3rd_from IS NOT NULL THEN period_3rd_to - period_3rd_from + 1 ELSE 0 END AS maternity_3_day
+          ,CASE WHEN period_4th_from IS NOT NULL THEN period_4th_to - period_4th_from + 1 ELSE 0 END AS maternity_4_day
+          ,CASE WHEN EM.PROBATION_START_DATE IS NULL THEN 0 ELSE EM.PROBATION_END_DATE - EM.PROBATION_START_DATE + 1 END AS probation_day
+          ,adjust_day
+        FROM TB_PAY_SEVERANCE_ALLOWANCE TS, EMP_MASTER EM
+        WHERE TS.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+          AND TS.EMPLOYEE_NO  = EM.EMPLOYEE_NUMBER
+         <if test="employeeNo != null and employeeNo != ''">
+              AND TS.employee_no = #{employeeNo}
+         </if>
+         <if test="employeeName != null and employeeName != ''">
+              AND UPPER(TS.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+          </if>
+        ) sub
+    </select>
+
+    <!-- 급여대상자 등록 -->
+    <update id="insertSeveranceAllowance" parameterType="LGCOMData">
+        INSERT /*LGVPAY00029.insertSeveranceAllowance*/ INTO tb_pay_severance_allowance
+              (severance_allowance_id
+                ,payroll_calculation_set_id
+                ,payment_yyyymm
+                ,employee_no
+                ,period_1st_from
+                ,period_1st_to
+                ,period_2nd_from
+                ,period_2nd_to
+                ,period_3rd_from
+                ,period_3rd_to
+                ,period_4th_from
+                ,period_4th_to
+                ,salary_1st
+                ,salary_2nd
+                ,salary_3rd
+                ,salary_4th
+                ,salary_5th
+                ,salary_6th
+                ,leaving_reason
+                ,note
+                ,adjust_day
+                ,creation_user_id
+                ,creation_date
+              )VALUES(
+                 SQ_PAY_SEVERANCE_ALLOWANCE_ID.NEXTVAL
+                ,#{calculationSetId, jdbcType=NUMERIC}
+                ,#{payMonth}
+                ,#{employeeNo}
+                ,#{period1stFrom}
+                ,#{period1stTo}
+                ,#{period2ndFrom}
+                ,#{period2ndTo}
+                ,#{period3rdFrom}
+                ,#{period3rdTo}
+                ,#{period4thFrom}
+                ,#{period4thTo}
+                ,#{salary1st}
+                ,#{salary2nd}
+                ,#{salary3rd}
+                ,#{salary4th}
+                ,#{salary5th}
+                ,#{salary6th}
+                ,#{leavingReason}
+                ,#{note}
+                ,#{adjustDay}
+                ,#{applicationUserId}
+                ,SYSDATE
+              )
+    </update>
+    
+    <update id="updateSeveranceAllowance" parameterType="LGCOMData">
+        UPDATE /*LGVPAY00029.updateSeveranceAllowance*/
+               tb_pay_severance_allowance 
+		SET  payroll_calculation_set_id  =  #{calculationSetId, jdbcType=NUMERIC}
+		    ,payment_yyyymm  =  #{payMonth}
+			,employee_no  =  #{employeeNo}
+			,period_1st_from  =  #{period1stFrom}
+			,period_1st_to  =  #{period1stTo}
+			,period_2nd_from  =  #{period2ndFrom}
+			,period_2nd_to  =  #{period2ndTo}
+			,period_3rd_from  =  #{period3rdFrom}
+			,period_3rd_to  =  #{period3rdTo}
+			,period_4th_from  =  #{period4thFrom}
+			,period_4th_to  =  #{period4thTo}
+			,salary_1st  =  #{salary1st}
+			,salary_2nd  =  #{salary2nd}
+			,salary_3rd  =  #{salary3rd}
+			,salary_4th  =  #{salary4th}
+			,salary_5th  =  #{salary5th}
+			,salary_6th  =  #{salary6th}
+			,leaving_reason  =  #{leavingReason}
+			,note  =  #{note}
+			,adjust_day  =  #{adjustDay}
+             , last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  severance_allowance_id   = #{severanceAllowanceId}
+    </update>
+
+    <!-- 행추가된 사용자 정보를 조회 -->
+    <select id="retrieveEmployeeInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00029.retrieveEmployeeInfo */
+               em.employee_number     AS employee_no
+             , em.full_name_english   AS employee_name
+             , em.grade               AS grade_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+             , em.org_name_local      AS organization_name
+             , em.grade_type          AS emp_category_name
+             , em.job_family||'.'||em.job_group||'.'||em.job_detail  AS work_type_name
+             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+             , TO_CHAR(em.date_retire, 'DD/MM/YYYY') as date_retire
+        FROM emp_master em
+        WHERE em.employee_number = #{employeeNo}
+    </select>
+
+    <!-- CSV 다운로드 -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00029.createDirectCSVDownloadData */
+              employee_no
+             ,employee_name_local
+             ,employee_name
+             ,period_1st_from
+             ,period_1st_to
+             ,period_2nd_from
+             ,period_2nd_to
+             ,period_3rd_from
+             ,period_3rd_to
+             ,period_4th_from
+             ,period_4th_to
+             ,salary_1st
+             ,salary_2nd
+             ,salary_3rd
+             ,salary_4th
+             ,salary_5th
+             ,salary_6th
+             ,leaving_reason
+             ,note
+             ,adjust_day
+        FROM (
+                  SELECT '1' gubun
+                        , 'Employee No' AS EMPLOYEE_NO
+                        , 'Employee Name' AS EMPLOYEE_NAME_LOCAL
+                        , 'Employee Eng Name' AS EMPLOYEE_NAME
+						, 'Period 1St From' AS  PERIOD_1ST_FROM
+						, 'Period 1St To' AS  PERIOD_1ST_TO
+						, 'Period 2Nd From' AS  PERIOD_2ND_FROM
+						, 'Period 2Nd To' AS  PERIOD_2ND_TO
+						, 'Period 3Rd From' AS  PERIOD_3RD_FROM
+						, 'Period 3Rd To' AS  PERIOD_3RD_TO
+						, 'Period 4Th From' AS  PERIOD_4TH_FROM
+						, 'Period 4Th To' AS  PERIOD_4TH_TO
+						, 'Salary 1St' AS  SALARY_1ST
+						, 'Salary 2Nd' AS  SALARY_2ND
+						, 'Salary 3Rd' AS  SALARY_3RD
+						, 'Salary 4Th' AS  SALARY_4TH
+						, 'Salary 5Th' AS  SALARY_5TH
+						, 'Salary 6Th' AS  SALARY_6TH
+						, 'Leaving Reason' AS  LEAVING_REASON
+						, 'Note' AS  NOTE
+						, 'Adjust Day' AS  ADJUST_DAY
+                   FROM DUAL
+                  UNION ALL
+                      SELECT '2' gubun
+                         , em.employee_number       AS employee_no
+                         , em.full_name_english   AS employee_name
+                         , em.full_name_local     AS employee_name_local
+						 , TO_CHAR(tpe.period_1st_from, 'DD/MM/YYYY') AS  PERIOD_1ST_FROM
+						 , TO_CHAR(tpe.period_1st_to, 'DD/MM/YYYY') AS  PERIOD_1ST_TO
+						 , TO_CHAR(tpe.period_2nd_from, 'DD/MM/YYYY') AS  PERIOD_2ND_FROM
+						 , TO_CHAR(tpe.period_2nd_to, 'DD/MM/YYYY') AS  PERIOD_2ND_TO
+						 , TO_CHAR(tpe.period_3rd_from, 'DD/MM/YYYY') AS  PERIOD_3RD_FROM
+						 , TO_CHAR(tpe.period_3rd_to, 'DD/MM/YYYY') AS  PERIOD_3RD_TO
+						 , TO_CHAR(tpe.period_4th_from, 'DD/MM/YYYY') AS  PERIOD_4TH_FROM
+						 , TO_CHAR(tpe.period_4th_to, 'DD/MM/YYYY') AS  PERIOD_4TH_TO
+						 , TO_CHAR(tpe.salary_1st) AS  SALARY_1ST
+						 , TO_CHAR(tpe.salary_2nd) AS  SALARY_2ND
+						 , TO_CHAR(tpe.salary_3rd) AS  SALARY_3RD
+						 , TO_CHAR(tpe.salary_4th) AS  SALARY_4TH
+						 , TO_CHAR(tpe.salary_5th) AS  SALARY_5TH
+						 , TO_CHAR(tpe.salary_6th) AS  SALARY_6TH
+						 , tpe.leaving_reason AS  LEAVING_REASON
+						 , tpe.note AS  NOTE
+						 , TO_CHAR(tpe.adjust_day) AS  ADJUST_DAY
+                       FROM   tb_pay_severance_allowance   tpe 
+                             , emp_master          em
+                             , lgcom_user_m        um
+                             , lgcom_company_v     cv
+                       WHERE  em.employee_number = tpe.employee_no
+                       AND    um.user_name       = em.employee_number
+                       AND    cv.short_code      = em.subsidiary_code
+                       AND    tpe.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+                       <if test="employeeNo != null and employeeNo != ''">
+                            AND tpe.employee_no = #{employeeNo}
+                       </if>
+                       <if test="employeeName != null and employeeName != ''">
+                            AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+                        </if>
+                        
+        )
+        ORDER BY employee_no asc
+    </select>
+
+    <!-- Excel Upload 후속 처리 -->
+    <select id="createSeveranceAllowanceUpload" statementType="CALLABLE" parameterType="LGCOMData">
+        {call lgvpay_upload_pkg.upload_payroll_emp_severance_a(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},                      /* p_errcode */
+                                                               #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},                    /* p_errbuf */
+                                                               #{sessionId, mode=IN , jdbcType=NUMERIC, javaType=string},
+                                                               #{payMonth , mode=IN, jdbcType=VARCHAR, javaType=string},                    /* p_pay_month */
+                                                               #{calculationSetId , mode=IN , jdbcType=NUMERIC, javaType=string}, /*p_payroll_calculation_set_id. (필수) calculation_set_id*/
+                                                               #{applicationUserId, mode=IN , jdbcType=NUMERIC, javaType=string}             /* p_application_user_id */
+                                                              )}
+    </select>
+    
+    <select id="saveCalculateSeveranceAllowance" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00029.saveCalculateSeveranceAllowance */
+              lgvatt_resignation_pkg.apply_severance_allowance_ret( #{retCode                             , mode=OUT, jdbcType=NUMERIC} /*p_ret_code. 0:성공, 그외:실패*/
+                                                                   , #{errorMessage                        , mode=OUT, jdbcType=VARCHAR} /*p_ret_msg*/
+                                                                   , #{USER_SESSION.applicationUserId      , mode=IN , jdbcType=NUMERIC} /*p_user_id. (필수)*/
+                                                                   , #{LGVHR_PROJECT_SESSION.subsidiaryCode, mode=IN , jdbcType=VARCHAR} /*p_subsidiary_code. (필수)*/
+                                                                   , #{payMonth , mode=IN, jdbcType=VARCHAR, javaType=string}                    /* p_pay_month */
+                                                                   , #{calculationSetId                    , mode=IN , jdbcType=NUMERIC} /*p_payroll_calculation_set_id. (필수) calculation_set_id*/
+                                                                   , #{employeeNo                          , mode=IN , jdbcType=NUMERIC} /*p_employee_no. (선택) 연차 재계산할 퇴직자 사번. 없는 경우 payMonth의 급여대상자 중 퇴직자 전체 연차 재계산 됨.*/
+                                                                   )
+        }
+    </select>
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVPAY00029.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     ,ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5, ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10, ATTRIBUTE11
+                                     , ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15, ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20, ATTRIBUTE21
+                                     , ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25, ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30, ATTRIBUTE31
+                                     , ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35, ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39, ATTRIBUTE40, ATTRIBUTE41, ATTRIBUTE42)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Employee No' AS EMPLOYEE_NO
+					, 'Employee Name' AS EMPLOYEE_NAME
+					, 'Organization Name' AS ORGANIZATION_NAME
+					, 'Grade Code' AS GRADE_CODE
+					, 'Start Date' AS START_DATE
+					, 'Probation Start Date' AS PROBATION_START_DATE
+					, 'Probation End Date' AS PROBATION_END_DATE
+					, 'Maternity Times' AS MATERNITY_TIMES
+					, 'Period 1St From' AS PERIOD_1ST_FROM
+					, 'Period 1St To' AS PERIOD_1ST_TO
+					, 'Period 2Nd From' AS PERIOD_2ND_FROM
+					, 'Period 2Nd To' AS PERIOD_2ND_TO
+					, 'Period 3Rd From' AS PERIOD_3RD_FROM
+					, 'Period 3Rd To' AS PERIOD_3RD_TO
+					, 'Period 4Th From' AS PERIOD_4TH_FROM
+					, 'Period 4Th To' AS PERIOD_4TH_TO
+					, 'Resignation Date' AS RESIGNATION_DATE
+					, 'Working Years' AS WORKING_YEARS
+					, 'Flag Yn' AS FLAG_YN
+					, 'Salary 1St' AS SALARY_1ST
+					, 'Salary 2Nd' AS SALARY_2ND
+					, 'Salary 3Rd' AS SALARY_3RD
+					, 'Salary 4Th' AS SALARY_4TH
+					, 'Salary 5Th' AS SALARY_5TH
+					, 'Salary 6Th' AS SALARY_6TH
+					, 'Average Salary' AS AVERAGE_SALARY
+					, 'Period For Cal' AS PERIOD_FOR_CAL
+					, 'Payment' AS PAYMENT
+					, 'Acc Org Code' AS ACC_ORG_CODE
+					, 'Bank Account Number' AS BANK_ACCOUNT_NUMBER
+					, 'Bank Name' AS BANK_NAME
+					, 'Leaving Reason' AS LEAVING_REASON
+					, 'Maternity 1 Day' AS MATERNITY_1_DAY
+					, 'Maternity 2 Day' AS MATERNITY_2_DAY
+					, 'Maternity 3 Day' AS MATERNITY_3_DAY
+					, 'Maternity 4 Day' AS MATERNITY_4_DAY
+					, 'Probation Day' AS PROBATION_DAY
+					, 'Adjust Day' AS ADJUST_DAY
+					, 'Total Day' AS TOTAL_DAY
+					, 'Paid Month' AS PAID_MONTH
+					, 'Note' AS NOTE
+					, 'Confirm Flag' AS CONFIRM_FLAG
+               FROM DUAL
+               UNION ALL
+               SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+                     , EMPLOYEE_NO, EMPLOYEE_NAME, ORGANIZATION_NAME, GRADE_CODE
+	                 , TO_CHAR(START_DATE, 'DD/MM/YYYY') AS START_DATE
+	                 , TO_CHAR(PROBATION_START_DATE, 'DD/MM/YYYY') AS PROBATION_START_DATE
+	                 , TO_CHAR(PROBATION_END_DATE, 'DD/MM/YYYY') AS PROBATION_END_DATE
+	                 , TO_CHAR(MATERNITY_TIMES)
+	                 , TO_CHAR(PERIOD_1ST_FROM, 'DD/MM/YYYY') AS PERIOD_1ST_FROM
+	                 , TO_CHAR(PERIOD_1ST_TO, 'DD/MM/YYYY') AS PERIOD_1ST_TO
+	                 , TO_CHAR(PERIOD_2ND_FROM, 'DD/MM/YYYY') AS PERIOD_2ND_FROM
+	                 , TO_CHAR(PERIOD_2ND_TO, 'DD/MM/YYYY') AS PERIOD_2ND_TO
+	                 , TO_CHAR(PERIOD_3RD_FROM, 'DD/MM/YYYY') AS PERIOD_3RD_FROM
+	                 , TO_CHAR(PERIOD_3RD_TO, 'DD/MM/YYYY') AS PERIOD_3RD_TO
+	                 , TO_CHAR(PERIOD_4TH_FROM, 'DD/MM/YYYY') AS PERIOD_4TH_FROM
+	                 , TO_CHAR(PERIOD_4TH_TO, 'DD/MM/YYYY') AS PERIOD_4TH_TO
+	                 , TO_CHAR(RESIGNATION_DATE, 'DD/MM/YYYY') AS RESIGNATION_DATE
+	                 , TO_CHAR(working_years),
+			           <![CDATA[
+			          CASE WHEN (working_years < 1 OR (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)) = 0) 
+			          THEN 'N' ELSE 'Y' END AS flag_yn ,
+			           ]]>
+			           TO_CHAR(salary_1st), TO_CHAR(salary_2nd), TO_CHAR(salary_3rd), TO_CHAR(salary_4th), TO_CHAR(salary_5th), TO_CHAR(salary_6th), TO_CHAR(average_salary),
+		                CASE WHEN flag_yn = 'N' THEN '0'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 42 THEN '4 years'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 36 THEN '3.5 years'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 30 THEN '3 years'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 24 THEN '2.5 years'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 18 THEN '2 years'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 12 THEN '1.5 years'
+		                     WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 6 THEN '1 year'
+		                     ELSE '6 months' END AS period_for_cal ,
+		                TO_CHAR(ROUND(CASE WHEN flag_yn = 'N' THEN 0 WHEN period_for_cal = '4 years' THEN average_salary * 2 WHEN period_for_cal = '3.5 years' THEN average_salary * 1.75 
+		                           WHEN period_for_cal = '3 years' THEN average_salary * 1.5 
+		                             WHEN period_for_cal = '2.5 years' THEN average_salary * 1.25 
+		                               WHEN period_for_cal = '2 years' THEN average_salary * 1 
+		                                 WHEN period_for_cal = '1.5 years' THEN average_salary * 0.75 
+		                                   WHEN period_for_cal = '1 year' THEN average_salary * 0.5 
+		                                     ELSE average_salary * 0.25 END,0)) AS payment ,
+		                   ACC_ORG_CODE, BANK_ACCOUNT_NUMBER, BANK_NAME,  leaving_reason, TO_CHAR(maternity_1_day), TO_CHAR(maternity_2_day), TO_CHAR(maternity_3_day), TO_CHAR(maternity_4_day), TO_CHAR(probation_day), TO_CHAR(adjust_day), 
+		                 TO_CHAR((NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))) AS total_day, 
+		                 TO_CHAR(ROUND(((NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)))/30,0)) AS paid_month, note, confirm_flag
+			        FROM (
+			        SELECT
+			          employee_no
+			          ,EM.FULL_NAME_ENGLISH AS employee_name
+			          ,EM.ASSIGNMENT_CATEGORY AS 
+			          ,em.org_name_local      AS organization_name
+			          ,em.grade   AS grade_code
+			          ,EM.DATE_HIRE_SUBSIDIARY AS start_date
+			          ,EM.PROBATION_START_DATE AS probation_start_date
+			          ,EM.PROBATION_END_DATE probation_end_date
+			          ,period_1st_from
+			          ,period_1st_to
+			          ,period_2nd_from
+			          ,period_2nd_to
+			          ,period_3rd_from
+			          ,period_3rd_to
+			          ,period_4th_from
+			          ,period_4th_to
+			          ,EM.DATE_RETIRE AS resignation_date
+			          ,EM.ACC_ORG_CODE
+			          ,em.ACCOUNT_NUMBER AS BANK_ACCOUNT_NUMBER
+			          ,EM.BANK_NAME AS BANK_NAME
+			          ,flag_yn
+			          ,salary_1st
+			          ,salary_2nd
+			          ,salary_3rd
+			          ,salary_4th
+			          ,salary_5th
+			          ,salary_6th
+			          ,period_for_cal
+			          ,payment
+			          ,leaving_reason
+			          ,note
+			          ,confirm_flag
+			          ,CASE WHEN ((NVL2(period_1st_from,1,0) + NVL2(period_1st_to,1,0) + NVL2(period_2nd_from,1,0) + NVL2(period_2nd_to,1,0) + NVL2(period_3rd_from,1,0) + NVL2(period_3rd_to,1,0) + NVL2(period_4th_from,1,0) + NVL2(period_4th_to,1,0))/2) != 0 
+			               THEN ((NVL2(period_1st_from,1,0) + NVL2(period_1st_to,1,0) + NVL2(period_2nd_from,1,0) + NVL2(period_2nd_to,1,0) + NVL2(period_3rd_from,1,0) + NVL2(period_3rd_to,1,0) + NVL2(period_4th_from,1,0) + NVL2(period_4th_to,1,0))/2) 
+			               ELSE NULL END AS maternity_times
+			          ,ROUND((EM.DATE_RETIRE - EM.DATE_HIRE_SUBSIDIARY + 1) / 365, 3) AS working_years
+			          ,NVL(ROUND((NVL(salary_1st,0) + NVL(salary_2nd,0) + NVL(salary_3rd,0) + NVL(salary_4th,0) + NVL(salary_5th,0) + NVL(salary_6th,0))/
+			          NULLIF((CASE WHEN salary_1st IS NOT NULL THEN 1 ELSE 0 END)
+			          + (CASE WHEN salary_2nd IS NOT NULL THEN 1 ELSE 0 END)
+			          + (CASE WHEN salary_3rd IS NOT NULL THEN 1 ELSE 0 END)
+			          + (CASE WHEN salary_4th IS NOT NULL THEN 1 ELSE 0 END)
+			          + (CASE WHEN salary_5th IS NOT NULL THEN 1 ELSE 0 END)
+			          + (CASE WHEN salary_6th IS NOT NULL THEN 1 ELSE 0 END)
+			          , 0), 0), 0) AS average_salary
+			          ,CASE WHEN period_1st_from IS NOT NULL THEN period_1st_to - period_1st_from + 1 ELSE 0 END AS maternity_1_day
+			          ,CASE WHEN period_2nd_from IS NOT NULL THEN period_2nd_to - period_2nd_from + 1 ELSE 0 END AS maternity_2_day
+			          ,CASE WHEN period_3rd_from IS NOT NULL THEN period_3rd_to - period_3rd_from + 1 ELSE 0 END AS maternity_3_day
+			          ,CASE WHEN period_4th_from IS NOT NULL THEN period_4th_to - period_4th_from + 1 ELSE 0 END AS maternity_4_day
+			          ,CASE WHEN EM.PROBATION_START_DATE IS NULL THEN 0 ELSE EM.PROBATION_END_DATE - EM.PROBATION_START_DATE + 1 END AS probation_day
+			          ,adjust_day
+			        FROM TB_PAY_SEVERANCE_ALLOWANCE TS, EMP_MASTER EM
+			        WHERE TS.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+			          AND TS.EMPLOYEE_NO  = EM.EMPLOYEE_NUMBER
+			         <if test="employeeNo != null and employeeNo != ''">
+			              AND TS.employee_no = #{employeeNo}
+			         </if>
+			         <if test="employeeName != null and employeeName != ''">
+			              AND UPPER(TS.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+			          </if>
+			        ) sub) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    </insert>
+
+    <!-- 기등록된 급여대상 조회 -->
+    <select id="retrieveRegSeveranceAllowanceChk" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00029.retrieveRegSeveranceAllowanceChk */
+            count(1) as cnt
+        FROM tb_pay_severance_allowance
+        WHERE payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+          AND employee_no = #{employeeNo}
+    </select>
+
+    <!-- 월급여 대상자 삭제 -->
+    <update id="deleteSeveranceAllowance" parameterType="LGCOMData">
+        DELETE FROM tb_pay_severance_allowance
+        WHERE severance_allowance_id   = #{severanceAllowanceId}
+    </update>
+    
+    <update id="deleteAllSeveranceAllowanceInMonth" parameterType="LGCOMData">
+        DELETE /* LGVPAY00029.deleteAllSeveranceAllowanceInMonth */ 
+        FROM tb_pay_severance_allowance
+        WHERE payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+    </update>
+    
+    <update id="applyAllSeveranceAllowanceInMonth" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00029.applyAllSeveranceAllowanceInMonth */ 
+        TB_PAY_SEVERANCE_ALLOWANCE t1
+			SET (t1.WORKING_YEARS, t1.FLAG_YN, t1.AVERAGE_SALARY, t1.PERIOD_FOR_CAL, t1.PAYMENT, t1.MATERNITY_1_DAY, t1.MATERNITY_2_DAY, t1.MATERNITY_3_DAY, t1.MATERNITY_4_DAY, 
+			     t1.PROBATION_DAY, t1.TOTAL_DAY, t1.PAID_MONTH, t1.LAST_UPDATE_DATE, t1.LAST_UPDATE_USER_ID, t1.CONFIRM_FLAG) 
+		     = (SELECT  working_years,
+		          <![CDATA[
+			          CASE WHEN (working_years < 1 OR (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)) = 0) 
+			          THEN 'N' ELSE 'Y' END AS flag_yn ,
+		           ]]> average_salary,
+		          CASE WHEN flag_yn = 'N' THEN '0'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 42 THEN '4 years'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 36 THEN '3.5 years'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 30 THEN '3 years'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 24 THEN '2.5 years'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 18 THEN '2 years'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 12 THEN '1.5 years'
+		               WHEN (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0))/30 > 6 THEN '1 year'
+		               ELSE '6 months' END AS period_for_cal ,
+		          ROUND(CASE WHEN flag_yn = 'N' THEN 0 WHEN period_for_cal = '4 years' THEN average_salary * 2 WHEN period_for_cal = '3.5 years' THEN average_salary * 1.75 
+		                     WHEN period_for_cal = '3 years' THEN average_salary * 1.5 
+		                       WHEN period_for_cal = '2.5 years' THEN average_salary * 1.25 
+		                         WHEN period_for_cal = '2 years' THEN average_salary * 1 
+		                           WHEN period_for_cal = '1.5 years' THEN average_salary * 0.75 
+		                             WHEN period_for_cal = '1 year' THEN average_salary * 0.5 
+		                               ELSE average_salary * 0.25 END,0) AS payment ,
+		             maternity_1_day, maternity_2_day, maternity_3_day, maternity_4_day, probation_day, 
+		           (NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)) AS total_day, 
+		           ROUND(((NVL(maternity_1_day,0) + NVL(maternity_2_day,0) + NVL(maternity_3_day,0) + NVL(maternity_4_day,0) + NVL(probation_day,0) + NVL(adjust_day,0)))/30,0) AS paid_month, sysdate, #{applicationUserId}, 'Y'
+		        FROM (
+		        SELECT
+		          employee_no
+		          ,severance_allowance_id
+		          ,payment_yyyymm
+		          ,period_1st_from
+		          ,period_1st_to
+		          ,period_2nd_from
+		          ,period_2nd_to
+		          ,period_3rd_from
+		          ,period_3rd_to
+		          ,period_4th_from
+		          ,period_4th_to
+		          ,flag_yn
+		          ,salary_1st
+		          ,salary_2nd
+		          ,salary_3rd
+		          ,salary_4th
+		          ,salary_5th
+		          ,salary_6th
+		          ,period_for_cal
+		          ,payment
+		          ,leaving_reason
+		          ,note
+		          ,CASE WHEN ((NVL2(period_1st_from,1,0) + NVL2(period_1st_to,1,0) + NVL2(period_2nd_from,1,0) + NVL2(period_2nd_to,1,0) + NVL2(period_3rd_from,1,0) + NVL2(period_3rd_to,1,0) + NVL2(period_4th_from,1,0) + NVL2(period_4th_to,1,0))/2) != 0 
+		               THEN ((NVL2(period_1st_from,1,0) + NVL2(period_1st_to,1,0) + NVL2(period_2nd_from,1,0) + NVL2(period_2nd_to,1,0) + NVL2(period_3rd_from,1,0) + NVL2(period_3rd_to,1,0) + NVL2(period_4th_from,1,0) + NVL2(period_4th_to,1,0))/2) 
+		               ELSE NULL END AS maternity_times
+		          ,ROUND((EM.DATE_RETIRE - EM.DATE_HIRE_SUBSIDIARY + 1) / 365, 3) AS working_years
+		          ,NVL(ROUND((NVL(salary_1st,0) + NVL(salary_2nd,0) + NVL(salary_3rd,0) + NVL(salary_4th,0) + NVL(salary_5th,0) + NVL(salary_6th,0))/
+		          NULLIF((CASE WHEN salary_1st IS NOT NULL THEN 1 ELSE 0 END)
+		          + (CASE WHEN salary_2nd IS NOT NULL THEN 1 ELSE 0 END)
+		          + (CASE WHEN salary_3rd IS NOT NULL THEN 1 ELSE 0 END)
+		          + (CASE WHEN salary_4th IS NOT NULL THEN 1 ELSE 0 END)
+		          + (CASE WHEN salary_5th IS NOT NULL THEN 1 ELSE 0 END)
+		          + (CASE WHEN salary_6th IS NOT NULL THEN 1 ELSE 0 END)
+		          , 0), 0), 0) AS average_salary
+		          ,CASE WHEN period_1st_from IS NOT NULL THEN period_1st_to - period_1st_from + 1 ELSE 0 END AS maternity_1_day
+		          ,CASE WHEN period_2nd_from IS NOT NULL THEN period_2nd_to - period_2nd_from + 1 ELSE 0 END AS maternity_2_day
+		          ,CASE WHEN period_3rd_from IS NOT NULL THEN period_3rd_to - period_3rd_from + 1 ELSE 0 END AS maternity_3_day
+		          ,CASE WHEN period_4th_from IS NOT NULL THEN period_4th_to - period_4th_from + 1 ELSE 0 END AS maternity_4_day
+		          ,CASE WHEN EM.PROBATION_START_DATE IS NULL THEN 0 ELSE EM.PROBATION_END_DATE - EM.PROBATION_START_DATE + 1 END AS probation_day
+		          ,adjust_day
+		        FROM TB_PAY_SEVERANCE_ALLOWANCE TS, EMP_MASTER EM
+		        WHERE TS.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+		          AND TS.EMPLOYEE_NO  = EM.EMPLOYEE_NUMBER
+		        ) sub where sub.severance_allowance_id = t1.severance_allowance_id
+		)
+		WHERE t1.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}  -- 급여대상자SetId
+    </update>
+    
+
+</mapper>

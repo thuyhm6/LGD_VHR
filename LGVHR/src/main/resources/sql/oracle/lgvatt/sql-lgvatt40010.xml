@@ -1,0 +1,859 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- HMT_20210315 Replace TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')+TO_DSINTERVAL(DECODE(ar.shift_type_code, '1A', '0 09:00:00', '0 12:00:00'))
+                   by lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT')--> 
+<mapper namespace="LGVATT40010">
+
+    <!-- 일근태 결재에서 조회가능한 계획근태 일수 조회 -->
+    <select id="retrievePlanDateList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT40010.retrievePlanDateList */
+               TO_CHAR(rs.plan_yyyymmdd, 'DDMMYYYY')   AS CODE
+             , (SELECT common_code_name FROM lgcom_message_label_v WHERE common_code = 'label.att.actual' AND language_code = #{USER_SESSION.languageCode}) || ' ' ||
+               TO_CHAR(rs.plan_yyyymmdd-1, 'DD/MM/YYYY') || ' (' || INITCAP(TO_CHAR(rs.plan_yyyymmdd-1, 'FMDY')) || ')'||
+               (SELECT common_code_name FROM lgcom_message_label_v WHERE common_code = 'label.att.plan' AND language_code = #{USER_SESSION.languageCode}) || ' ' ||
+               TO_CHAR(rs.plan_yyyymmdd, 'DD/MM/YYYY') || ' (' || INITCAP(TO_CHAR(rs.plan_yyyymmdd, 'FMDY')) || ')' AS NAME /* 요일명 3자리 약어 : DY, 요일명 : DAY, 첫영문대문자:INITCAP */
+             , TO_CHAR(rs.plan_yyyymmdd-1, 'DD/MM/YYYY')    AS result_ymd
+             , INITCAP(TO_CHAR(rs.plan_yyyymmdd-1, 'FMDY')) AS result_dy
+             , TO_CHAR(rs.plan_yyyymmdd, 'DD/MM/YYYY')      AS plan_ymd
+             , INITCAP(TO_CHAR(rs.plan_yyyymmdd, 'FMDY'))   AS plan_dy
+             , ac_p.holiday_flag  AS holiday_flag_plan
+             , ac_r.holiday_flag  AS holiday_flag_result
+        FROM   (SELECT  TRUNC(SYSDATE) - (LEVEL - 1)+NVL(TO_NUMBER(lgvhr_common_pkg.decode_lookup('LGVHR_ATT_COMMON_CODE', 'APPROVAL_SEARCH_DAYS', 'A2')), 5) AS plan_yyyymmdd
+                FROM    DUAL
+                <![CDATA[
+                CONNECT BY LEVEL <= NVL(TO_NUMBER(lgvhr_common_pkg.decode_lookup('LGVHR_ATT_COMMON_CODE', 'APPROVAL_SEARCH_DAYS', 'A1')), 15)
+                ]]>
+               ) rs
+             ,(SELECT TO_DATE(lgvhr_common_pkg.decode_lookup('LGVHR_ATT_COMMON_CODE', 'OPEN_YYYYMMDD', 'A1'), 'YYYYMMDD') AS open_date
+               FROM   dual) dt
+             , tb_att_calendar_n ac_p
+             , tb_att_calendar_n ac_r
+        WHERE  ac_p.subsidiary_code             = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    ac_p.time_and_attendance_date    = rs.plan_yyyymmdd
+        <![CDATA[
+        AND    rs.plan_yyyymmdd                >= dt.open_date
+        ]]>
+        AND    ac_r.subsidiary_code(+)          = ac_p.subsidiary_code
+        and    ac_r.time_and_attendance_date(+) = ac_p.time_and_attendance_date-1
+        ORDER BY rs.plan_yyyymmdd DESC
+    </select>
+
+    <!-- 사무직 일근태 결재 가능한 시간인지 체크 -->
+    <select id="retrieveApprovalEnableTimeCheck"  parameterType="LGCOMData" resultType="LGCOMData">
+    <![CDATA[
+        SELECT  /* LGVATT40010.retrieveApprovalEnableTimeCheck */
+                CASE WHEN SYSDATE < limit_date THEN 'Y' ELSE 'N' END AS approval_enable_flag /* 결재가능여부 */
+              , TO_CHAR(limit_date, 'HH24:MI')                       AS approval_end_time    /* 결재마감시간 */
+        FROM   (SELECT lgvatt_common_pkg.get_att_close_time(NVL(#{subsidiaryCode}, #{LGVHR_PROJECT_SESSION.subsidiaryCode}), 'APPROVAL', TO_DATE(#{yyyymmdd}, 'DDMMYYYY')) AS limit_date FROM DUAL)
+    ]]>
+    </select>
+
+    <!-- 계획근태 또는 실적근태에 대해 승인/반려 가능한지 여부 조회. 계획근태일자를 기준으로 결재 가능시간을 조회한다. -->
+    <select id="retrieveApprovalEnableFlagData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH approval_end_date AS (
+            SELECT /* LGVATT40010.retrieveApprovalEnableFlagData */
+                   lgvatt_common_pkg.get_att_close_time(#{subsidiaryCode}, 'APPROVAL', TO_DATE(#{yyyymmdd}, 'DDMMYYYY')) AS limit_date
+            FROM   DUAL
+        )
+        SELECT
+        <![CDATA[
+               CASE WHEN dt.approval_enable_flag = 'Y' AND SYSDATE < aed.limit_date THEN 'Y' ELSE 'N' END AS approval_enable_flag
+        ]]>
+        FROM   TABLE(CAST(lgvatt_common_pkg.get_input_date(#{subsidiaryCode}, TO_DATE(#{yyyymmdd}, 'DDMMYYYY'), 'PLAN', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt
+             , approval_end_date aed
+        WHERE  'PLAN' = #{planResultType}
+        AND    dt.time_and_attendance_date = TO_DATE(#{attendanceYyyymmddPlan}, 'DDMMYYYY')
+        UNION ALL
+        SELECT
+        <![CDATA[
+               CASE WHEN dt.approval_enable_flag = 'Y' AND SYSDATE < aed.limit_date THEN 'Y' ELSE 'N' END AS approval_enable_flag
+        ]]>
+        FROM   TABLE(CAST(lgvatt_common_pkg.get_input_date(#{subsidiaryCode}, TO_DATE(#{yyyymmdd}, 'DDMMYYYY'), 'RESULT', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt
+             , approval_end_date aed
+        WHERE  'RESULT' = #{planResultType}
+        AND    dt.time_and_attendance_date = TO_DATE(#{attendanceYyyymmddResult}, 'DDMMYYYY')
+    </select>
+
+    <!-- 일근태(계획/실적)결재 목록 조회 -->
+    <select id="retrieveDailyAttendanceApprovalList" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH att_plan AS (
+        /* 계획근태 */
+            SELECT /* LGVATT40010.retrieveDailyAttendanceApprovalList */
+                   ap.employee_no         AS employee_no
+                 , em.full_name_local     AS employee_name
+                 , em.org_name_local      AS organization_name
+                 , em.grade_title         AS grade_title
+
+                 , TO_CHAR(ap.time_and_attendance_date, 'DDMMYYYY') AS attendance_yyyymmdd /* 계획근태일자 */
+                 , ap.time_and_attendance_code                      AS attendance_code
+                 , ap.overtime_sum_hours                            AS overtime_hours
+                 , ap.evening_meal_flag                             AS evening_meal_flag
+                 , ap.time_attend_input_reason_desc                 AS input_reason
+                 ,(SELECT cc.time_and_attendance_short_name FROM tb_att_code_c cc WHERE cc.subsidiary_code = ap.subsidiary_code AND cc.time_and_attendance_code = ap.time_and_attendance_code) AS attendance_name
+                 , ap.time_attend_detail_code                       AS attendance_detail_code
+                 ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', ap.time_attend_detail_code, NULL, #{USER_SESSION.languageCode}) FROM dual) AS attendance_detail_name
+
+                 , larn.request_master_id
+                 , larn.request_code
+                 /* 승인라인 결재상태가 Wait for Approval(2) 이고, 결재 가능한 계획 근태일이면서 결재가능시간 이전인 경우만 결재가능 Y, 그외는 결재불가능 N */
+                 <![CDATA[
+                 , CASE WHEN dt.approval_enable_flag = 'Y' AND SYSDATE < lgvatt_common_pkg.get_att_close_time(ap.subsidiary_code, 'APPROVAL', ap.time_and_attendance_date, ap.shift_type_code) THEN
+                             CASE WHEN    MAX(lasn.approval_status_code) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs) = '2' /* 1차결재 가능한 상태 */
+                                       OR MAX(lasn.approval_status_code) KEEP (DENSE_RANK LAST  ORDER BY lasn.approval_seqs) = '2' /* 최종결재 가능한 상태 */ THEN 'Y'
+                                  ELSE 'N'
+                             END
+                        ELSE 'N'
+                   END AS wait_approval_flag
+                 ]]>
+                 , COUNT(lasn.user_no) AS approver_cnt
+                 , MAX(lasn.approval_comment) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs) AS approval_comment1
+                 , MAX(lasn.approval_comment) KEEP (DENSE_RANK LAST  ORDER BY lasn.approval_seqs) AS approval_comment2
+
+            FROM   tb_att_plan_n            ap   /* 계획근태 */
+                 , emp_master               em   /* 임직원마스터 */
+                 , lgcom_approval_request_n larn /* 공통결재마스터(계획) */
+                 , lgcom_approval_status_n  lasn /* 공통결재자별 결재상태(계획) */
+                 , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{planYyyymmdd}, 'DDMMYYYY'), 'PLAN', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt /* 결재가능일자 확인하기 위한 join */
+
+            WHERE  ap.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    ap.time_and_attendance_date = TO_DATE(#{planYyyymmdd}, 'DDMMYYYY')
+            AND    em.employee_number          = ap.employee_no
+            <![CDATA[
+            AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+            ]]>
+            AND    em.assignment_category      = 'LGD_OW' /* 사무직만 조회 */
+            AND    larn.request_master_id      = ap.approval_request_id
+            AND    larn.request_code           = ap.request_code
+            AND    lasn.request_master_id      = larn.request_master_id
+            AND    lasn.request_code           = larn.request_code
+            AND    lasn.approval_action_code   = 'APPROVAL' /* 결재자만 조회 */
+            AND    lasn.user_no                = #{LGVHR_PROJECT_SESSION.employeeNo}
+
+            AND    dt.time_and_attendance_date = ap.time_and_attendance_date
+            /* 결재자가 동일한 경우 처리하기 위한 group by */
+            GROUP BY ap.employee_no
+                 , em.full_name_local
+                 , em.org_name_local
+                 , em.grade_title
+
+                 , TO_CHAR(ap.time_and_attendance_date, 'DDMMYYYY')
+                 , ap.subsidiary_code
+                 , ap.time_and_attendance_code
+                 , ap.overtime_sum_hours
+                 , ap.evening_meal_flag
+                 , ap.time_attend_input_reason_desc
+                 , ap.time_attend_detail_code
+
+                 , larn.request_master_id
+                 , larn.request_code
+                 , dt.approval_enable_flag
+                 , lgvatt_common_pkg.get_att_close_time(ap.subsidiary_code, 'APPROVAL', ap.time_and_attendance_date, ap.shift_type_code)
+        )
+        , att_result AS (
+        /* 실적근태 */
+            SELECT /* LGVATT40010.retrieveDailyAttendanceApprovalList */
+                   ar.employee_no         AS employee_no
+                 , em.full_name_local     AS employee_name
+                 , em.org_name_local      AS organization_name
+                 , em.grade_title         AS grade_title
+
+                 , TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY') AS attendance_yyyymmdd /* 실적근태일자 */
+                 ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN'), 'HH24:MI') FROM dual) AS in_time /* 출근시간 */
+                 ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT'), 'HH24:MI') FROM dual) AS out_time /* 퇴근시간 */
+                 , ar.time_and_attendance_code                      AS attendance_code
+                 , ar.work_hours
+                  -NVL(ar.tardy_hours,                   0)
+                  -NVL(ar.early_leave_hours,             0)
+                  -NVL(ar.going_out_hours,               0)         AS work_hours
+                 , NVL(ar.weekday_overtime_hours,        0)
+                  +NVL(ar.holiday_overtime_hours,        0)
+                  +NVL(ar.public_holiday_overtime_hours, 0)         AS overtime_hours        -- Over Time
+
+                 , NVL(ar.weekday_night_overtime_hours,   0)
+                  +NVL(ar.weekday_ot_af_night_work_hours, 0)
+                  +NVL(ar.holiday_night_overtime_hours,   0)
+                  +NVL(ar.public_holiday_night_ot_hours,  0)        AS night_overtime_hours  -- Over Time at Night
+
+                 , NVL(ar.normal_night_overtime_hours, 0)           AS night_hours           -- Night Time
+                 , ar.time_attend_input_reason_desc                 AS input_reason
+                 ,(SELECT cc.time_and_attendance_short_name FROM tb_att_code_c cc WHERE cc.subsidiary_code = ar.subsidiary_code AND cc.time_and_attendance_code = ar.time_and_attendance_code) AS attendance_name
+                 , ar.time_attend_detail_code                       AS attendance_detail_code
+                 ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', ar.time_attend_detail_code, NULL, #{USER_SESSION.languageCode}) FROM dual) AS attendance_detail_name
+
+                 , ar.evening_meal_flag                                          AS evening_meal_flag
+                 , TO_CHAR(ar.tardy_hours,                            'FM990.0') AS tardy_hours
+                 , TO_CHAR(ar.early_leave_hours,                      'FM990.0') AS early_leave_hours
+                 , TO_CHAR(ar.going_out_hours,                        'FM990.0') AS going_out_hours
+                 , TO_CHAR(NVL(ar.weekday_overtime_hours,         0), 'FM990.0') AS weekday_overtime_hours
+                 , TO_CHAR(NVL(ar.holiday_overtime_hours,         0), 'FM990.0') AS holiday_overtime_hours
+                 , TO_CHAR(NVL(ar.public_holiday_overtime_hours,  0), 'FM990.0') AS public_holiday_overtime_hours
+                 , TO_CHAR(NVL(ar.weekday_night_overtime_hours,   0), 'FM990.0') AS weekday_night_overtime_hours
+                 , TO_CHAR(NVL(ar.weekday_ot_af_night_work_hours, 0), 'FM990.0') AS weekday_ot_af_night_work_hours
+                 , TO_CHAR(NVL(ar.holiday_night_overtime_hours,   0), 'FM990.0') AS holiday_night_overtime_hours
+                 , TO_CHAR(NVL(ar.public_holiday_night_ot_hours,  0), 'FM990.0') AS public_holiday_night_ot_hours
+
+                 , larn.request_master_id
+                 , larn.request_code
+                 /* 승인라인 결재상태가 Wait for Approval(2) 이고, 결재 가능한 실적 근태일이면서 결재가능시간 이전인 경우만 결재가능 Y, 그외는 결재불가능 N */
+                 <![CDATA[
+                 , CASE WHEN dt.approval_enable_flag = 'Y' AND SYSDATE < lgvatt_common_pkg.get_att_close_time(ar.subsidiary_code, 'APPROVAL', (ar.time_and_attendance_date+1), ar.shift_type_code) THEN
+                             CASE WHEN    MAX(lasn.approval_status_code) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs) = '2' /* 1차결재 가능한 상태 */
+                                       OR MAX(lasn.approval_status_code) KEEP (DENSE_RANK LAST  ORDER BY lasn.approval_seqs) = '2' /* 최종결재 가능한 상태 */ THEN 'Y'
+                                  ELSE 'N'
+                             END
+                        ELSE 'N'
+                   END AS wait_approval_flag
+                 ]]>
+                 , COUNT(lasn.user_no) AS approver_cnt
+
+                 , MAX(lasn.approval_comment) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs) AS approval_comment1
+                 , MAX(lasn.approval_comment) KEEP (DENSE_RANK LAST  ORDER BY lasn.approval_seqs) AS approval_comment2
+
+                 /* ID Card 출입시간이 출근시간 이후이고, ID Card 퇴근시간이 퇴근시간 이전인 경우 적색 표시. 출근시간 : work_start_time, 퇴근시간 : 단부제:출근시간+9시간, 교대제:출근시간+12 */
+                 <![CDATA[
+                 ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN' ) >= TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+                                    AND lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') <  lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') THEN 'Y' /*HMT_20210315*/
+                               ELSE 'N'
+                          END
+                   FROM   dual) AS in_out_time_red_flag /* 출퇴근시간 적색표시여부 */
+                 ]]>
+
+            FROM   tb_att_result_n          ar   /* 실적근태 */
+                 , emp_master               em   /* 임직원마스터 */
+                 , lgcom_approval_request_n larn /* 공통결재마스터(실적) */
+                 , lgcom_approval_status_n  lasn /* 공통결재자별 결재상태(실적) */
+                 , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{planYyyymmdd}, 'DDMMYYYY'), 'RESULT', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt /* 결재가능일자 확인하기 위한 join */
+
+            WHERE  ar.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    ar.time_and_attendance_date = (TO_DATE(#{planYyyymmdd}, 'DDMMYYYY')-1) /* 계획-1일의 실적 조회 */
+            AND    em.employee_number          = ar.employee_no
+            <![CDATA[
+            AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+            ]]>
+            AND    em.assignment_category      = 'LGD_OW' /* 사무직만 조회 */
+            AND    larn.request_master_id      = ar.approval_request_id
+            AND    larn.request_code           = ar.request_code
+            AND    lasn.request_master_id      = larn.request_master_id
+            AND    lasn.request_code           = larn.request_code
+            AND    lasn.approval_action_code   = 'APPROVAL' /* 결재자만 조회 */
+            AND    lasn.user_no                = #{LGVHR_PROJECT_SESSION.employeeNo}
+
+            AND    dt.time_and_attendance_date = ar.time_and_attendance_date
+            /* 결재자가 동일한 경우 처리하기 위한 group by */
+            GROUP BY ar.employee_no
+                 , em.full_name_local
+                 , em.org_name_local
+                 , em.grade_title
+
+                 , ar.subsidiary_code
+                 , TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY')
+                 , lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN')
+                 , lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT')
+                 , ar.time_and_attendance_code
+                 , ar.work_hours
+                  -NVL(ar.tardy_hours,                   0)
+                  -NVL(ar.early_leave_hours,             0)
+                  -NVL(ar.going_out_hours,               0)
+                 , NVL(ar.weekday_overtime_hours,        0)
+                  +NVL(ar.holiday_overtime_hours,        0)
+                  +NVL(ar.public_holiday_overtime_hours, 0)
+
+                 , NVL(ar.weekday_night_overtime_hours,   0)
+                  +NVL(ar.weekday_ot_af_night_work_hours, 0)
+                  +NVL(ar.holiday_night_overtime_hours,   0)
+                  +NVL(ar.public_holiday_night_ot_hours,  0)
+
+                 , NVL(ar.normal_night_overtime_hours, 0)
+                 , ar.time_attend_input_reason_desc
+                 , ar.time_attend_detail_code
+
+                 , ar.evening_meal_flag
+                 , TO_CHAR(ar.tardy_hours,                            'FM990.0')
+                 , TO_CHAR(ar.early_leave_hours,                      'FM990.0')
+                 , TO_CHAR(ar.going_out_hours,                        'FM990.0')
+                 , TO_CHAR(NVL(ar.weekday_overtime_hours,         0), 'FM990.0')
+                 , TO_CHAR(NVL(ar.holiday_overtime_hours,         0), 'FM990.0')
+                 , TO_CHAR(NVL(ar.public_holiday_overtime_hours,  0), 'FM990.0')
+                 , TO_CHAR(NVL(ar.weekday_night_overtime_hours,   0), 'FM990.0')
+                 , TO_CHAR(NVL(ar.weekday_ot_af_night_work_hours, 0), 'FM990.0')
+                 , TO_CHAR(NVL(ar.holiday_night_overtime_hours,   0), 'FM990.0')
+                 , TO_CHAR(NVL(ar.public_holiday_night_ot_hours,  0), 'FM990.0')
+
+                 , larn.request_master_id
+                 , larn.request_code
+                 , dt.approval_enable_flag
+                 , lgvatt_common_pkg.get_att_close_time(ar.subsidiary_code, 'APPROVAL', (ar.time_and_attendance_date+1), ar.shift_type_code)
+                 , TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+                 , lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') /*HMT_20210315*/
+        )
+        SELECT att_e.employee_no
+             , att_e.employee_name
+             , att_e.organization_name
+             , att_e.grade_title
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', att_e.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+
+             , att_p.attendance_yyyymmdd       AS attendance_yyyymmdd_plan /* 계획근태일자 */
+             , att_p.attendance_code           AS attendance_code_plan
+             , att_p.overtime_hours            AS overtime_hours_plan
+             , att_p.evening_meal_flag         AS evening_meal_flag_plan
+             , att_p.input_reason              AS input_reason_plan
+             , att_p.attendance_name           AS attendance_name_plan
+             , att_p.attendance_detail_code    AS attendance_detail_code_plan
+             , att_p.attendance_detail_name    AS attendance_detail_name_plan
+
+             , att_p.request_master_id         AS request_master_id_plan
+             , att_p.request_code              AS request_code_plan
+             , att_p.wait_approval_flag        AS wait_flag_plan
+
+             , att_r.attendance_yyyymmdd       AS attendance_yyyymmdd_result /* 실적근태일자 */
+             , att_r.in_time                   AS in_time_result /* 출근시간 */
+             , att_r.out_time                  AS out_time_result /* 퇴근시간 */
+             , att_r.attendance_code           AS attendance_code_result
+             , att_r.work_hours                AS work_hours_result
+             , att_r.overtime_hours            AS overtime_hours_result -- Over Time
+             , att_r.night_overtime_hours      AS night_overtime_hours_result -- Over Time at Night
+             , att_r.night_hours               AS night_hours_result -- Night Time
+             , att_r.input_reason              AS input_reason_result
+             , att_r.attendance_name           AS attendance_name_result
+             , att_r.attendance_detail_code    AS attendance_detail_code_result
+             , att_r.attendance_detail_name    AS attendance_detail_name_result
+             , att_r.evening_meal_flag         AS evening_meal_flag_result
+             , att_r.tardy_hours               AS tardy_hours_result
+             , att_r.early_leave_hours         AS early_leave_hours_result
+             , att_r.going_out_hours           AS going_out_hours_result
+             /* OVER TIME SUM */
+             , att_r.weekday_overtime_hours
+             , att_r.holiday_overtime_hours
+             , att_r.public_holiday_overtime_hours
+             /* OVER TIME SUM */
+             /* NIGHT OVER TIME SUM */
+             , att_r.weekday_night_overtime_hours
+             , att_r.weekday_ot_af_night_work_hours
+             , att_r.holiday_night_overtime_hours
+             , att_r.public_holiday_night_ot_hours
+             /* NIGHT OVER TIME SUM */
+
+             , att_r.request_master_id       AS request_master_id_result
+             , att_r.request_code            AS request_code_result
+             , att_r.wait_approval_flag      AS wait_flag_result
+             , lgvhr_common_pkg.decode_lookup('LGVHR_ATT_APPROVAL_STATUS', lgvatt_common_pkg.get_approval_status(NVL(att_r.request_master_id, att_p.request_master_id), NVL(att_r.request_code, att_p.request_code), #{LGVHR_PROJECT_SESSION.employeeNo}), NULL, #{USER_SESSION.languageCode})  AS approval_status
+             , att_r.in_out_time_red_flag    AS in_out_time_red_flag_result /* 출퇴근시간 적색표시 여부 */
+
+             , att_p.approver_cnt            AS approver_cnt_plan       /* 요청서별 결재자로 등록된 건수 */
+             , att_p.approval_comment1       AS approval_comment1_plan  /* 결재자의 1차결재의견 */
+             , att_p.approval_comment2       AS approval_comment2_plan  /* 결재자의 2차결재의견 */
+
+             , att_r.approver_cnt            AS approver_cnt_result
+             , att_r.approval_comment1       AS approval_comment1_result
+             , att_r.approval_comment2       AS approval_comment2_result
+
+        FROM   (SELECT employee_no, employee_name, organization_name, grade_title FROM att_result
+                UNION
+                SELECT employee_no, employee_name, organization_name, grade_title FROM att_plan p
+               ) att_e
+              ,att_plan   att_p
+              ,att_result att_r
+        WHERE  att_e.employee_no = att_p.employee_no(+) /* 계획, 실적 모두 있는 경우 + 계획 없이 실적만 있는 경우 */
+        AND    att_e.employee_no = att_r.employee_no    /* 계획, 실적 모두 있는 경우 + 실적 없이 계획만 있는 경우 생략 */
+        <if test="approvaStatusCode != null and approvaStatusCode != ''">
+        AND    lgvatt_common_pkg.get_approval_status(NVL(att_r.request_master_id, att_p.request_master_id), NVL(att_r.request_code, att_p.request_code), #{LGVHR_PROJECT_SESSION.employeeNo}) = #{approvaStatusCode}
+        </if>
+        ORDER BY att_e.organization_name, att_e.employee_name
+    </select>
+
+    <!-- 일근태(계획/실적) 비요청자 목록 조회 -->
+    <select id="retrieveDailyAttendanceUnRequestorList" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH att_plan AS (
+            /* 계획근태 */
+                SELECT /* LGVATT40010.retrieveDailyAttendanceUnRequestorList */
+                       ap.employee_no         AS employee_no
+                     , em.full_name_local     AS employee_name
+                     , em.org_name_local      AS organization_name
+                     , em.grade_title         AS grade_title
+
+                     , TO_CHAR(ap.time_and_attendance_date, 'DDMMYYYY') AS attendance_yyyymmdd /* 계획근태일자 */
+                     , ap.time_and_attendance_code                      AS attendance_code
+                     , ap.overtime_sum_hours                            AS overtime_hours
+                     , ap.evening_meal_flag                             AS evening_meal_flag
+                     , ap.time_attend_input_reason_desc                 AS input_reason
+                     ,(SELECT cc.time_and_attendance_short_name FROM tb_att_code_c cc WHERE cc.subsidiary_code = ap.subsidiary_code AND cc.time_and_attendance_code = ap.time_and_attendance_code) AS attendance_name
+                     , ap.time_attend_detail_code                       AS attendance_detail_code
+                     ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', ap.time_attend_detail_code, NULL, #{USER_SESSION.languageCode}) FROM dual) AS attendance_detail_name
+
+                     , NULL AS request_master_id
+                     , NULL AS request_code
+                     /* 승인라인 결재상태가 Wait for Approval(2) 이고, 결재 가능한 계획 근태일이면서 결재가능시간 이전인 경우만 결재가능 Y, 그외는 결재불가능 N */
+
+                     , 'N' AS wait_approval_flag
+
+                     , 0 AS approver_cnt
+                     , NULL AS approval_comment1
+                     , NULL AS approval_comment2
+
+                FROM   tb_att_plan_n            ap   /* 계획근태 */
+                     , emp_master               em   /* 임직원마스터 */
+                     , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{planYyyymmdd}, 'DDMMYYYY'), 'PLAN', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt /* 결재가능일자 확인하기 위한 join */
+
+                WHERE  ap.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                AND    ap.time_and_attendance_date = TO_DATE(#{planYyyymmdd}, 'DDMMYYYY')
+                AND    em.employee_number          = ap.employee_no
+
+                AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+
+                AND    em.assignment_category      = 'LGD_OW' /* 사무직만 조회 */
+
+                AND    dt.time_and_attendance_date = ap.time_and_attendance_date
+
+                AND    ap.employee_no IN (
+                                          SELECT /*+ push_subq */
+                                                 em.employee_number
+                                          FROM   emp_master em
+                                          WHERE  em.assignment_category = 'LGD_OW'
+                                          AND    (em.date_retire IS NULL OR em.date_retire >= TRUNC(SYSDATE))
+                                          AND    #{LGVHR_PROJECT_SESSION.employeeNo} IN ( em.attribute1, em.attribute2 )    /* 로긴자 사번 */
+                                         )
+          /* 결재자가 동일한 경우 처리하기 위한 group by */
+                GROUP BY ap.employee_no
+                     , em.full_name_local
+                     , em.org_name_local
+                     , em.grade_title
+
+                     , TO_CHAR(ap.time_and_attendance_date, 'DDMMYYYY')
+                     , ap.subsidiary_code
+                     , ap.time_and_attendance_code
+                     , ap.overtime_sum_hours
+                     , ap.evening_meal_flag
+                     , ap.time_attend_input_reason_desc
+                     , ap.time_attend_detail_code
+                     , dt.approval_enable_flag
+                     , lgvatt_common_pkg.get_att_close_time(ap.subsidiary_code, 'APPROVAL', ap.time_and_attendance_date, ap.shift_type_code)
+            )
+            , att_result AS (
+            /* 실적근태 */
+                SELECT /* LGVATT40010.retrieveDailyAttendanceUnRequestorList */
+                       ar.employee_no         AS employee_no
+                     , em.full_name_local     AS employee_name
+                     , em.org_name_local      AS organization_name
+                     , em.grade_title         AS grade_title
+
+                     , TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY') AS attendance_yyyymmdd /* 실적근태일자 */
+                     ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN'), 'HH24:MI') FROM dual) AS in_time /* 출근시간 */
+                     ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT'), 'HH24:MI') FROM dual) AS out_time /* 퇴근시간 */
+                     , ar.time_and_attendance_code                      AS attendance_code
+                     , ar.work_hours
+                      -NVL(ar.tardy_hours,                   0)
+                      -NVL(ar.early_leave_hours,             0)
+                      -NVL(ar.going_out_hours,               0)         AS work_hours
+                     , NVL(ar.weekday_overtime_hours,        0)
+                      +NVL(ar.holiday_overtime_hours,        0)
+                      +NVL(ar.public_holiday_overtime_hours, 0)         AS overtime_hours        /* Over Time */
+
+                     , NVL(ar.weekday_night_overtime_hours,   0)
+                      +NVL(ar.weekday_ot_af_night_work_hours, 0)
+                      +NVL(ar.holiday_night_overtime_hours,   0)
+                      +NVL(ar.public_holiday_night_ot_hours,  0)        AS night_overtime_hours  /* Over Time at Night */
+
+                     , NVL(ar.normal_night_overtime_hours, 0)           AS night_hours           /* Night Time */
+                     , ar.time_attend_input_reason_desc                 AS input_reason
+                     ,(SELECT cc.time_and_attendance_short_name FROM tb_att_code_c cc WHERE cc.subsidiary_code = ar.subsidiary_code AND cc.time_and_attendance_code = ar.time_and_attendance_code) AS attendance_name
+                     , ar.time_attend_detail_code                       AS attendance_detail_code
+                     ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', ar.time_attend_detail_code, NULL, #{USER_SESSION.languageCode}) FROM dual) AS attendance_detail_name
+
+                     , ar.evening_meal_flag                                          AS evening_meal_flag
+                     , TO_CHAR(ar.tardy_hours,                            'FM990.0') AS tardy_hours
+                     , TO_CHAR(ar.early_leave_hours,                      'FM990.0') AS early_leave_hours
+                     , TO_CHAR(ar.going_out_hours,                        'FM990.0') AS going_out_hours
+                     , TO_CHAR(NVL(ar.weekday_overtime_hours,         0), 'FM990.0') AS weekday_overtime_hours
+                     , TO_CHAR(NVL(ar.holiday_overtime_hours,         0), 'FM990.0') AS holiday_overtime_hours
+                     , TO_CHAR(NVL(ar.public_holiday_overtime_hours,  0), 'FM990.0') AS public_holiday_overtime_hours
+                     , TO_CHAR(NVL(ar.weekday_night_overtime_hours,   0), 'FM990.0') AS weekday_night_overtime_hours
+                     , TO_CHAR(NVL(ar.weekday_ot_af_night_work_hours, 0), 'FM990.0') AS weekday_ot_af_night_work_hours
+                     , TO_CHAR(NVL(ar.holiday_night_overtime_hours,   0), 'FM990.0') AS holiday_night_overtime_hours
+                     , TO_CHAR(NVL(ar.public_holiday_night_ot_hours,  0), 'FM990.0') AS public_holiday_night_ot_hours
+
+                     , NULL AS request_master_id
+                     , NULL AS request_code
+
+                     , /* 승인라인 결재상태가 Wait for Approval(2) 이고, 결재 가능한 실적 근태일이면서 결재가능시간 이전인 경우만 결재가능 Y, 그외는 결재불가능 N */
+                       'N' AS wait_approval_flag
+
+                     , 0 AS approver_cnt
+
+                     , NULL AS approval_comment1
+                     , NULL AS approval_comment2
+
+                     /* ID Card 출입시간이 출근시간 이후이고, ID Card 퇴근시간이 퇴근시간 이전인 경우 적색 표시. 출근시간 : work_start_time, 퇴근시간 : 단부제:출근시간+9시간, 교대제:출근시간+12 */
+                     <![CDATA[
+                     ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN' ) >= TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+                                        AND lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') <  lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') THEN 'Y' /*HMT_20210315*/
+                                   ELSE 'N'
+                              END
+                       FROM   dual) AS in_out_time_red_flag /* 출퇴근시간 적색표시여부 */
+                     ]]>
+                     ,(SELECT DECODE(application_user_id, 247970, 'SYS_ADMIN', (SELECT full_name_local FROM emp_master WHERE employee_number = user_name))
+                         FROM lgcom_user_m
+                        WHERE application_user_id = ar.last_update_user_id) AS last_updated_by /* 최종 수정자 */
+                FROM   tb_att_result_n          ar   /* 실적근태 */
+                     , emp_master               em   /* 임직원마스터 */
+                     , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{planYyyymmdd}, 'DDMMYYYY'), 'RESULT', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt /* 결재가능일자 확인하기 위한 join */
+
+                WHERE  ar.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                AND    ar.time_and_attendance_date = (TO_DATE(#{planYyyymmdd}, 'DDMMYYYY')-1) /* 계획-1일의 실적 조회 */
+                AND    em.employee_number          = ar.employee_no
+
+                AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+
+                AND    em.assignment_category      = 'LGD_OW' /* 사무직만 조회 */
+
+                AND    dt.time_and_attendance_date = ar.time_and_attendance_date
+                AND    ar.time_and_attendance_code NOT IN ( 'US', 'PS' )
+                AND    ar.progress_status_code IS NULL
+                AND    ar.employee_no IN (
+                                          SELECT /*+ push_subq */
+                                                 em.employee_number
+                                          FROM   emp_master em
+                                          WHERE  em.assignment_category = 'LGD_OW'
+                                          AND    (em.date_retire IS NULL OR em.date_retire >= TRUNC(SYSDATE))
+                                          AND    #{LGVHR_PROJECT_SESSION.employeeNo} IN ( em.attribute1, em.attribute2 )    /* 로긴자 사번 */
+                                         )
+          /* 결재자가 동일한 경우 처리하기 위한 group by */
+        GROUP BY ar.employee_no
+             , em.full_name_local
+             , em.org_name_local
+             , em.grade_title
+
+             , ar.subsidiary_code
+             , TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY')
+             , lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN')
+             , lgvatt_common_pkg.get_idcard_inout_time (ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT')
+             , ar.time_and_attendance_code
+             , ar.work_hours
+              -NVL(ar.tardy_hours,                   0)
+              -NVL(ar.early_leave_hours,             0)
+              -NVL(ar.going_out_hours,               0)
+             , NVL(ar.weekday_overtime_hours,        0)
+              +NVL(ar.holiday_overtime_hours,        0)
+              +NVL(ar.public_holiday_overtime_hours, 0)
+
+             , NVL(ar.weekday_night_overtime_hours,   0)
+              +NVL(ar.weekday_ot_af_night_work_hours, 0)
+              +NVL(ar.holiday_night_overtime_hours,   0)
+              +NVL(ar.public_holiday_night_ot_hours,  0)
+
+             , NVL(ar.normal_night_overtime_hours, 0)
+             , ar.time_attend_input_reason_desc
+             , ar.time_attend_detail_code
+
+             , ar.evening_meal_flag
+             , TO_CHAR(ar.tardy_hours,                            'FM990.0')
+             , TO_CHAR(ar.early_leave_hours,                      'FM990.0')
+             , TO_CHAR(ar.going_out_hours,                        'FM990.0')
+             , TO_CHAR(NVL(ar.weekday_overtime_hours,         0), 'FM990.0')
+             , TO_CHAR(NVL(ar.holiday_overtime_hours,         0), 'FM990.0')
+             , TO_CHAR(NVL(ar.public_holiday_overtime_hours,  0), 'FM990.0')
+             , TO_CHAR(NVL(ar.weekday_night_overtime_hours,   0), 'FM990.0')
+             , TO_CHAR(NVL(ar.weekday_ot_af_night_work_hours, 0), 'FM990.0')
+             , TO_CHAR(NVL(ar.holiday_night_overtime_hours,   0), 'FM990.0')
+             , TO_CHAR(NVL(ar.public_holiday_night_ot_hours,  0), 'FM990.0')
+             , TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+             , lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') /*HMT_20210315*/
+             , ar.last_update_user_id
+            )
+            SELECT att_e.employee_no
+                 , att_e.employee_name
+                 , att_e.organization_name
+                 , att_e.grade_title
+                 ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', att_e.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+
+                 , att_p.attendance_yyyymmdd       AS attendance_yyyymmdd_plan /* 계획근태일자 */
+                 , att_p.attendance_code           AS attendance_code_plan
+                 , att_p.overtime_hours            AS overtime_hours_plan
+                 , att_p.evening_meal_flag         AS evening_meal_flag_plan
+                 , att_p.input_reason              AS input_reason_plan
+                 , att_p.attendance_name           AS attendance_name_plan
+                 , att_p.attendance_detail_code    AS attendance_detail_code_plan
+                 , att_p.attendance_detail_name    AS attendance_detail_name_plan
+
+                 , att_p.request_master_id         AS request_master_id_plan
+                 , att_p.request_code              AS request_code_plan
+                 , att_p.wait_approval_flag        AS wait_flag_plan
+
+                 , att_r.attendance_yyyymmdd       AS attendance_yyyymmdd_result /* 실적근태일자 */
+                 , att_r.in_time                   AS in_time_result /* 출근시간 */
+                 , att_r.out_time                  AS out_time_result /* 퇴근시간 */
+                 , att_r.attendance_code           AS attendance_code_result
+                 , att_r.work_hours                AS work_hours_result
+                 , att_r.overtime_hours            AS overtime_hours_result /* Over Time */
+                 , att_r.night_overtime_hours      AS night_overtime_hours_result /* Over Time at Night */
+                 , att_r.night_hours               AS night_hours_result /* Night Time */
+                 , att_r.input_reason              AS input_reason_result
+                 , att_r.attendance_name           AS attendance_name_result
+                 , att_r.attendance_detail_code    AS attendance_detail_code_result
+                 , att_r.attendance_detail_name    AS attendance_detail_name_result
+                 , att_r.evening_meal_flag         AS evening_meal_flag_result
+                 , att_r.tardy_hours               AS tardy_hours_result
+                 , att_r.early_leave_hours         AS early_leave_hours_result
+                 , att_r.going_out_hours           AS going_out_hours_result
+                 /* OVER TIME SUM */
+                 , att_r.weekday_overtime_hours
+                 , att_r.holiday_overtime_hours
+                 , att_r.public_holiday_overtime_hours
+                 /* OVER TIME SUM */
+                 /* NIGHT OVER TIME SUM */
+                 , att_r.weekday_night_overtime_hours
+                 , att_r.weekday_ot_af_night_work_hours
+                 , att_r.holiday_night_overtime_hours
+                 , att_r.public_holiday_night_ot_hours
+                 /* NIGHT OVER TIME SUM */
+
+                 , att_r.request_master_id       AS request_master_id_result
+                 , att_r.request_code            AS request_code_result
+                 , att_r.wait_approval_flag      AS wait_flag_result
+                 , att_r.last_updated_by         AS last_updated_by /* 최종 수정자 */
+                 , att_r.in_out_time_red_flag    AS in_out_time_red_flag_result /* 출퇴근시간 적색표시 여부 */
+
+           , att_p.approver_cnt            AS approver_cnt_plan       /* 요청서별 결재자로 등록된 건수 */
+           , att_p.approval_comment1       AS approval_comment1_plan  /* 결재자의 1차결재의견 */
+           , att_p.approval_comment2       AS approval_comment2_plan  /* 결재자의 2차결재의견 */
+
+           , att_r.approver_cnt            AS approver_cnt_result
+           , att_r.approval_comment1       AS approval_comment1_result
+           , att_r.approval_comment2       AS approval_comment2_result
+
+            FROM   (SELECT employee_no, employee_name, organization_name, grade_title FROM att_result
+                    UNION
+                    SELECT employee_no, employee_name, organization_name, grade_title FROM att_plan p
+                   ) att_e
+                  ,att_plan   att_p
+                  ,att_result att_r
+            WHERE  att_e.employee_no = att_p.employee_no(+) /* 계획, 실적 모두 있는 경우 + 계획 없이 실적만 있는 경우 */
+            AND    att_e.employee_no = att_r.employee_no    /* 계획, 실적 모두 있는 경우 + 실적 없이 계획만 있는 경우 생략 */
+            ORDER BY att_e.organization_name, att_e.employee_name
+    </select>
+
+    <!-- 실적근태 결재자와 계획근태 결재자가 동일한지 체크 -->
+    <select id="retrievePlanApproverSameCheck" parameterType="LGCOMData" resultType="LGCOMData">
+    <![CDATA[
+        SELECT  /* LGVATT40010.retrievePlanApproverSameCheck */
+                NVL((
+                     SELECT 'Y' AS approver_same_flag
+                     FROM   lgcom_approval_status_n as_p
+                          , lgcom_approval_status_n as_r
+                     WHERE  as_p.request_master_id = #{requestMasterIdPlan}
+                     AND    as_p.request_code      = #{requestCodePlan}
+                     AND    as_r.request_master_id = #{requestMasterResult}
+                     AND    as_r.request_code      = #{requestCodeResult}
+                     AND    as_r.approval_seqs     = as_p.approval_seqs
+                     AND    as_r.process_seq_no    = as_p.process_seq_no
+                     AND    as_r.user_no           = as_p.user_no
+                     HAVING COUNT(as_p.request_master_id) = (SELECT COUNT(as_r0.request_master_id) /* 실적결재자 건수 와 실적결재자와 동일한 계획결재자 건수가 동일한지 체크 */
+                                                             FROM   lgcom_approval_status_n as_r0
+                                                             WHERE  as_r0.request_master_id = #{requestMasterResult}
+                                                             AND    as_r0.request_code      = #{requestCodeResult}
+                                                             )
+                    ), 'N') AS approver_same_flag /* 실적결재자와 계획결재자가 동일한지 여부 */
+              ,(SELECT DECODE(as_p0.status_code, '20', 'Y', 'N') /* 계획근태가 결재요청(20)인 경우만 삭제하기 위한 값 */
+                FROM   lgcom_approval_request_n as_p0
+                WHERE  as_p0.request_master_id = #{requestMasterIdPlan}
+                AND    as_p0.request_code      = #{requestCodePlan}
+               ) AS approval_wait_flag /* 계획결재 대기상태여부 */
+        FROM    DUAL
+    ]]>
+    </select>
+
+    <!-- 계획근태 결재자에 등록할 실적근태 결재자 조회 -->
+    <select id="retrieveResultApproverList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT40010.retrieveResultApproverList */
+               #{requestMasterIdPlan} AS request_master_id    /* 요청마스터아이디 */
+             , #{requestCodePlan}     AS request_code         /* 요청코드 */
+             , organization_id        AS ou_id                /* 조직아이디 */
+             , user_no                AS employee_no          /* 사용자번호. 결재자사번 */
+             , approval_action_code                           /* 결재액션코드 */
+             , approval_duty_code     AS position_name        /* 결재의무코드 */
+             , settlement_delete_flag                         /* 결제삭제여부 */
+
+        FROM   lgcom_approval_status_n
+        WHERE  request_master_id                      = #{requestMasterIdResult}
+        AND    request_code                           = #{requestCodeResult}
+    </select>
+
+    <!-- 승인 또는 반려 후 근태 계획 테이블에 결재상태 반영 -->
+    <update id="updateAttendancePlanApprovalInfo" parameterType="LGCOMData">
+        UPDATE /* LGVATT40010.updateAttendancePlanApprovalInfo */
+               tb_att_plan_n ar
+        SET    progress_status_code                   = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = ar.approval_request_id AND request_code = ar.request_code)    /* 진행상태코드 */
+             , last_update_user_id                    = #{sessionAppUserId}           /* 최종수정사용자아이디 */
+             , last_update_date                       = SYSDATE                                     /* 최종수정일자 */
+        WHERE  subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}      /* 해외법인코드 */
+        AND    employee_no                            = #{employeeNo}          /* 사원번호 */
+        AND    time_and_attendance_date               = TO_DATE(#{attendanceYyyymmddPlan}, 'DDMMYYYY')   /* 근태일자 */
+    </update>
+
+    <!-- 승인 또는 반려 후 근태 실적 테이블에 결재상태 반영 -->
+    <update id="updateAttendanceResultApprovalInfo" parameterType="LGCOMData">
+        UPDATE /* LGVATT40010.updateAttendanceResultApprovalInfo */
+               tb_att_result_n ar
+        SET    progress_status_code                   = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = ar.approval_request_id AND request_code = ar.request_code)    /* 진행상태코드 */
+             , last_update_user_id                    = #{sessionAppUserId}                         /* 최종수정사용자아이디 */
+             , last_update_date                       = SYSDATE                                     /* 최종수정일자 */
+        WHERE  subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}      /* 해외법인코드 */
+        AND    employee_no                            = #{employeeNo}          /* 사원번호 */
+        AND    time_and_attendance_date               = TO_DATE(#{attendanceYyyymmddResult}, 'DDMMYYYY')   /* 근태일자 */
+    </update>
+
+    <!-- 메일발송 내용 조회 -->
+    <select id="retrieveMailContent" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT40010.retrieveMailContent */
+               rs.mail_code
+             , rs.session_app_user_id
+             , rs.subsidiary_code
+             , rs.language_code
+             , rs.receipt_info
+             <![CDATA[
+             , REPLACE(REPLACE(mc.mail_detail_content, '[approverInfo]'
+                                                     , NVL(#{USER_SESSION.fullNameLocal}, '') || ' ' || NVL(#{USER_SESSION.titleName}, '')), '[rejectReason]'
+                                                                                                                                           , REPLACE(#{comment}, CHR(10), '<br/>')) AS mail_mapp_data
+             ]]>
+        FROM   (
+                SELECT
+                     <![CDATA[
+                       CASE WHEN (NVL(#{requestMasterIdPlan}, 'X') <> 'X' AND #{waitFlagPlan} =  'Y') AND (NVL(#{requestMasterIdResult}, 'X') <> 'X' AND #{waitFlagResult} =  'Y') THEN 'DAY_ATT_PLAN_REJECT'
+                            WHEN (NVL(#{requestMasterIdPlan}, 'X') <> 'X' AND #{waitFlagPlan} =  'Y') AND (NVL(#{requestMasterIdResult}, 'X') =  'X' OR  #{waitFlagResult} <> 'Y') THEN 'DAY_ATT_PLAN_REJECT'
+                            WHEN (NVL(#{requestMasterIdPlan}, 'X') =  'X' OR  #{waitFlagPlan} <> 'Y') AND (NVL(#{requestMasterIdResult}, 'X') <> 'X' AND #{waitFlagResult} =  'Y') THEN 'DAY_ATT_PLAN_REJECT'
+                            ELSE ''
+                       END                                     AS mail_code /* 메일템플릿 코드명 */
+                     ]]>
+                     , #{USER_SESSION.applicationUserId}       AS session_app_user_id
+                     , #{LGVHR_PROJECT_SESSION.subsidiaryCode} AS subsidiary_code
+                     , #{USER_SESSION.languageCode}            AS language_code
+                     , #{employeeNo}                           AS receipt_info
+                     , '{'|| '"subject"' || ':' || '{' || '"title"' || ':' || '""' ||
+                                                   '}' || ','
+                          || '"data1"'   || ':' || '{' || '"approverInfo"' || ':' || '"' || NVL(#{USER_SESSION.fullNameLocal}, '') || ' ' || NVL(#{USER_SESSION.titleName}, '') || '"' ||
+                                                          ',' ||
+                                                          '"rejectReason"' || ':' || '"' || #{comment} || '"' ||
+                                                   '}' ||
+                        '}' AS mail_mapp_data
+                FROM   DUAL
+               ) rs
+             , lgcom_common_code_c cc
+             , lgcom_mail_content_n mc
+        WHERE  cc.code_type_code = 'LGVHR_MAIL_TEMPLATE_LIST'
+        AND    cc.common_code    = rs.mail_code
+        AND    mc.mail_id        = TO_NUMBER(cc.code_data1_value)
+        AND    mc.language_code  = rs.language_code
+    </select>
+
+    <!-- 2018.03.12 [베트남 급여근태 고도화] 메뉴에 접근 권한이 있는 사용자인지 체크 -->
+    <select id="retrieveMenuAuthCheckData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT40010.retrieveMenuAuthCheckData */
+               CASE WHEN COUNT(lum.user_name) > 0 THEN 'Y' ELSE 'N' END AS auth_flag /* Y:권한있는 경우 */
+
+        FROM   lgcom_menu_m lmm
+             , lgcom_role_menu_n lrm
+             , lgcom_user_role_n lurn
+             , lgcom_user_m lum
+
+        WHERE  lmm.program_id = 'LGVATT40010'
+        AND    lrm.menu_id = lmm.menu_id
+        AND    TRUNC(SYSDATE) BETWEEN lurn.apply_start_date AND NVL(lurn.apply_end_date, TRUNC(SYSDATE))
+        AND    lurn.role_code = lrm.role_code
+        AND    lum.user_name = #{LGVHR_PROJECT_SESSION.employeeNo}
+        AND    TRUNC(SYSDATE) BETWEEN lum.apply_start_date AND lum.apply_end_date
+        AND    lum.application_user_id = lurn.application_user_id
+        AND    NVL(#{container}, 'N')      = 'Y'
+        AND    NVL(#{letsFg}, 'N')         = 'Y' /* Let's에서 직접호출된 경우 */
+        <choose>
+            <when test="aprSt eq '1'.toString()">
+            <![CDATA[
+        AND    SYSDATE BETWEEN TRUNC(SYSDATE)+INTERVAL '13:30:00' HOUR TO SECOND + INTERVAL '-20' MINUTE AND TRUNC(SYSDATE)+INTERVAL '13:30:59.999' HOUR TO SECOND(3) + INTERVAL '+20' MINUTE /* 1:30. 결재자 2명이고 1차 결재인 경우 Part Leader로 보고 1:30에 띄움. Let's에서 1:30, 3:30 호출됨. */
+            ]]>
+            </when>
+            <when test="aprSt eq 'F'.toString()">
+        AND    SYSDATE BETWEEN TRUNC(SYSDATE)+INTERVAL '15:00:00' HOUR TO SECOND + INTERVAL '-20' MINUTE AND TRUNC(SYSDATE)+INTERVAL '15:00:59.999' HOUR TO SECOND(3) + INTERVAL '+20' MINUTE /* 3:00. 결재자 인원수와 결재단계가 같은 경우 최종 결재자이므로 Team Leader로 보고 3시에 띄움. Let's에서 3:00, 5:00 호출됨. */
+            </when>
+            <otherwise>
+            1=2
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 2018.03.12 [베트남 급여근태 고도화] 결재건이 있는지 여부 조회 -->
+    <select id="retireveDirectOpenData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT40010.retireveDirectOpenData */
+               CASE WHEN COUNT(rs.employee_no) > 0 THEN 'Y' ELSE 'N' END AS popup_open_flag
+        FROM   (
+                SELECT larn.request_master_id
+                      , larn.request_code
+                      , ar.employee_no
+                      , lasn.approval_seqs
+                      , count(lasn_cnt.request_master_id) AS approval_cnt
+
+                FROM   tb_att_result_n          ar   /* 실적근태 */
+                     , emp_master               em   /* 임직원마스터 */
+                     , lgcom_approval_request_n larn /* 공통결재마스터(실적) */
+                     , lgcom_approval_status_n  lasn /* 공통결재자별 결재상태(실적) */
+                     , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TRUNC(SYSDATE), 'RESULT', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dt /* 결재가능일자 확인하기 위한 join */
+                     , lgcom_approval_status_n  lasn_cnt /* 결재자 인원수 카운트용 */
+
+                WHERE  ar.subsidiary_code          = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                AND    em.employee_number          = ar.employee_no
+                <![CDATA[
+                AND   (em.date_retire IS NULL OR em.date_retire >= TRUNC(sysdate)) /* 재직자만 */
+                ]]>
+                AND    em.assignment_category      = 'LGD_OW' /* 사무직만 조회 */
+                AND    larn.request_master_id      = ar.approval_request_id
+                AND    larn.request_code           = ar.request_code
+                AND    lasn.request_master_id      = larn.request_master_id
+                AND    lasn.request_code           = larn.request_code
+                AND    lasn.process_seq_no         = larn.process_status_code
+                AND    lasn.approval_action_code   = 'APPROVAL' /* 결재자만 조회 */
+                AND    lasn.user_no                = #{LGVHR_PROJECT_SESSION.employeeNo}
+                AND    lasn.progress_code          = '0002' /* 결재자 */
+                AND    lasn.request_code           = '10001'
+                AND    lasn.approval_status_code   = '2' /* Wait for Approval */
+                AND    dt.time_and_attendance_date = ar.time_and_attendance_date
+                AND    NVL(#{container}, 'N')      = 'Y'
+                AND    NVL(#{letsFg}, 'N')         = 'Y' /* Let's에서 직접호출된 경우 */
+
+                AND    lasn_cnt.request_master_id      = larn.request_master_id
+                AND    lasn_cnt.request_code           = larn.request_code
+                AND    lasn_cnt.approval_action_code   = 'APPROVAL' /* 결재자만 조회 */
+                AND    lasn_cnt.progress_code          = '0002' /* 결재자 */
+                <choose>
+                    <when test="aprSt eq '1'.toString()">
+                    <![CDATA[
+                AND    SYSDATE BETWEEN TRUNC(SYSDATE)+INTERVAL '13:30:00' HOUR TO SECOND + INTERVAL '-20' MINUTE AND TRUNC(SYSDATE)+INTERVAL '13:30:59.999' HOUR TO SECOND(3) + INTERVAL '+20' MINUTE /* 1:30. 결재자 2명이고 1차 결재인 경우 Part Leader로 보고 1:30에 띄움. Let's에서 1:30, 3:30 호출됨. */
+                    ]]>
+                    </when>
+                    <when test="aprSt eq 'F'.toString()">
+                AND    SYSDATE BETWEEN TRUNC(SYSDATE)+INTERVAL '15:00:00' HOUR TO SECOND + INTERVAL '-20' MINUTE AND TRUNC(SYSDATE)+INTERVAL '15:00:59.999' HOUR TO SECOND(3) + INTERVAL '+20' MINUTE /* 3:00. 결재자 인원수와 결재단계가 같은 경우 최종 결재자이므로 Team Leader로 보고 3시에 띄움. Let's에서 3:00, 5:00 호출됨. */
+                    </when>
+                    <otherwise>
+                    1=2
+                    </otherwise>
+                </choose>
+
+                GROUP BY larn.request_master_id
+                       , larn.request_code
+                       , ar.employee_no
+                       , lasn.approval_seqs
+
+                <choose>
+                    <when test="aprSt eq '1'.toString()">
+                    <![CDATA[
+                HAVING   count(lasn_cnt.request_master_id) > 1 AND lasn.approval_seqs < count(lasn_cnt.request_master_id) /* 1:30. 결재자 2명이고 1차 결재인 경우 Part Leader로 보고 1:30에 띄움 */
+                    ]]>
+                    </when>
+                    <when test="aprSt eq 'F'.toString()">
+                HAVING   count(lasn_cnt.request_master_id) = lasn.approval_seqs /* 3:00. 결재자 인원수와 결재단계가 같은 경우 최종 결재자이므로 Team Leader로 보고 3시에 띄움 */
+                    </when>
+                    <otherwise>
+                    1=2
+                    </otherwise>
+                </choose>
+                ) rs
+
+    </select>
+
+</mapper>

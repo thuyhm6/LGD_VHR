@@ -1,0 +1,598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00210">
+	<!-- My Menu를 사용한 메뉴 조회 : : My Menu Use = Y인 경우 -->
+	<select id="retrieveMenuList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /* LGSYSC00210.retrieveMenuList */
+		       m.*
+		  FROM (
+		                   SELECT ma.*
+		                     FROM (
+		                           SELECT lmm.*
+		                                , lfs.sort_order_no AS user_sort_order_no
+		                                , (SELECT DECODE(COUNT(1), 1, 'Y', 'N')
+		                                     FROM LGCOM_PROGRAM_USE_HELP_N
+		                                    WHERE program_id = lmm.program_id
+		                                      AND ROWNUM = 1) AS user_manual_flag
+		                                , pgm.system_code AS program_system_code
+		                                , pgm.program_type_code
+		                                , pgm.link_url_addr
+		                             FROM (
+		                                   SELECT common_code AS menu_id
+		                                        , common_code AS system_code
+		                                        , NULL AS module_code
+		                                        , NULL AS high_menu_id
+		                                        ,(SELECT common_code_name
+		                                            FROM LGCOM_COMMON_CODE_MULTI_LANG_C
+		                                           WHERE code_type_code = 'LGCOM_SYSTEM_CODE'
+		                                             AND common_code = lc.common_code
+		                                             AND language_code = 'en') AS menu_name
+		                                        , NULL AS menu_desc
+		                                        , NULL AS url_addr
+		                                        , NULL AS program_id
+		                                        , 0 AS menu_level_no
+		                                     FROM LGCOM_COMMON_CODE_C lc
+		                                    WHERE code_type_code = 'LGCOM_SYSTEM_CODE'
+		                                      AND use_flag = 'Y'
+		                                      AND NVL(apply_start_date, SYSDATE) < (SYSDATE + 1)
+		                                      AND NVL(apply_end_date, SYSDATE) >= SYSDATE
+		                                   UNION
+		                                   SELECT a.menu_id
+		                                        , a.system_code
+		                                        , a.module_code
+		                                        , DECODE(a.menu_level_no, 1,a.system_code,a.high_menu_id) AS high_menu_id
+		                                        , lmm.menu_name
+		                                        , a.menu_desc
+		                                        , a.url_addr
+		                                        , a.program_id
+		                                        , a.menu_level_no
+		                                     FROM LGCOM_MENU_M a
+		                                        , LGCOM_MENU_MULTI_LANG_N lmm
+		                                        , (
+		                                           SELECT role_code, org_id, menu_id
+		                                             FROM (
+		                                                   SELECT a.role_code
+		                                                        , NULL AS org_id
+		                                                        , b.menu_id
+		                                                     FROM LGCOM_USER_ROLE_N a
+		                                                        , LGCOM_ROLE_MENU_N b
+		                                                    WHERE a.application_user_id = #{USER_SESSION.applicationUserId}
+		                                                      AND a.role_code = b.role_code
+		                                                      AND NVL(apply_start_date,SYSDATE) <= SYSDATE
+		                                                      AND NVL(apply_end_date,SYSDATE)   >= SYSDATE
+		                                                      AND NOT EXISTS (SELECT '1'
+		                                                                        FROM LGCOM_ROLE_BIZ_ORG_N
+		                                                                       WHERE organization_type_code = 'C'
+		                                                                         AND role_code              = a.role_code)
+		                                                   UNION
+		                                                   SELECT a.role_code
+		                                                        , b.company_id AS org_id
+		                                                        , c.menu_id
+		                                                     FROM LGCOM_USER_ROLE_N    a
+		                                                        , LGCOM_ROLE_BIZ_ORG_N b
+		                                                        , LGCOM_ROLE_MENU_N    c
+		                                                    WHERE a.role_code = b.role_code
+		                                                      AND a.role_code = c.role_code
+		                                                      AND a.application_user_id = #{USER_SESSION.applicationUserId}
+		                                                      AND NVL(a.apply_start_date,SYSDATE) <= SYSDATE
+		                                                      AND NVL(a.apply_end_date,SYSDATE)   >= SYSDATE
+		                                                      AND b.organization_type_code = 'C'
+		                                                   )
+		                                             WHERE (org_id IS NULL OR org_id = #{USER_SESSION.defaultOrgId})
+		                                           ) b
+		                                    WHERE a.menu_id      = b.menu_id
+		                                      AND a.menu_id      = lmm.menu_id
+                                              AND lmm.language_code = #{USER_SESSION.languageCode}
+		                                      AND a.display_flag = 'Y'
+		                                  ) lmm
+		                                , LGCOM_FULL_SYSTEM_FAVOR_HIER_N lfs
+		                                , LGCOM_PROGRAM_M pgm
+		                            WHERE lmm.menu_id = lfs.menu_id
+		                              AND lmm.program_id = pgm.program_id(+)
+		                              AND lfs.application_user_id = #{USER_SESSION.applicationUserId}
+		                          ) ma
+		               START WITH ma.menu_level_no = 0
+		         CONNECT BY PRIOR ma.menu_id = ma.high_menu_id
+		        ORDER SIBLINGS BY ma.user_sort_order_no, ma.menu_name
+		       ) m
+		 WHERE m.menu_level_no <> 0
+	]]>
+	</select>
+
+	<select id="retrieveMenuInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /*LGSYSC00210.retrieveMenuInfo*/
+		       LMM.MENU_ID,
+		       LMM.MENU_NAME,
+		       LMM.SYSTEM_CODE,
+		       LMM.MODULE_CODE,
+           LMM.HIGH_MENU_ID,
+           LMM.MENU_DESC,
+           LMM.MENU_LEVEL_NO,
+           LMM.SORT_ORDER_NO,
+           LMM.PROGRAM_ID
+      FROM LGCOM_MENU_M LMM
+     WHERE LMM.DISPLAY_FLAG = 'Y'
+       AND LMM.MENU_ID = #{menuId}
+	</select>
+
+	<!-- Default System으로 조회한 사용자 메뉴 : My Menu Use = N인 경우 -->
+	<select id="retrieveMenuListByRole" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGSYSC00210.retrieveMenuListByRole */
+		         user_menu_yn
+		       ,(SELECT DECODE(COUNT(1), 1, 'Y', 'N')
+                   FROM LGCOM_PROGRAM_USE_HELP_N um
+                  WHERE program_id = men.program_id
+                    AND ROWNUM = 1) AS user_manual_flag   
+		       , application_user_id
+		       , menu_id
+		       , menu_name
+		       , system_code
+		       , module_code
+		       , high_menu_id
+		       , program_id
+		       , program_system_code
+		       , program_module_code
+		       , program_type_code
+		       , link_url_addr
+		       , menu_desc
+		       , menu_level_no
+		       , sort_order_no
+		       , menu_order_by
+		    FROM (SELECT DECODE((SELECT COUNT(1)
+		                           FROM LGCOM_FULL_SYSTEM_FAVOR_HIER_N
+		                          WHERE application_user_id = lu.application_user_id
+		                            AND menu_id = lu.menu_id),1,'Y','N') AS user_menu_yn
+		               , application_user_id
+		               , menu_id
+		               , menu_name
+		               , system_code
+		               , module_code
+		               , high_menu_id
+		               , program_id
+		               , program_system_code
+		               , program_module_code
+		               , program_type_code
+		               , link_url_addr
+		               , menu_desc
+		               , menu_level_no
+		               , sort_order_no
+		               , menu_order_by
+		            FROM LGCOM_USER_MENU_INFO_V lu
+		           WHERE lu.language_code       = #{USER_SESSION.languageCode}
+		             AND lu.system_code         = UPPER( #{USER_SESSION.systemCode} )  /* Session 에 있는 기본 시스템 정보를 활용한다. */
+		             AND lu.application_user_id = #{USER_SESSION.applicationUserId}
+		         ) men
+		ORDER BY menu_order_by
+	</select>
+
+		<!-- 인트로 화면 : 사용자 즐겨찾기 목록 조회 -->
+	<select id="retrieveTop10ListForMain" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /*LGSYSC00210.retrieveTop10ListForMain*/
+		       fav.menu_id
+		      ,mmm.menu_name
+		      ,men.program_id
+		FROM   lgcom_system_user_favorites_n fav
+		      ,lgcom_menu_m                  men
+		      ,lgcom_menu_multi_lang_n       mmm
+	     WHERE fav.menu_id = men.menu_id
+	       AND fav.favorites_creation_class_code in ( 'USER_SYSTEM_FAVORITE' )
+	       AND fav.system_code = UPPER( #{USER_SESSION.systemCode} )
+	       AND men.menu_id = mmm.menu_id
+	       AND mmm.language_code = #{USER_SESSION.languageCode}
+	     ORDER BY fav.sort_order_no
+	</select>
+
+
+		<!-- 인트로 화면 :  counterWidget에 배열할 숫자목록 인출  -->
+	<select id="retrieveWidgetNumbers" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+        SELECT 'USER' AS item_type
+		      ,COUNT(DISTINCT lsa.application_user_id) item_count
+		FROM   lgcom_system_access_logging_n lsa
+		      ,lgcom_user_m                  lu
+		WHERE  lsa.application_user_id = lu.application_user_id
+		AND    lsa.access_date >= TRUNC(SYSDATE)
+		AND    lsa.access_date < SYSDATE + 1
+		UNION ALL
+		SELECT 'ROLE' AS ITEM_TYPE,
+		       COUNT(*) AS ITEM_COUNT
+		  FROM LGCOM_ROLE_M
+		 WHERE NVL( TO_CHAR(APPLY_END_DATE,'YYYY-MM-DD'), '9999-12-31') > TO_CHAR( SYSDATE, 'YYYY-MM-DD' )
+		 UNION ALL
+		 SELECT 'PROGRAM' AS ITEM_TYPE,
+		       COUNT(*) AS ITEM_COUNT
+		  FROM LGCOM_PROGRAM_M
+		 WHERE USE_FLAG = 'Y'
+     ]]>
+	</select>
+
+	<!-- 메인 counterWidget에 배열할 숫자목록 인출  -->
+	<select id="retrieveWidgetSystemList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	SELECT COMMON_CODE AS "CODE",
+	       CODE_DATA1_VALUE AS "NAME"
+	  FROM LGCOM_COMMON_CODE_C
+	 WHERE CODE_TYPE_CODE = 'LGCOM_SYSTEM_CODE'
+	</select>
+
+	<!-- 메인 contact에 배열할 SM담당자 및 연락처 인출  -->
+	<select id="retrieveSystemContactUserList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	SELECT SM_NAME AS "NAME",
+	       PI_OFFICE_PHONE_NUMBER AS "PHONE"
+	  FROM LGCOM_SYSTEM_CONTACT_USER_V
+	</select>
+
+	<!-- 사용자 정보 수정 -->
+	<update id="updateUserThemeCode" parameterType="java.util.HashMap">
+		UPDATE LGCOM_USER_M
+		   SET SCREEN_DESIGN_THEME_ID       = #{themeCode}
+		     , LAST_UPDATED_BY     = #{USER_SESSION.applicationUserId}
+		     , LAST_UPDATE_DATE    = SYSDATE
+		WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+	</update>
+
+	<!-- 메인 counterWidget에 배열할 숫자목록 인출  -->
+	<select id="selectUserPopupHistory" parameterType="java.util.HashMap" resultType="LGCOMData">
+	/*LGSYSC00210.selectUserPopupHistory*/
+	SELECT BULLETIN_BOARD_NO
+	  FROM LGCOM_USER_BB_READ_LOG_N
+	 WHERE BULLETIN_BOARD_NO = #{bulletinBoardNo}
+	   AND APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+	</select>
+
+	<!-- 팝업의 게시물을 더이상 보지 않겠다고 확인 했는지를 기록하는 쿼리 -->
+	<insert id="insertUserPopupHistory" parameterType="java.util.HashMap">
+	/*LGSYSC00210.insertPopupHistory*/
+	INSERT INTO LGCOM_USER_BB_READ_LOG_N
+      (  APPLICATION_USER_ID
+        ,BULLETIN_BOARD_NO
+        ,READ_DATE
+        ,DISPLAY_FLAG
+	    ,CREATED_BY
+	    ,CREATION_DATE
+	    ,LAST_UPDATED_BY
+	    ,LAST_UPDATE_DATE  )
+	  VALUES
+	  (  #{USER_SESSION.applicationUserId}
+	    ,#{bulletinBoardNo}
+	    ,SYSDATE
+	    ,'Y'
+	    ,#{USER_SESSION.applicationUserId}
+	    ,SYSDATE
+	    ,#{USER_SESSION.applicationUserId}
+	    ,SYSDATE  )
+	</insert>
+
+	<!-- 팝업의 게시물을 더이상 보지 않겠다고 하자마자 바로 해제 하는 경우에 대응하는 쿼리  -->
+	<delete id="deleteUserPopupHistory" parameterType="java.util.HashMap">
+	/*LGSYSC00210.deleteUserPopupHistory*/
+		DELETE FROM LGCOM_USER_BB_READ_LOG_N
+		 WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+		   AND BULLETIN_BOARD_NO   = #{bulletinBoardNo}
+	</delete>
+
+	<!-- 첨부파일 목록을 조회 하기 위한 쿼리   -->
+	<select id="selectAttachmentListByFileGroupId" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+	      SELECT /* LGSYSC00210.selectAttachmentListByReqNumber */
+	             file_id,
+	             file_group_id,
+	             system_code,
+	             module_code,
+	             file_name,
+	             file_desc,
+	             file_size,
+	             file_location_info,
+	             #{downloadURL} || '/common/' ||  file_id AS download_url
+	        FROM lgcom_attach_file_info
+	       WHERE file_group_id = #{fileGroupId}
+	    ORDER BY file_id
+	]]>
+	</select>
+
+    <!-- 첨부파일 삭제 ( 파일 단독 ) -->
+    <delete id="deleteAttachFileInfo" parameterType="java.util.HashMap">
+        DELETE /*LGSYSC00210.deleteAttachFileInfo*/
+          FROM lgcom_attach_file_info
+         WHERE file_id = #{fileId}
+    </delete>
+
+
+    <!-- 첨부파일 삭제 -->
+    <update id="updateAttachFileInfo" parameterType="java.util.HashMap">
+        UPDATE /*LGSYSC00210.updateAttachFileInfo*/  lgcom_attach_file_info
+           SET file_desc = #{fileDesc}
+              ,last_updated_by = #{USER_SESSION.applicationUserId}
+              ,last_update_date = SYSDATE
+        WHERE file_id = #{fileId}
+    </update>
+
+    <!-- 첨부파일 삭제 ( 그룹 전체 삭제 )-->
+    <delete id="deleteAttachFilesByFileGroupId" parameterType="java.util.HashMap">
+        DELETE /*LGSYSC00210.deleteAttachFilesByFileGroupId*/
+          FROM LGCOM_ATTACH_FILE_INFO
+         WHERE file_group_id = #{fileGroupId}
+    </delete>
+
+
+    <!-- 엑셀 업로드 과정의 에러 갯수를 조회 함  -->
+    <select id="selectExcelUploadErrorCount" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+    /*LGSYSC00210.selectExcelUploadErrorCount*/
+		SELECT COUNT(SESSION_ID) ERROR_COUNT
+		  FROM LGCOM_IMPORT_INFO
+		 WHERE SESSION_ID = #{sessionId}
+		   AND ATTRIBUTE199 = 'Y'
+		   AND SEQ_NO <> '1'
+    ]]>
+    </select>
+
+    <!-- 엑셀 업로드 과정의 에러 항목의 목록을 조회 함  -->
+    <select id="selectExcelUploadErrorList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    /*LGSYSC00210.selectExcelUploadErrorList*/
+		SELECT *
+		  FROM (
+
+		SELECT SESSION_ID,
+		       SEQ_NO,
+               ATTRIBUTE200 AS ERROR_MESSAGE,
+	        <foreach collection="valueList" item="item" index="index" separator=" , ">
+	          ATTRIBUTE${index + 1}
+	        </foreach>
+	           , 'H' AS ROW_TYPE
+        	   , ATTRIBUTE198 AS PROGRAM_ID
+		  FROM LGCOM_IMPORT_INFO
+		 WHERE SESSION_ID = #{sessionId}
+		   AND SEQ_NO = 1
+		   AND ATTRIBUTE199 IS NULL
+
+		UNION ALL
+
+        SELECT SESSION_ID,
+               SEQ_NO,
+               ATTRIBUTE200 AS ERROR_MESSAGE,
+            <foreach collection="valueList" item="item" index="index" separator=" , ">
+              ATTRIBUTE${index + 1}
+            </foreach>
+               , 'H' AS ROW_TYPE
+               , ATTRIBUTE198 AS PROGRAM_ID
+          FROM LGCOM_IMPORT_INFO
+         WHERE SESSION_ID = #{sessionId}
+           AND ATTRIBUTE199 = 'H'
+
+        UNION ALL
+
+		SELECT SESSION_ID,
+		       SEQ_NO,
+		       ATTRIBUTE200 AS ERROR_MESSAGE,
+	        <foreach collection="valueList" item="item" index="index" separator=" , ">
+	          ATTRIBUTE${index + 1}
+	        </foreach>
+	            <![CDATA[
+	           , 'E' AS ROW_TYPE
+               , ATTRIBUTE198 AS PROGRAM_ID
+		  FROM LGCOM_IMPORT_INFO
+		 WHERE SESSION_ID = #{sessionId}
+		   AND ATTRIBUTE199 = 'Y'
+
+		)
+		ORDER BY SEQ_NO
+		    ]]>
+    </select>
+
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1,
+					            <foreach collection="valueList" item="item" index="index" separator=" , ">
+					              ATTRIBUTE${index + 2}
+					            </foreach>
+                                     )
+
+        SELECT *
+          FROM (
+
+        SELECT #{exportSsessionId},
+               #{USER_SESSION.applicationUserId},
+               SYSDATE,
+               1 AS SEQ_NO,
+               'KO16KSC5601',
+               'Error Message' AS ERROR_MESSAGE,
+            <foreach collection="valueList" item="item" index="index" separator=" , ">
+              ATTRIBUTE${index + 1}
+            </foreach>
+          FROM LGCOM_IMPORT_INFO
+         WHERE SESSION_ID = #{sessionId}
+           AND SEQ_NO = 1
+           AND ATTRIBUTE199 IS NULL
+
+        UNION ALL
+
+        SELECT #{exportSsessionId},
+               #{USER_SESSION.applicationUserId},
+               SYSDATE,
+               1 AS SEQ_NO,
+               'KO16KSC5601',
+               ATTRIBUTE200 AS ERROR_MESSAGE,
+            <foreach collection="valueList" item="item" index="index" separator=" , ">
+              ATTRIBUTE${index + 1}
+            </foreach>
+          FROM LGCOM_IMPORT_INFO
+         WHERE SESSION_ID = #{sessionId}
+           AND ATTRIBUTE199 = 'H'
+
+        UNION ALL
+
+        SELECT #{exportSsessionId},
+               #{USER_SESSION.applicationUserId},
+               SYSDATE,
+               SEQ_NO,
+               'KO16KSC5601',
+               ATTRIBUTE200 AS ERROR_MESSAGE,
+            <foreach collection="valueList" item="item" index="index" separator=" , ">
+              ATTRIBUTE${index + 1}
+            </foreach>
+          FROM LGCOM_IMPORT_INFO
+         WHERE SESSION_ID = #{sessionId}
+           AND ATTRIBUTE199 = 'Y'
+        )
+        ORDER BY SEQ_NO
+    </insert>
+
+	<!-- ################################################################################ -->
+	<!-- 2017.03.29. forain 신규 추가                                                     -->
+	<!-- ERP의 Temp 테이블이 아닌 LGCOM 전용의 Temp 테이블용                              -->
+	<!-- ################################################################################ -->
+	<!-- LGCOM 전용 템프 테이블에서 엑셀 업로드 과정의 에러 갯수를 조회 함  -->
+	<select id="selectExcelUploadErrorCountForLgcom" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGSYSC00210.selectExcelUploadErrorCountForLgcom */
+		       COUNT(session_id) AS error_count
+		  FROM LGCOM_IMPORT_N
+		 WHERE session_id   = #{sessionId}
+		   AND attribute199 = 'Y'
+		   AND seq_no       &lt;&gt; '1'
+	</select>
+
+	<!-- 엑셀 업로드 과정의 에러 항목의 목록을 조회 함  -->
+	<select id="selectExcelUploadErrorListForLgcom" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /*LGSYSC00210.selectExcelUploadErrorListForLgcom*/
+		         *
+		    FROM (
+		          SELECT session_id,
+		                 seq_no,
+		                 attribute200 AS error_message,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		                 attribute${index + 1}
+		</foreach>
+		               , 'H' AS row_type
+		               , attribute198 AS program_id
+		            FROM LGCOM_IMPORT_N
+		           WHERE session_id = #{sessionId}
+		             AND seq_no     = 1
+		             AND attribute199 IS NULL
+		          UNION ALL
+		          SELECT session_id,
+		                 seq_no,
+		                 attribute200 AS error_message,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		                 attribute${index + 1}
+		</foreach>
+		               , 'H' AS row_type
+		               , attribute198 AS program_id
+		            FROM LGCOM_IMPORT_N
+		          WHERE session_id   = #{sessionId}
+		            AND attribute199 = 'H'
+		          UNION ALL
+		          SELECT session_id,
+		                 seq_no,
+		                 attribute200 AS error_message,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		                 attribute${index + 1}
+		</foreach>
+		               , 'E' AS row_type
+		               , attribute198 AS program_id
+		            FROM LGCOM_IMPORT_N
+		           WHERE session_id = #{sessionId}
+		             AND attribute199 = 'Y'
+		         )
+		ORDER BY seq_no
+	</select>
+
+	<insert id="createExcelDownloadDataForLgcom" parameterType="java.util.HashMap">
+		INSERT INTO XXLGE_EXPORT_INFO (
+		    session_id,
+		    created_by,
+		    creation_date,
+		    seq_no,
+		    character_set_name,
+		    attribute1,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		   attribute${index + 2}
+		</foreach>
+		)
+		  SELECT *
+		    FROM (
+		          SELECT #{exportSsessionId}
+		               , #{USER_SESSION.applicationUserId}
+		               , SYSDATE
+		               , 1 AS seq_no
+		               , 'KO16KSC5601'
+		               , 'Error Message' AS error_message,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		               attribute${index + 1}
+		</foreach>
+		            FROM LGCOM_IMPORT_N
+		           WHERE session_id = #{sessionId}
+		             AND seq_no     = 1
+		             AND attribute199 IS NULL
+		          UNION ALL
+		          SELECT #{exportSsessionId}
+		               , #{USER_SESSION.applicationUserId}
+		               , SYSDATE
+		               , 1 AS seq_no
+		               , 'KO16KSC5601'
+		               , attribute200 AS error_message,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		               attribute${index + 1}
+		</foreach>
+		            FROM LGCOM_IMPORT_N
+		           WHERE session_id   = #{sessionId}
+		             AND attribute199 = 'H'
+		          UNION ALL
+		          SELECT #{exportSsessionId}
+		               , #{USER_SESSION.applicationUserId}
+		               , SYSDATE
+		               , seq_no
+		               , 'KO16KSC5601'
+		               , ATTRIBUTE200 AS error_message,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		               attribute${index + 1}
+		</foreach>
+		            FROM LGCOM_IMPORT_N
+		           WHERE session_id   = #{sessionId}
+		             AND attribute199 = 'Y'
+		         )
+		ORDER BY SEQ_NO
+	</insert>
+
+
+
+    <!-- Intro 차트를 위한 데이타 조회 -->
+    <select id="retrieveChartWidgetNumbers" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+    SELECT lcc.code_data1_value system_code
+          ,NVL( SUM(DECODE(item_type, 'USER', NVL(item_count, 0))), 0) AS "User"
+          ,NVL( SUM(DECODE(item_type, 'ROLE', NVL(item_count, 0))), 0) AS "Role"
+          ,NVL( SUM(DECODE(item_type, 'PROGRAM', NVL(item_count, 0))), 0) AS "Program"
+    FROM   (SELECT lu.system_code
+                  ,'USER' AS item_type
+			      ,COUNT(DISTINCT lsa.application_user_id) item_count
+			FROM   lgcom_system_access_logging_n lsa
+			      ,lgcom_user_m                  lu
+			WHERE  lsa.application_user_id = lu.application_user_id
+			AND    lsa.access_date >= TRUNC(SYSDATE)
+			AND    lsa.access_date < SYSDATE + 1
+			GROUP  BY lu.system_code
+            UNION ALL
+            SELECT system_code
+                  ,'ROLE' AS item_type
+                  ,COUNT(*) AS item_count
+            FROM   lgcom_role_m
+            WHERE  NVL(TO_CHAR(apply_end_date, 'YYYY-MM-DD'), '9999-12-31') > TO_CHAR(SYSDATE, 'YYYY-MM-DD')
+            GROUP  BY system_code
+            UNION ALL
+            SELECT system_code
+                  ,'PROGRAM' AS item_type
+                  ,COUNT(*) AS item_count
+            FROM   lgcom_program_m
+            WHERE  use_flag = 'Y'
+            GROUP  BY system_code) ldata
+          ,lgcom_common_code_c lcc
+    WHERE  ldata.system_code = lcc.common_code
+    AND    lcc.code_type_code = 'LGCOM_SYSTEM_CODE'
+    GROUP  BY lcc.code_data1_value
+             ,lcc.sort_order_no
+    ORDER  BY lcc.sort_order_no
+    ]]>
+    </select>
+
+</mapper>

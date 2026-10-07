@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT30080">
+	<!-- SPECIAL OT REQUEST 목록 조회; Add HMT_20210410 month ot total with month ot limit -->
+	<select id="retrieveSpecialOtRequestList" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+			SELECT /* LGVATT30080.retrieveSpecialOtRequestList */
+			       so.request_no                                  AS request_no
+			      ,em.organization_id                             AS employee_org
+			      ,so.employee_no                                 AS employee_no
+			      ,em.full_name_local                             AS employee_name
+			      ,lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE'
+			                                     ,em.grade_title
+			                                     ,NULL
+			                                     ,#{USER_SESSION.languageCode})           AS employee_grade
+			      ,TO_CHAR(so.time_and_attendance_date, 'DD/MM/YYYY')                     AS time_and_attendance_date
+			      ,lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+					                                        ,so.employee_no
+					                                        ,so.time_and_attendance_date) AS shift_type_code
+			      ,so.night_shift_flag                            AS night_shift_flag                        
+			      ,so.work_start_time                             AS work_start_time
+			      ,so.work_end_time                               AS work_end_time
+			      ,so.overtime_sum_hours                          AS overtime_sum_hours
+			      ,lgvatt_common_pkg.get_att_code_info(so.subsidiary_code, so.time_attend_detail_code, 'NAME') AS attendance_name
+			      ,lgvatt_ot_calculation_pkg.get_ot_total(so.subsidiary_code, so.employee_no, so.time_and_attendance_date, so.time_and_attendance_date, 'month_total_ot_yyyymm') AS month_total_overtime 
+                  ,lgvatt_ot_level_pkg.get_ot_level(so.subsidiary_code, so.employee_no, so.time_and_attendance_yyyymm, 'request_lower_limit') as overtime_limit 
+			      ,so.time_attend_input_reason_desc               AS time_attend_input_reason_desc
+			      ,nvl(so.weekday_overtime_hours, 0)              AS weekday_overtime_hours
+			      ,nvl(so.holiday_overtime_hours, 0)              AS holiday_overtime_hours
+			      ,nvl(so.public_holiday_overtime_hours, 0)       AS public_holiday_overtime_hours
+			      ,nvl(so.weekday_night_overtime_hours, 0)        AS weekday_night_overtime_hours
+			      ,nvl(so.weekday_ot_af_night_work_hours, 0)      AS weekday_ot_af_night_work_hours
+			      ,nvl(so.holiday_night_overtime_hours, 0)        AS holiday_night_overtime_hours 
+			      ,nvl(so.public_holiday_night_ot_hours, 0)       AS public_holiday_night_ot_hours
+			      ,lgvhr_common_pkg.decode_lookup('LGVHR_ATT_APPROVAL_STATUS'
+			                                     ,lgvatt_common_pkg.get_approval_status(so.approval_request_id
+			                                                                           ,so.request_code
+			                                                                           ,#{LGVHR_PROJECT_SESSION.employeeNo})
+			                                     ,NULL
+			                                     ,#{USER_SESSION.languageCode})           AS approval_status
+			      ,so.confirm_flag                                AS confirm_flag
+			      ,so.approval_request_id                         AS request_master_id
+			      ,so.request_code                                AS request_code
+			      ,lgvatt_common_pkg.get_approval_status(so.approval_request_id
+                                                        ,so.request_code
+                                                        ,#{LGVHR_PROJECT_SESSION.employeeNo}) AS approval_status_code
+			  FROM tb_att_special_ot_result_n so
+			      ,emp_master em
+			 WHERE so.subsidiary_code = em.subsidiary_code
+			   AND so.employee_no = em.employee_number
+			   AND so.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}	
+		]]>
+		<if test="requestStartDate != null and requestStartDate != '' and requestEndDate != null and requestEndDate != ''">
+			   AND so.request_date BETWEEN TRUNC(TO_DATE(#{requestStartDate},'DD/MM/YYYY')) AND TRUNC(TO_DATE(#{requestEndDate},'DD/MM/YYYY')+1)
+		</if>
+		<if test="confirmFlag != null and confirmFlag != ''">
+			   AND so.confirm_flag = #{confirmFlag}
+		</if>
+		<if test="orgId != null and orgId != ''">
+			   AND em.organization_id = #{orgId}
+		</if>
+		<if test="empNo != null and empNo != ''">
+			   AND so.employee_no like '%' || UPPER(#{empNo}) || '%'
+		</if>
+		<if test="empName != null and empName != ''">
+			   AND UPPER(em.full_name_local) like '%' || UPPER(#{empName}) || '%'
+		</if>
+		<if test="approvaStatusCode != null and approvaStatusCode != ''">
+		 	AND lgvatt_common_pkg.get_approval_status(so.approval_request_id, so.request_code, #{LGVHR_PROJECT_SESSION.employeeNo}) = #{approvaStatusCode}
+		</if>
+	</select>
+	
+	<update id="updateSpecialOTByHR" parameterType="LGCOMData">
+		UPDATE tb_att_special_ot_result_n so
+		   SET so.overtime_sum_hours             = #{overtimeSumHours}
+		      ,so.weekday_overtime_hours         = #{weekdayOvertimeHours}
+		      ,so.holiday_overtime_hours         = #{holidayOvertimeHours}
+		      ,so.public_holiday_overtime_hours  = #{publicHolidayOvertimeHours}
+		      ,so.weekday_night_overtime_hours   = #{weekdayNightOvertimeHours}
+		      ,so.weekday_ot_af_night_work_hours = #{weekdayOtAfNightWorkHours}
+		      ,so.holiday_night_overtime_hours   = #{holidayNightOvertimeHours}
+		      ,so.public_holiday_night_ot_hours  = #{publicHolidayNightOtHours}
+		      ,so.time_attend_input_reason_desc  = #{timeAttendInputReasonDesc}
+		      ,so.confirm_flag                   = #{confirmType}
+		      ,so.last_update_user_id            = #{applicationUserId}
+		      ,so.last_update_date               = SYSDATE
+		 WHERE so.subsidiary_code = #{subsidiaryCode}
+		   AND so.time_and_attendance_date = to_date(#{timeAndAttendanceDate}, 'DD/MM/YYYY')
+		   AND so.employee_no = #{employeeNo}
+		   AND so.approval_request_id = #{requestMasterId}
+		   AND so.request_code = #{requestCode}
+	</update>
+	
+</mapper>

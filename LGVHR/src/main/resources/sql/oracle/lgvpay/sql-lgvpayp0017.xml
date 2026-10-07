@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0017">
+
+    <!-- Payroll Item Detail List 조회 -->
+    <select id="retrievePayrollItemDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0017.retrievePayrollItemDetailList */
+		       ppi.payroll_item_id
+		     , ppi.inquiry_name
+			 , ppi.pay_item_classification_code
+			 , lgvhr_common_pkg.decode_lookup('LGDVHR_PAY_CLASS_TYPE_CODE', ppi.pay_item_classification_code, NULL, #{USER_SESSION.languageCode}) AS pay_item_classification_name
+			 
+			 , pid.payroll_item_detail_detail_id
+			 , pid.additional_input_value /* detail_name */
+			 , pid.pay_calc_rslt_detail_type_code
+			 , lgvhr_common_pkg.decode_lookup('LGDVH_PAY_ITEM_DETAIL_TYPE_CODE', pid.pay_calc_rslt_detail_type_code, NULL, #{USER_SESSION.languageCode}) AS pay_calc_rslt_detail_type_name
+			 
+		FROM   tb_pay_payroll_item_m ppi
+		     , tb_pay_item_detail_n  pid
+		WHERE  ppi.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		<if test="inquiryName != null and inquiryName != ''">
+		AND    ppi.inquiry_name LIKE '%'||#{inquiryName}|| '%'
+		</if>
+		AND    pid.payroll_item_id = ppi.payroll_item_id
+		<if test="additionalInputValue != null and additionalInputValue != ''">
+		AND    pid.additional_input_value LIKE '%'||#{additionalInputValue}||'%'
+		</if>
+		ORDER BY ppi.inquiry_name, pid.sort_order_no
+    </select>
+
+</mapper>

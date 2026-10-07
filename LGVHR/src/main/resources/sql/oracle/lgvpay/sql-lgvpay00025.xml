@@ -1,0 +1,383 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00025">
+    <!-- 급여대상자 조회 -->
+    <select id="retrieveEmailEmpList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00025.retrieveCalSetEmpList */
+               tpe.payment_yyyymm           AS pay_month
+             , em.employee_number     AS employee_no
+             , em.full_name_english   AS employee_name
+             , em.full_name_local   AS employee_name_local
+             , em.organization_id
+             , um.default_org_id
+             , em.org_name_local      AS organization_name
+             , em.person_type 
+             , em.assignment_category AS employment_category_code 
+             , em.status
+             , em.grade   AS grade_code
+             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+             , TO_CHAR(em.date_retire, 'DD/MM/YYYY') as date_retire
+             , (SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS grade_title
+             , em.grade_type          AS emp_category_name
+             , em.attribute10         AS shift_type_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
+             , em.supervisor
+             , (select ema.full_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_name
+             , (select ema.org_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_org_name
+             , (select om.parent_org_name from org_master om  where om.organization_id = em.organization_id) as section
+             , um.employee_mobile_phone_no as mobile_phone
+             , tpe.user_email_addr                as email_outside
+             , tpe.remark_text                       as remark
+             , tpe.payroll_calculation_exec_id  as payroll_calculation_exec_id
+             , tpe.slip_creation_flag          as create_payslip_flag
+             , tpe.error_message_content         as create_payslip_error
+             , tpe.transfer_flag                    as send_flag
+             , tpe.mail_send_error_content                   as send_error
+        FROM   tb_pay_slip_send_n  tpe
+             , emp_master          em
+             , lgcom_user_m        um
+             , lgcom_company_v     cv
+        WHERE  em.employee_number = tpe.employee_no
+        AND    um.user_name       = em.employee_number
+        AND    cv.short_code      = em.subsidiary_code
+        AND    tpe.payment_yyyymm      = #{payMonth}
+        <if test="employeeNo != null and employeeNo != ''">
+            AND tpe.employee_no = #{employeeNo}
+       </if>
+       <if test="employeeName != null and employeeName != ''">
+           AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+       </if>
+       <if test="payrollCalculationExecId != null and payrollCalculationExecId != ''">
+            AND tpe.payroll_calculation_exec_id = #{payrollCalculationExecId}
+       </if>
+       <if test="sendFlag != null and sendFlag != ''">
+            AND tpe.transfer_flag  = #{sendFlag}
+       </if>
+       <if test="createFlag != null and createFlag != ''">
+            AND tpe.slip_creation_flag = #{createFlag}
+       </if>
+        ORDER BY em.employee_number asc
+    </select>
+
+    <!-- 급여대상자 등록 -->
+    <update id="insertEmailEmp" parameterType="LGCOMData">
+        INSERT /*LGVPAY00025.insertAttendanceClose*/ INTO tb_pay_slip_send_n
+              (  payment_yyyymm
+                ,employee_no
+                ,user_email_addr
+                ,remark_text
+                ,creation_user_id
+                ,creation_date
+              )VALUES(
+                 #{payMonth}
+                ,#{employeeNo}
+                ,#{emailOutside}
+                ,#{remark}
+                ,#{applicationUserId}
+                ,SYSDATE
+              )
+    </update>
+    
+    <update id="createEmailEmpPrevious" parameterType="LGCOMData">
+        INSERT /*LGVPAY00025.createEmailEmpPrevious*/ INTO tb_pay_slip_send_n
+              (  payment_yyyymm
+                ,employee_no
+                ,user_email_addr
+                ,creation_user_id
+                ,creation_date
+              ) (SELECT #{payMonth}
+                ,t.employee_no
+                ,t.user_email_addr
+                ,#{applicationUserId}
+                ,SYSDATE
+            FROM tb_pay_slip_send_n t
+           WHERE TO_CHAR(ADD_MONTHS(TO_DATE(t.payment_yyyymm, 'YYYYMM'), 1), 'YYYYMM') = #{payMonth} )
+    </update>
+    
+    <update id="updateEmailEmp" parameterType="LGCOMData">
+        UPDATE /*LGVPAY00025.updateEmailEmp*/
+               tb_pay_slip_send_n 
+        SET    user_email_addr                   = #{emailOutside}             
+             , remark_text                          = #{remark}
+             , last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  payment_yyyymm   = #{payMonth}
+        AND    employee_no = #{employeeNo}              
+    </update>
+
+    <!-- 행추가된 사용자 정보를 조회 -->
+    <select id="retrieveEmployeeInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00025.retrieveEmployeeInfo */
+               em.employee_number     AS employee_no
+             , em.full_name_english   AS employee_name
+             , em.grade               AS grade_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+             , em.org_name_local      AS organization_name
+             , em.grade_type          AS emp_category_name
+             , em.job_family||'.'||em.job_group||'.'||em.job_detail  AS work_type_name
+             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+             , TO_CHAR(em.date_retire, 'DD/MM/YYYY') as date_retire
+        FROM emp_master em
+        WHERE em.employee_number = #{employeeNo}
+    </select>
+
+    <!-- CSV 다운로드 -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00025.createDirectCSVDownloadData */
+              employee_no
+             , employee_name_local
+             , employee_name
+             , email_outside
+             , remark
+             , organization_name
+             , person_type
+             , status
+             , grade_code
+             , grade_title
+             , emp_category_name
+             , date_hire_subsidiary
+             , date_retire
+             , supervisor
+             , supervisor_name
+             , supervisor_org_name
+             , mobile_phone
+             , shift_type_name
+             , payroll_calculation_exec_id
+             , send_error
+        FROM (
+                  SELECT '1' gubun
+                        , 'Employee No' AS EMPLOYEE_NO
+                        , 'Employee Name' AS EMPLOYEE_NAME_LOCAL
+                        , 'Employee Eng Name' AS EMPLOYEE_NAME
+                        , 'e-Mail' AS EMAIL_OUTSIDE
+                        , 'Remark' AS REMARK
+                        , 'Organization Name' AS ORGANIZATION_NAME
+                        , 'Type' AS PERSON_TYPE
+                        , 'Status' AS STATUS
+                        , 'Grade' AS GRADE_CODE
+                        , 'Title' AS GRADE_TITLE
+                        , 'Emp. Category' AS EMP_CATEGORY_NAME
+                        , 'Hire Date' AS DATE_HIRE_SUBSIDIARY
+                        , 'Resignation Date' AS DATE_RETIRE
+                        , 'Supervisor' AS SUPERVISOR
+                        , 'Supervisor' AS SUPERVISOR_NAME
+                        , 'Supervisor' AS SUPERVISOR_ORG_NAME
+                        , 'Mobile Phone No.' AS MOBILE_PHONE
+                        , 'Work Type' AS SHIFT_TYPE_NAME
+                        , 'Calculation Set' AS PAYROLL_CALCULATION_EXEC_ID
+                        , 'Error' AS SEND_ERROR
+                   FROM DUAL
+                  UNION ALL
+                      SELECT '2' gubun
+                         , em.employee_number       AS employee_no
+                         , em.full_name_english   AS employee_name
+                         , em.full_name_local     AS employee_name_local
+                         , tpe.user_email_addr      AS email_outside
+                         , tpe.remark_text             AS remark
+                         , em.org_name_local      AS organization_name
+                         , em.person_type         AS person_type
+                         , em.status              AS status
+                         , em.grade  AS grade_code
+                         , (SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL)           AS grade_title
+                         , em.grade_type          AS emp_category_name
+                         , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
+                         , TO_CHAR(em.date_retire, 'DD/MM/YYYY')          AS date_retire
+                         , em.supervisor                                  AS supervisor
+                         , (select ema.full_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_name
+                         , (select ema.org_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_org_name
+                         , um.employee_mobile_phone_no as mobile_phone
+                         ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
+                         , to_char(tpe.payroll_calculation_exec_id)   AS payroll_calculation_exec_id
+                         , tpe.mail_send_error_content                             AS send_error
+                       FROM   tb_pay_slip_send_n   tpe
+                             , emp_master          em
+                             , lgcom_user_m        um
+                             , lgcom_company_v     cv
+                       WHERE  em.employee_number = tpe.employee_no
+                       AND    um.user_name       = em.employee_number
+                       AND    cv.short_code      = em.subsidiary_code
+                       AND    tpe.payment_yyyymm      = #{payMonth}
+                       <if test="employeeNo != null and employeeNo != ''">
+                            AND tpe.employee_no = #{employeeNo}
+                       </if>
+                       <if test="employeeName != null and employeeName != ''">
+                            AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+                        </if>
+                        <if test="payrollCalculationExecId != null and payrollCalculationExecId != ''">
+				            AND tpe.payroll_calculation_exec_id = #{payrollCalculationExecId}
+				       </if>
+				       <if test="sendError != null and sendError != ''">
+				            AND tpe.mail_send_error_content is not null
+				       </if>
+        )
+        ORDER BY employee_no asc
+    </select>
+
+    <!-- Excel Upload 후속 처리 -->
+    <select id="createEmailEmpUpload" statementType="CALLABLE" parameterType="LGCOMData">
+        {call lgvpay_upload_pkg.upload_payroll_employee_email(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},                      /* p_errcode */
+                                                          #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},                    /* p_errbuf */
+                                                          #{sessionId, mode=IN , jdbcType=NUMERIC, javaType=string},
+                                                          #{payMonth , mode=IN, jdbcType=VARCHAR, javaType=string},                    /* p_pay_month */
+                                                          #{applicationUserId, mode=IN , jdbcType=NUMERIC, javaType=string}             /* p_application_user_id */
+                                                         )}
+    </select>
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVPAY00025.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10, ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+                                     , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Employee No' AS EMPLOYEE_NO
+                    , 'Employee Name' AS EMPLOYEE_NAME_LOCAL
+                    , 'Employee Eng Name' AS EMPLOYEE_NAME
+                    , 'e-Mail' AS EMAIL_OUTSIDE
+                    , 'Remark' AS REMARK
+                    , 'Organization Name' AS ORGANIZATION_NAME
+                    , 'Type' AS PERSON_TYPE
+                    , 'Status' AS STATUS
+                    , 'Grade' AS GRADE_CODE
+                    , 'Title' AS GRADE_TITLE
+                    , 'Emp. Category' AS EMP_CATEGORY_NAME
+                    , 'Hire Date' AS DATE_HIRE_SUBSIDIARY
+                    , 'Resignation Date' AS DATE_RETIRE
+                    , 'Supervisor' AS SUPERVISOR
+                    , 'Supervisor' AS SUPERVISOR_NAME
+                    , 'Supervisor' AS SUPERVISOR_ORG_NAME
+                    , 'Mobile Phone No.' AS MOBILE_PHONE
+                    , 'Work Type' AS SHIFT_TYPE_NAME
+                    , 'Calculation Set' AS PAYROLL_CALCULATION_EXEC_ID
+                    , 'Error' AS SEND_ERROR
+               FROM DUAL
+               UNION ALL
+               SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+                     , em.employee_number       AS employee_no
+                     , em.full_name_english   AS employee_name
+                     , em.full_name_local     AS employee_name_local
+                     , tpe.user_email_addr      AS email_outside
+                     , tpe.remark_text             AS remark
+                     , em.org_name_local      AS organization_name
+                     , em.person_type         AS person_type
+                     , em.status              AS status
+                     , em.grade   AS grade_code
+                     , (SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL)      AS grade_title
+                     , em.grade_type          AS emp_category_name
+                     , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
+                     , TO_CHAR(em.date_retire, 'DD/MM/YYYY')          AS date_retire
+                     , em.supervisor                                  AS supervisor
+                     , (select ema.full_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_name
+                     , (select ema.org_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_org_name
+                     , um.employee_mobile_phone_no as mobile_phone
+                     ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
+                     , to_char(tpe.payroll_calculation_exec_id)   AS payroll_calculation_exec_id
+                     , tpe.mail_send_error_content                    AS send_error
+                   FROM   tb_pay_slip_send_n   tpe
+                         , emp_master          em
+                         , lgcom_user_m        um
+                         , lgcom_company_v     cv
+                   WHERE  em.employee_number   = tpe.employee_no
+                   AND    um.user_name         = em.employee_number
+                   AND    cv.short_code        = em.subsidiary_code
+                   AND    tpe.payment_yyyymm   = #{payMonth} 
+                   <if test="employeeNo != null and employeeNo != ''">
+                        AND tpe.employee_no = #{employeeNo}
+                   </if>
+                   <if test="employeeName != null and employeeName != ''">
+                        AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+                    </if>
+                    <if test="payrollCalculationExecId != null and payrollCalculationExecId != ''">
+                        AND tpe.payroll_calculation_exec_id = #{payrollCalculationExecId}
+                   </if>
+                   <if test="sendError != null and sendError != ''">
+                        AND tpe.mail_send_error_content is not null
+                   </if>
+                   ORDER BY ORDER_BY, EMPLOYEE_NO asc
+              ) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    </insert>
+
+    <!-- 기등록된 급여대상 조회 -->
+    <select id="retrieveRegEmailEmpChk" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00025.retrieveRegEmailEmpChk */
+            count(1) as cnt
+        FROM tb_pay_slip_send_n
+        WHERE payment_yyyymm   = #{payMonth}
+          AND employee_no = #{employeeNo}
+    </select>
+
+    <!-- 월급여 대상자 삭제 -->
+    <update id="deleteEmailEmp" parameterType="LGCOMData">
+        DELETE FROM tb_pay_slip_send_n
+        WHERE payment_yyyymm   = #{payMonth}
+          AND employee_no = #{employeeNo}
+    </update>
+    
+    <update id="deleteAllEmailInMonth" parameterType="LGCOMData">
+        DELETE FROM tb_pay_slip_send_n
+        WHERE payment_yyyymm   = #{payMonth}
+    </update>
+    
+    <select id="retrieveEmpEmailList" parameterType="LGCOMData" resultType="LGCOMData">
+         SELECT /* LGVPAY00025.retrieveEmpEmailList */
+               pcee.payroll_calculation_exec_id
+             , pcee.employee_no                              AS employee_no
+             , em.full_name_local                            AS employee_name
+             , tpe.user_email_addr                            AS email_outside
+             , tpe.remark_text                                   AS remark
+             , em.lastname_eng                               AS lastname_eng
+        FROM   tb_pay_calc_emp_exec_n pcee
+             , tb_pay_slip_send_n tpe
+             , emp_master em
+        WHERE  pcee.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+         AND   em.employee_number = pcee.employee_no
+         AND   tpe.employee_no = pcee.employee_no
+         AND   tpe.payment_yyyymm   = #{payMonth}
+         AND  exists (select  1 from tb_pay_slip_send_n ps where ps.payment_yyyymm = tpe.payment_yyyymm
+                             and (ps.payroll_calculation_exec_id != #{payrollCalculationExecId, jdbcType=NUMERIC} or ps.payroll_calculation_exec_id is null )
+                     )
+         <if test="employeeNo != null and employeeNo != ''">
+              AND tpe.employee_no = #{employeeNo}
+         </if>
+         <if test="createFlag != null and createFlag != ''">
+              AND   (tpe.slip_creation_flag is null or tpe.slip_creation_flag = 'N')
+         </if>
+         <if test="sendFlag != null and sendFlag != ''">
+              AND (tpe.transfer_flag is null or tpe.transfer_flag = 'N')
+         </if>
+         <if test="calculationSetId != null and calculationSetId != ''">
+              AND tpe.employee_no in (select n.employee_no from tb_pay_calc_set_target_per_n n where n.payroll_calculation_set_id = #{calculationSetId} )
+         </if>
+         ORDER BY tpe.employee_no ASC
+    </select>
+    
+    <select id="retrieveSendEmailInfo" parameterType="LGCOMData" resultType="LGCOMData">
+         SELECT /* LGVPAY00025.retrieveSendEmailInfo */
+               mc.mail_id
+             , cc.common_code_desc sender_name
+             , cc.code_data2_value as sender
+             , cc.code_data3_value as value3
+             , cc.code_data4_value as value4
+             , cc.code_data5_value as value5
+             , mc.subject_text        as subject
+             , mc.mail_detail_content as mail_content
+             from  lgcom_common_code_c cc
+                   , lgcom_mail_content_n mc
+        WHERE  cc.code_type_code = 'LGVHR_MAIL_TEMPLATE_LIST'
+        AND    cc.common_code    = 'PAYSLIP_SEND_EMAIL_INFO'
+        AND    mc.mail_id        = TO_NUMBER(cc.CODE_DATA1_VALUE)
+    </select>
+
+</mapper>

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00007">
+
+    <!-- 급여작업 Activity 조회 -->
+    <select id="retrievePayrollActivityList" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH calc_set AS (
+            SELECT /*LGVPAY00007.retrievePayrollActivityList*/
+                   tpcs.payroll_calculation_set_name
+                 , tpcs.auto_creation_flag
+            FROM   tb_pay_calc_set_n tpcs
+            WHERE  tpcs.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    tpcs.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+        )
+        SELECT
+               a.process_no
+             , a.process_group_name
+             , a.process_name
+             , a.process_desc
+             , NVL(b.completion_flag,'N') AS completion_flag
+             , TO_CHAR(b.completion_date, 'DD/MM/YYYY HH24:MI:SS') AS completion_date
+             , calc_set.payroll_calculation_set_name
+             , CASE WHEN a.process_group_name = 'TRANSFER_ERP'    THEN 'Y'
+                    WHEN a.process_group_name = 'REQUEST_PAYROLL_CONFIRM' THEN 'R'
+                    WHEN a.process_group_name = 'CREATE_EMPLOYEE'
+                         AND NVL(calc_set.auto_creation_flag, 'N') = 'Y' THEN 'Y'  /* 자동생성인 경우만 대상자 생성 버튼 보여줌 */
+                    ELSE 'N'
+               END AS run_btn_display_flag
+             , a.batch_program_full_name
+             , 'Y' AS retire_flag /* 퇴직여부. 급여대상자 생성시 필요한 파라메터. 현재는 Y로 고정 */
+             ,( SELECT pce.payroll_calculation_exec_id
+                FROM   tb_pay_calc_exec_n pce
+                     , tb_pay_calc_period_basis_n pcpb
+                WHERE  pce.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+                AND    pce.payroll_type_code          = a.payroll_type_code
+                AND    pcpb.subsidiary_code           = a.subsidiary_code
+                AND    pcpb.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+                AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd, 'yyyymmdd') AND to_date(pcpb.end_yyyymmdd, 'yyyymmdd')
+                AND    pce.confirm_flag               = 'Y' /* 확정된 calculation_exec_id 조회 */
+              ) AS payroll_calculation_exec_id /* 급여 전표 인터페이스 데이터 생성 시 필요한 파라메터. payMonth, payType, calculationSetId 로 조회한 실행 건 중 확정된 exec_id */
+             ,NVL(( SELECT CASE WHEN larn.status_code IN ( 40, 50 ) OR pce.request_master_id IS NULL THEN 'Y' ELSE 'N' END
+		            FROM   tb_pay_calc_exec_n pce
+		                 , tb_pay_calc_period_basis_n pcpb
+		                 , lgcom_approval_request_n larn
+		            WHERE  pce.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+		            AND    pce.payroll_type_code          = a.payroll_type_code
+		            AND    pcpb.subsidiary_code           = a.subsidiary_code
+		            AND    pce.request_master_id          = larn.request_master_id(+)
+		            AND    pce.request_code               = larn.request_code(+)
+		            AND    pcpb.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+		            AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd, 'yyyymmdd') AND to_date(pcpb.end_yyyymmdd, 'yyyymmdd')
+		            AND    pce.confirm_flag               = 'Y' /* 확정된 calculation_exec_id 조회 */
+		          ), 'Y') AS approved_flag
+        FROM   tb_pay_payroll_process_m a
+             , tb_pay_procs_perfm_result_n b
+             , calc_set
+        WHERE  a.subsidiary_code               = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    a.payroll_type_code             = #{payrollTypeCode}
+        <if test="srchProcessNo != null and srchProcessNo != ''">
+        AND    a.process_no                    = #{srchProcessNo}
+        </if>
+        AND    b.process_no(+)                 = a.process_no
+        AND    b.basis_yyyymm(+)               = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+        AND    b.payroll_calculation_set_id(+) = #{calculationSetId, jdbcType=NUMERIC}
+        ORDER BY sort_order_no
+    </select>
+
+    <!-- 급여작업 Activity 유무 조회 -->
+    <select id="retrievePayProcsPerfmResultExistsFlag" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT CASE WHEN COUNT(*) > 0 THEN 'Y' ELSE 'N' END as exists_flag
+        FROM   tb_pay_procs_perfm_result_n b
+        WHERE  b.process_no                 = #{processNo, jdbcType=NUMERIC}
+        AND    b.basis_yyyymm               = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+        AND    b.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+    </select>
+
+    <!-- 급여작업 Activity 등록 -->
+    <insert id="insertPayProcsPerfmResult" parameterType="LGCOMData">
+        INSERT /* LGVPAY00007.insertPayProcsPerfmResult */
+        INTO   tb_pay_procs_perfm_result_n(
+               basis_yyyymm                                      /* 기준년월 */
+             , payroll_calculation_set_id                        /* 급여산출세트아이디 */
+             , process_no                                        /* 프로세스번호 */
+             , completion_flag                                   /* 완료여부 */
+             , completion_date                                   /* 완료일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , creation_date                                     /* 생성일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+        ) VALUES (
+               TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')    /* basis_yyyymm => 기준년월 */
+             , #{calculationSetId, jdbcType=NUMERIC}            /* payroll_calculation_set_id => 급여산출세트아이디 */
+             , #{processNo, jdbcType=NUMERIC}                   /* process_no => 프로세스번호 */
+             , #{completionFlag}                                /* completion_flag => 완료여부 */
+             , CASE WHEN NVL(#{completionFlag}, 'N') = 'Y' THEN SYSDATE ELSE NULL END /* completion_date => 완료일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+        )
+    </insert>
+
+    <!-- 급여작업 Activity 수정 -->
+    <update id="updatePayProcsPerfmResult" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00007.updatePayProcsPerfmResult */
+               tb_pay_procs_perfm_result_n
+        SET    completion_flag                        = #{completionFlag}                                 /* 완료여부 */
+             , completion_date                        = CASE WHEN NVL(#{completionFlag}, 'N') = 'Y' THEN SYSDATE ELSE NULL END /* 완료일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+        WHERE  basis_yyyymm                           = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm') /* 기준년월 */
+        AND    payroll_calculation_set_id             = #{calculationSetId, jdbcType=NUMERIC}             /* 급여산출세트아이디 */
+        AND    process_no                             = #{processNo, jdbcType=NUMERIC}                    /* 프로세스번호 */
+    </update>
+
+    <!-- 급여대상자 생성 -->
+    <select id="createPayrollTargetEmployee" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00007.createPayrollTargetEmployee */
+                lgvpay_calculation_set_pkg.creation_target_employee( #{errcode  , mode=OUT, jdbcType=VARCHAR} /*p_errcode. 오류코드*/
+                                                                   , #{errbuf   , mode=OUT, jdbcType=VARCHAR} /*p_errbuf. 오류메세지*/
+                                                                   , #{createCnt, mode=OUT, jdbcType=NUMERIC} /*p_create_cnt. 대상자 생성 건수*/
+                                                                   , TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm') /*p_yyyymm. payMonth. */
+                                                                   , #{LGVHR_PROJECT_SESSION.subsidiaryCode}  /*p_subsidiary_code. 법인코드 */
+                                                                   , #{payrollTypeCode}                       /*p_payroll_type_code. 급여/상여 유형코드 */
+                                                                   , #{retireFlag}                            /*p_retire_flag. 퇴직자 포함여부 */
+                                                                   , #{USER_SESSION.applicationUserId}        /*p_application_user_id. 로그인사용자 appliocation_user_id. who 컬럼 사용 */
+                                                                   )
+        }
+    </select>
+
+    <!-- 전표 인터페이스 데이터 생성 -->
+    <select id="insertPayInvoiceIF" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVPAY00007.insertPayInvoiceIF */
+                lgvpay_payroll_invoice_pkg.send_pay_result( #{payrollCalculationExecId}            /*p_payroll_calculation_exec_id*/
+                                                          , TO_DATE(#{paymentDate}, 'DD/MM/YYYY')            /*p_payment_date*/
+                                                          , #{errcode, mode=OUT, jdbcType=VARCHAR} /*p_errcode. 오류코드*/
+                                                          , #{errbuf , mode=OUT, jdbcType=VARCHAR} /*p_errbuf. 오류메세지*/
+                                                           )
+        }
+    </select>
+    
+    <!-- 급여지급확정요청 2차결재여부 조회 -->
+    <select id="retrieveSecondApprovedFlag" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAY00007.retrieveSecondApprovedFlag */    	
+		       DECODE(lasn.approval_status_code, 3, 'Y', 'N') AS second_approved_flag
+		FROM   tb_pay_calc_exec_n pce
+		     , lgcom_approval_request_n larn
+		     , lgcom_approval_status_n lasn
+		WHERE  pce.request_master_id           = larn.request_master_id(+)
+		AND    pce.request_code                = larn.request_code(+)
+		AND    pce.request_master_id           = lasn.request_master_id(+)
+		AND    pce.request_code                = lasn.request_code(+)
+		AND    pce.payroll_calculation_exec_id = #{payrollCalculationExecId}
+		AND    pce.confirm_flag                = 'Y' /* 확정된 calculation_exec_id 조회 */
+		AND    lasn.approval_seqs              = 2
+    </select>
+
+</mapper>

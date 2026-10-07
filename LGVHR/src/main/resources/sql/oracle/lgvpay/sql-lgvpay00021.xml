@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00021">
+
+    <!-- Calculation Set 조회 -->
+    <select id="retrieveCalcSetList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00021.retrieveCalcSetList */
+               pcs.payroll_calculation_set_id
+             , pcs.payroll_calculation_set_name
+             , pcs.resignation_flag
+             , pcs.payroll_type_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_PAY_RUN_TYPE', pcs.payroll_type_code, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS payroll_type_name
+             , pcs.object_type	-- vanaa 03/11/2025
+             , pcs.auto_creation_flag
+
+             ,(SELECT COUNT(cstp.employee_no)
+               FROM   tb_pay_calc_set_target_per_n cstp
+               WHERE  cstp.payroll_calculation_set_id = pcs.payroll_calculation_set_id) AS set_person_count /* Calculation Set 대상자 인원수 */
+
+             ,(SELECT CASE WHEN COUNT(pce.payroll_calculation_exec_id) > 0 THEN 'Y' ELSE 'N' END
+               FROM   tb_pay_calc_exec_n pce
+                    , tb_pay_calc_emp_exec_n pcee
+               WHERE  pce.payroll_calculation_set_id = pcs.payroll_calculation_set_id
+               AND    pcee.payroll_calculation_exec_id(+) = pce.payroll_calculation_exec_id) AS exec_flag /* 급여 실행되었는지 여부 */
+
+        FROM   tb_pay_calc_set_n pcs
+        WHERE  pcs.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    pcs.payroll_calculation_set_name like #{calculationSetName}||'%'
+        <if test="srchPayrollCalculationSetId != null and srchPayrollCalculationSetId !=''">
+        AND    pcs.payroll_calculation_set_id = #{srchPayrollCalculationSetId, jdbcType=NUMERIC}
+        </if>
+        /* calculation_set_name이 mm/yyyy 형태이므로, yyyymm 형태로 변환하여 정렬 */
+        ORDER BY REGEXP_REPLACE(pcs.payroll_calculation_set_name,'([[:digit:]]{2})\/([[:digit:]]{4})','\2/\1')
+    </select>
+
+    <!-- Calculation Set Name 저장 전 유효성 체크 -->
+    <select id="retireveValidateCalcSetData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00021.retireveValidateCalcSetData */
+                   payroll_calculation_set_id
+                 , payroll_calculation_set_name
+                 , resignation_flag
+                 , payroll_type_code
+            FROM   tb_pay_calc_set_n
+            WHERE  1=1
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND    payroll_calculation_set_id NOT IN
+            <foreach collection="deleted" item="deleteItem" open="(" close=")" separator="UNION ALL">
+                SELECT #{deleteItem.payrollCalculationSetId, jdbcType=NUMERIC} AS payroll_calculation_set_id
+                FROM dual
+
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="createItem" open="(" close=")" separator="UNION ALL">
+               SELECT  TO_NUMBER(#{createItem.payrollCalculationSetId}) AS payroll_calculation_set_id
+                     , #{createItem.payrollCalculationSetName}          AS payroll_calculation_set_name
+                     , #{createItem.resignationFlag}                    AS resignation_flag
+                     , #{createItem.payrollTypeCode}                    AS payroll_type_code
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  NVL(update_list.payroll_calculation_set_id   , detail_list.payroll_calculation_set_id   ) AS payroll_calculation_set_id
+                      , NVL(update_list.payroll_calculation_set_name , detail_list.payroll_calculation_set_name ) AS payroll_calculation_set_name
+                      , NVL(update_list.resignation_flag             , detail_list.resignation_flag             ) AS resignation_flag
+                      , NVL(update_list.payroll_type_code            , detail_list.payroll_type_code            ) AS payroll_type_code
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  TO_NUMBER(#{updated[${idx}].payrollCalculationSetId})  AS payroll_calculation_set_id
+                                 , #{updated[${idx}].payrollCalculationSetName}           AS payroll_calculation_set_name
+                                 , #{updated[${idx}].resignationFlag}                     AS resignation_flag
+                                 , #{updated[${idx}].payrollTypeCode}                     AS payroll_type_code
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_calculation_set_id        = update_list.payroll_calculation_set_id(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_calculation_set_id
+                      , detail_list.payroll_calculation_set_name
+                      , detail_list.resignation_flag
+                      , detail_list.payroll_type_code
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT (SELECT DISTINCT
+                       listagg(rs.payroll_calculation_set_name, ', ') WITHIN GROUP (ORDER BY rs.payroll_calculation_set_name) OVER (PARTITION BY 1)
+                FROM   rs
+                GROUP BY rs.payroll_calculation_set_name
+                HAVING COUNT(1) > 1 ) AS dup_calc_set_names /* Calculation Set Name 중복 */
+
+             <![CDATA[
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calculationSet' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_calc_set_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- Calculation Set 등록 -->
+    <insert id="insertCalcSet" parameterType="LGCOMData">
+        INSERT /* LGVPAY00021.insertCalcSet */
+        INTO   tb_pay_calc_set_n(
+               payroll_calculation_set_id                        /* 급여산출세트아이디 */
+             , payroll_calculation_set_name                      /* 급여산출세트명 */
+             , subsidiary_code                                   /* 해외법인코드 */
+             , resignation_flag                                  /* 퇴직여부 */
+             , payroll_type_code                                 /* 급여유형코드 */
+             , object_type                                 /* object_type */ -- vanaa 03/11/2025
+             , auto_creation_flag                                /* 자동생성여부 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_calc_set_n.nextval                     /* payroll_calculation_set_id => 급여산출세트아이디 */
+             , #{payrollCalculationSetName}                     /* payroll_calculation_set_name => 급여산출세트명 */
+             , #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* subsidiary_code => 해외법인코드 */
+             , #{resignationFlag}                               /* resignation_flag => 퇴직여부 */
+             , #{payrollTypeCode}                               /* payroll_type_code => 급여유형코드 */
+             , #{objectType}                                    /* object_type => object_type */	-- vanaa 03/11/2025
+             , #{autoCreationFlag}                              /* auto_creation_flag => 자동생성여부 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+        )
+    </insert>
+
+    <!-- Calculation Set 수정 -->
+    <update id="updateCalcSet" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00021.updateCalcSet */
+               tb_pay_calc_set_n
+        SET    payroll_calculation_set_name           = #{payrollCalculationSetName}                      /* 급여산출세트명 */
+             , resignation_flag                       = #{resignationFlag}                                /* 퇴직여부 */
+             , payroll_type_code                      = #{payrollTypeCode}                                /* 급여유형코드 */
+            , object_type                      		  = #{objectType}                                     /* objectType */ -- vanaa 03/11/2025
+             , auto_creation_flag                     = #{autoCreationFlag}                               /* 자동생성여부 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+        WHERE  payroll_calculation_set_id             = #{payrollCalculationSetId, jdbcType=NUMERIC}      /* 급여산출세트아이디 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}           /* 해외법인코드 */
+    </update>
+
+    <!-- Calculation Set 삭제 -->
+    <delete id="deleteCalcSet" parameterType="LGCOMData">
+        DELETE /* LGVPAY00021.deleteCalcSet */
+        FROM   tb_pay_calc_set_n
+        WHERE  payroll_calculation_set_id             = #{payrollCalculationSetId, jdbcType=NUMERIC}      /* 급여산출세트아이디 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}           /* 해외법인코드 */
+    </delete>
+
+    <!-- Calculation Set 대상자 삭제 -->
+    <delete id="deleteCalcSetTargetPerAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00021.deleteCalcSetTargetPerAll */
+        FROM   tb_pay_calc_set_target_per_n
+        WHERE  payroll_calculation_set_id             = #{payrollCalculationSetId, jdbcType=NUMERIC}      /* 급여산출세트아이디 */
+    </delete>
+
+</mapper>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSETC00040">
+	<!-- 메세지 목록 조회 -->
+	<select id="retrieveCodeTypePopupList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT a.code_type_code
+		      ,a.code_type_code_desc
+		      ,a.control_level_code
+		      ,(SELECT m.common_code_name
+		        FROM   lgcom_common_code_c            c
+		              ,lgcom_common_code_multi_lang_c m
+		        WHERE  c.common_code = m.common_code
+		        AND    c.code_type_code = m.code_type_code
+		        AND    c.company_id = m.company_id
+            AND    c.inventory_organization_id = m.inventory_organization_id
+		        AND    c.code_type_code = 'LGCOM_CONTROL_LEVEL_CODE'
+		        AND    c.common_code = a.control_level_code
+		        AND    m.language_code = #{USER_SESSION.languageCode}
+		        AND    ROWNUM = 1) AS control_level_code_name
+		      ,a.access_level_code
+		      ,(SELECT m.common_code_name
+		        FROM   lgcom_common_code_c            c
+		              ,lgcom_common_code_multi_lang_c m
+		        WHERE  c.common_code = m.common_code
+		        AND    c.code_type_code = m.code_type_code
+		        AND    c.company_id = m.company_id
+            AND    c.inventory_organization_id = m.inventory_organization_id
+		        AND    c.code_type_code = 'LGCOM_ACCESS_LEVEL_CODE'
+		        AND    c.common_code = a.access_level_code
+		        AND    m.language_code = #{USER_SESSION.languageCode}
+		        AND    ROWNUM = 1) AS access_level_code_name
+		      ,a.system_code
+		      ,a.module_code
+		FROM   lgcom_code_type_code_c a
+		WHERE  UPPER(a.code_type_code) LIKE UPPER(#{codeTypeCode}) || '%'	 	 	
+	]]>		
+	<if test="useFlag != null and useFlag != ''">
+		AND    	a.use_flag = #{useFlag} 
+	</if>	
+	<if test="systemCode != null and systemCode != ''">
+		AND    	a.system_code = #{systemCode} 
+	</if>
+	<if test="moduleCode != null and moduleCode != ''">
+		AND    	a.module_code = #{moduleCode} 
+	</if>	
+	<![CDATA[
+		ORDER  BY a.system_code, a.module_code, a.code_type_code	
+	]]>						   
+	</select>	
+</mapper>
+
+

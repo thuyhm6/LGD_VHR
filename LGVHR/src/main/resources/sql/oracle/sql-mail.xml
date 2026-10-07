@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="Mail">
+	<!-- Mail 전송 대상 목록 조회 -->
+	<select id="retrieveMailInfo" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*Mail.retrieveMailInfo*/
+		       seq_id, 
+		       sender_email_addr, 
+		       receipt_email_addr, 
+		       cc_email_addr, 
+		       mail_clob_data,
+		       mail_clob_content,
+		       subject_content,
+		       mail_id,
+		       language_code,
+		       file_name
+		  FROM LGCOM_MAIL_INFO
+		 WHERE STATUS_CODE = 'N'
+	</select>
+
+	<!-- Mail Template 조회 -->
+	<select id="retrieveMailTemplate" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*Mail.retrieveMailTemplate*/
+		       SUBJECT_TEXT, 
+		       MAIL_DETAIL_CONTENT
+		  FROM LGCOM_MAIL_CONTENT_N
+		 WHERE MAIL_ID = #{mailId}
+		   AND LANGUAGE_CODE = #{languageCode}
+	</select>
+	
+	<!-- Mail 로그 저장  -->
+	<update id="updateMailInfo" parameterType="LGCOMData">
+         UPDATE /*Mail.updateMailInfo*/
+                LGCOM_MAIL_INFO
+            SET status_code = #{status},
+                mail_clob_content = #{mailClobContent}, /* 실제 메일로 발송된 최종 문장을 저장한다. */
+                subject_content = #{subjectContent},
+                error_reason_desc = #{errorReasonDesc}
+          WHERE seq_id = #{seqId}
+    </update>
+
+
+</mapper>

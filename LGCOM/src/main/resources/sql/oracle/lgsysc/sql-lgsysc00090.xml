@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00090">
+	<!-- Role 목록 조회 -->
+	<select id="retrieveRoleList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT  a.system_code
+        	   ,a.module_code
+        	   ,a.role_code
+        	   ,a.role_name
+        	   ,a.role_desc
+        	   ,TO_CHAR(a.apply_start_date,'YYYY-MM-DD') AS apply_start_date
+        	   ,TO_CHAR(a.apply_end_date,'YYYY-MM-DD') AS apply_end_date
+		       ,CASE
+		            WHEN
+		                (select COUNT(b.menu_id)
+		                from lgcom_role_menu_n b
+		                where a.role_code = b.role_code) > 0
+		            THEN 'Y'
+		            ELSE 'N'
+		        END AS menu_flag
+		       ,CASE
+		            WHEN
+		                (select COUNT(role_business_organization_id)
+		                from lgcom_role_biz_org_n c
+		                where a.role_code = c.role_code) > 0
+		            THEN 'Y'
+		            ELSE 'N'
+		        END AS org_flag
+		FROM  lgcom_role_m a
+		WHERE 1=1
+		AND	  UPPER(a.role_code) like UPPER(#{roleCode}) || '%'
+		AND	  UPPER(a.role_name) like UPPER(#{roleName}) || '%'
+	<if test="systemCode != null and systemCode != ''">
+		AND a.system_code = #{systemCode}
+	</if>
+	<if test="moduleCode != null and moduleCode != ''">
+		AND a.module_code = #{moduleCode}
+	</if>
+		ORDER  BY a.system_code,a.module_code,a.role_code
+	</select>
+
+	<select id="retrieveRoleCode" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT 	COUNT(a.role_code) AS cnt
+		FROM 	lgcom_role_m a
+		WHERE   a.role_code = #{roleCode}
+	]]>
+	</select>
+
+	<!-- Role 정보 저장 -->
+	<update id="mergeRoleInfo" parameterType="java.util.HashMap">
+		MERGE INTO LGCOM_ROLE_M a
+		     USING (
+		            SELECT #{systemCode} AS system_code
+		                 , #{moduleCode} AS module_code
+		                 , #{roleCode} AS role_code
+		                 , #{roleName} AS role_name
+		                 , #{roleDesc} AS role_desc
+		                 , TO_DATE(#{applyStartDate},'YYYY-MM-DD') AS apply_start_date
+		                 , TO_DATE(#{applyEndDate},'YYYY-MM-DD') AS apply_end_date
+		                 , #{sessionUserId} AS sess_user_id
+		              FROM DUAL
+		           ) b
+		        ON (a.role_code = b.role_code)
+		WHEN MATCHED THEN
+		     UPDATE SET system_code      = b.system_code
+		     		  , module_code  	 = b.module_code
+		     		  , role_name		 = b.role_name
+		     		  , role_desc		 = b.role_desc
+		     		  , apply_start_date = b.apply_start_date
+		              , apply_end_date   = b.apply_end_date
+		              , last_updated_by  = b.sess_user_id
+		              , last_update_date = SYSDATE
+		WHEN NOT MATCHED THEN
+		     INSERT(system_code,module_code,role_code,role_name,role_desc,apply_start_date,apply_end_date,created_by,creation_date,last_updated_by,last_update_date)
+		     VALUES(b.system_code,b.module_code,b.role_code,b.role_name,b.role_desc,b.apply_start_date,b.apply_end_date,b.sess_user_id,SYSDATE,b.sess_user_id,SYSDATE)
+	</update>
+
+	<!-- Role Code 삭제시 Role Menu 삭제 -->
+	<delete id="deleteRoleMenuMaster" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_ROLE_MENU_N lrm
+		      WHERE EXISTS (SELECT 'x'
+		                      FROM LGCOM_ROLE_M
+		                     WHERE role_code = #{roleCode}
+		                       AND role_code = lrm.role_code)
+	</delete>
+
+	<!-- Role Code 삭제시 Role Org 삭제 -->
+	<delete id="deleteUserRoleInfo" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_USER_ROLE_N lur
+		      WHERE EXISTS (SELECT 'x'
+		                      FROM LGCOM_ROLE_M
+		                     WHERE role_code = #{roleCode}
+		                       AND role_code = lur.role_code)
+	</delete>
+
+	<!-- Role Code 삭제시 Role Biz Org 삭제 -->
+	<delete id="deleteRoleBizOrgInfo" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_ROLE_BIZ_ORG_N lrb
+		      WHERE EXISTS (SELECT 'x'
+		                      FROM LGCOM_ROLE_M
+		                     WHERE role_code = #{roleCode}
+		                       AND role_code = lrb.role_code)
+	</delete>
+
+	<!-- Role Code 삭제시 Role Hrm Org 삭제 -->
+	<delete id="deleteRoleHrmOrgInfo" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_ROLE_HRM_ORGANIZATION_N lrh
+		      WHERE EXISTS (SELECT 'x'
+		                      FROM LGCOM_ROLE_M
+		                     WHERE role_code = #{roleCode}
+		                       AND role_code = lrh.role_code)
+	</delete>
+
+	<!-- Program Access 삭제 -->
+	<delete id="deleteProgramAccessInfo" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_PROGRAM_ACCESS_N pan
+		      WHERE EXISTS (SELECT 'x'
+		                      FROM LGCOM_ROLE_M
+		                     WHERE role_code = #{roleCode}
+		                       AND role_code = pan.role_code)
+	</delete>
+
+	<!-- Code Type Role 삭제 -->
+	<delete id="deleteCodeTypeCodeAccessInfo" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_CODE_TYPE_CODE_ACCESS_N ctca
+		      WHERE EXISTS (SELECT 'x'
+		                      FROM LGCOM_ROLE_M
+		                     WHERE role_code = #{roleCode}
+		                       AND role_code = ctca.role_code)
+	</delete>
+
+	<!-- Role Code 삭제 -->
+	<delete id="deleteRoleMaster" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_ROLE_M
+		      WHERE role_code = #{roleCode}
+	</delete>
+</mapper>

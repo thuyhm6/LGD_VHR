@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT30040">
+
+	<!-- Employee OT Over Year Limit Retrieve -->
+	<select id="retrieveOtOverYearLimitList" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+	WITH raw_data AS (
+    SELECT em.organization_id                                             AS employee_org
+         ,em.employee_number                                             AS employee_no
+         ,em.full_name_local                                             AS employee_name
+         ,em.grade_title                                                 AS employee_grade
+         ,em.attribute10                                                 AS actual_shift_code
+         ,em.assignment_category                                         AS employee_category
+         ,em.date_hire_subsidiary                                        AS date_hire_subsidiary
+
+         ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result') AS year_ot
+         ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'month_total_ot_result') AS month_total_ot
+
+         -- weekday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_day','month_total_ot') AS weekday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_day','month_total_ot_over_limit') AS weekday_day_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_day','year_total_ot_over_limit') AS weekday_day_over_y_raw
+
+         -- holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_day','month_total_ot') AS holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_day','month_total_ot_over_limit') AS holiday_day_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_day','year_total_ot_over_limit') AS holiday_day_over_y_raw
+
+         -- public_holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_day','month_total_ot') AS public_holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_day','month_total_ot_over_limit') AS public_holiday_day_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_day','year_total_ot_over_limit') AS public_holiday_day_over_y_raw
+
+         -- weekday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_night','month_total_ot') AS weekday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_night','month_total_ot_over_limit') AS weekday_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_night','year_total_ot_over_limit') AS weekday_night_over_y_raw
+
+         -- weekday_af_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_af_night','month_total_ot') AS weekday_af_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_af_night','month_total_ot_over_limit') AS weekday_af_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_af_night','year_total_ot_over_limit') AS weekday_af_night_over_y_raw
+
+         -- holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_night','month_total_ot') AS holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_night','month_total_ot_over_limit') AS holiday_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_night','year_total_ot_over_limit') AS holiday_night_over_y_raw
+
+         -- public_holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','month_total_ot') AS public_holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','month_total_ot_over_limit') AS ph_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','year_total_ot_over_limit') AS ph_night_over_y_raw
+
+    FROM emp_master em
+   WHERE em.subsidiary_code = 'LGDVN'
+     AND em.date_hire_subsidiary <= LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
+     AND (em.date_retire >= to_date(#{attendanceYm}, 'YYYYMM') OR em.date_retire IS NULL)
+     AND NVL(em.fse_yn,  'N') <> 'Y'
+     AND NVL(em.flsa_yn, 'N') <> 'Y' 
+	]]>
+		<if test="shiftCode != null and shiftCode != ''">
+			AND em.attribute10 = #{shiftCode}
+		</if>
+		<if test="categoryTitle != null and categoryTitle != ''">
+			   AND em.assignment_category = #{categoryTitle}
+		</if>
+		<if test="orgId != null and orgId != ''">
+			AND em.organization_id = #{orgId}
+		</if>
+		<if test="empNo != null and empNo != ''">
+			AND em.employee_number = UPPER(#{empNo})
+		</if>
+		<if test="empName != null and empName != ''">
+			AND UPPER(em.full_name_local) LIKE '%' || UPPER(#{empName}) || '%'
+		</if>
+		<if test="monthTotalOtFrom != null and monthTotalOtFrom != ''">
+			AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+	                             to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'month_total_ot_result') >= #{monthTotalOtFrom}
+		</if>
+		<if test="monthTotalOtTo != null and monthTotalOtTo != ''">
+			<![CDATA[
+				AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+		                         to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'month_total_ot_result') <= #{monthTotalOtTo}
+		    ]]>
+		</if>
+		<if test="yearTotalOtFrom != null and yearTotalOtFrom != ''">
+			AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+                                 TRUNC(TO_DATE(#{attendanceYm}, 'YYYYMM'), 'YYYY'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result_yyyy') >= #{yearTotalOtFrom}
+		</if>
+		<if test="yearTotalOtTo != null and yearTotalOtTo != ''">
+			<![CDATA[
+				AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+	                             TRUNC(TO_DATE(#{attendanceYm}, 'YYYYMM'), 'YYYY'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result_yyyy') <= #{yearTotalOtTo}
+			]]>
+		</if>
+		)
+		SELECT employee_org
+		     ,employee_no
+		     ,employee_name
+		     ,employee_grade
+		     ,actual_shift_code
+		     ,employee_category
+		     ,to_char(to_date(#{attendanceYm}, 'YYYYMM'), 'MM/YYYY')    AS attendance_ym_end
+		     ,TO_CHAR(date_hire_subsidiary, 'DD/MM/YYYY')        AS date_hire_subsidiary
+		     ,year_ot
+		     ,month_total_ot
+		
+		     ,weekday_day
+		     ,CASE WHEN weekday_day_over_m_raw > weekday_day_over_y_raw THEN weekday_day_over_m_raw ELSE 0 END AS weekday_day_over_m
+		     ,CASE WHEN weekday_day_over_m_raw > weekday_day_over_y_raw THEN 0 ELSE weekday_day_over_y_raw END AS weekday_day_over_y
+		
+		     ,holiday_day
+		     ,CASE WHEN holiday_day_over_m_raw > holiday_day_over_y_raw THEN holiday_day_over_m_raw ELSE 0 END AS holiday_day_over_m
+		     ,CASE WHEN holiday_day_over_m_raw > holiday_day_over_y_raw THEN 0 ELSE holiday_day_over_y_raw END AS holiday_day_over_y
+		
+		     ,public_holiday_day
+		     ,CASE WHEN public_holiday_day_over_m_raw > public_holiday_day_over_y_raw THEN public_holiday_day_over_m_raw ELSE 0 END AS public_holiday_day_over_m
+		     ,CASE WHEN public_holiday_day_over_m_raw > public_holiday_day_over_y_raw THEN 0 ELSE public_holiday_day_over_y_raw END AS public_holiday_day_over_y
+		
+		     ,weekday_night
+		     ,CASE WHEN weekday_night_over_m_raw > weekday_night_over_y_raw THEN weekday_night_over_m_raw ELSE 0 END AS weekday_night_over_m
+		     ,CASE WHEN weekday_night_over_m_raw > weekday_night_over_y_raw THEN 0 ELSE weekday_night_over_y_raw END AS weekday_night_over_y
+		
+		     ,weekday_af_night
+		     ,CASE WHEN weekday_af_night_over_m_raw > weekday_af_night_over_y_raw THEN weekday_af_night_over_m_raw ELSE 0 END AS weekday_af_night_over_m
+		     ,CASE WHEN weekday_af_night_over_m_raw > weekday_af_night_over_y_raw THEN 0 ELSE weekday_af_night_over_y_raw END AS weekday_af_night_over_y
+		
+		     ,holiday_night
+		     ,CASE WHEN holiday_night_over_m_raw > holiday_night_over_y_raw THEN holiday_night_over_m_raw ELSE 0 END AS holiday_night_over_m
+		     ,CASE WHEN holiday_night_over_m_raw > holiday_night_over_y_raw THEN 0 ELSE holiday_night_over_y_raw END AS holiday_night_over_y
+		
+		     ,public_holiday_night
+		     ,CASE WHEN ph_night_over_m_raw > ph_night_over_y_raw THEN ph_night_over_m_raw ELSE 0 END AS public_holiday_night_over_m
+		     ,CASE WHEN ph_night_over_m_raw > ph_night_over_y_raw THEN 0 ELSE ph_night_over_y_raw END AS public_holiday_night_over_y
+		
+		FROM raw_data
+	</select>
+	
+	<!-- 엑셀 다운로드 HMT_20221108 Add Download Excel Function -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVATT30040.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10, ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15, ATTRIBUTE16
+                                     , ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20, ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23
+                                     , ATTRIBUTE24, ATTRIBUTE25, ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30, ATTRIBUTE31, ATTRIBUTE32)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Start Month' AS ATTENDANCE_YM_START
+                    , 'End Month' AS ATTENDANCE_YM_END
+                    , 'Orgnazation' AS EMPLOYEE_ORG
+                    , 'Employee No' AS EMPLOYEE_NO
+                    , 'Employee Name' AS EMPLOYEE_NAME
+                    , 'Grade' AS EMPLOYEE_GRADE
+                    , 'Shift Code' AS ACTUAL_SHIFT_CODE
+                    , 'Employee Category' AS EMPLOYEE_CATEGORY
+                    , 'Hire Date' AS DATE_HIRE_SUBSIDIARY
+                    , 'Year OT' AS YEAR_OT
+                    , 'Month OT' AS MONTH_TOTAL_OT
+                    
+                    , 'Week Day - 150%' AS WEEKDAY_DAY
+                    , 'Holiday Day - 200%' AS HOLIDAY_DAY
+                    , 'Plublic Holiday Day - 300%' AS PUBLIC_HOLIDAY_DAY
+                    , 'Weekday Night - 200%' AS WEEKDAY_NIGHT
+                    , 'Weekday Af Night - 210%' AS WEEKDAY_AF_NIGHT
+                    , 'Holiday Night - 270%' AS HOLIDAY_NIGHT
+                    , 'Public Holiday Night - 390%' AS PUBLIC_HOLIDAY_NIGHT
+                    
+                    
+                    , 'Weekday Day Over Year - 150%' AS WEEKDAY_DAY_OVER_YEAR
+                    , 'Holiday Day Over Year - 200%' AS HOLIDAY_DAY_OVER_YEAR
+                    , 'Plublic Holiday Day Over Year - 300%' AS PUBLIC_HOLIDAY_DAY_OVER_YEAR
+                    , 'Weekday Night Over Year - 200%' AS WEEKDAY_NIGHT_OVER_YEAR
+                    , 'Weekday Af Night Over Year - 210%' AS WEEKDAY_AF_NIGHT_OVER_YEAR
+                    , 'Holiday Night Over Year - 270%' AS HOLIDAY_NIGHT_OVER_YEAR
+                    , 'Public Holiday Night Over Year - 390%' AS PH_NIGHT_OVER_YEAR
+                    
+                    , 'Weekday Day Over Month - 150%' AS WEEKDAY_DAY_OVER_MONTH
+                    , 'Holiday Day Over Month - 200%' AS HOLIDAY_DAY_OVER_MONTH
+                    , 'Plublic Holiday Day Over Month - 300%' AS PUBLIC_HOLIDAY_DAY_OVER_MONTH
+                    , 'Weekday Night Over Month - 200%' AS WEEKDAY_NIGHT_OVER_MONTH
+                    , 'Weekday Af Night Over Month - 210%' AS WEEKDAY_AF_NIGHT_OVER_MONTH
+                    , 'Holiday Night Over Month - 270%' AS HOLIDAY_NIGHT_OVER_MONTH
+                    , 'Public Holiday Night Over Month - 390%' AS PH_NIGHT_OVER_MONTH
+                    
+               FROM DUAL
+               UNION ALL
+               SELECT * FROM (WITH raw_data AS (
+    SELECT em.organization_id                                             AS employee_org
+         ,em.employee_number                                             AS employee_no
+         ,em.full_name_local                                             AS employee_name
+         ,em.grade_title                                                 AS employee_grade
+         ,em.attribute10                                                 AS actual_shift_code
+         ,em.assignment_category                                         AS employee_category
+         ,em.date_hire_subsidiary                                        AS date_hire_subsidiary
+
+         ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result') AS year_ot
+         ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'month_total_ot_result') AS month_total_ot
+
+         -- weekday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_day','month_total_ot') AS weekday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_day','month_total_ot_over_limit') AS weekday_day_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_day','year_total_ot_over_limit') AS weekday_day_over_y_raw
+
+         -- holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_day','month_total_ot') AS holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_day','month_total_ot_over_limit') AS holiday_day_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_day','year_total_ot_over_limit') AS holiday_day_over_y_raw
+
+         -- public_holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_day','month_total_ot') AS public_holiday_day
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_day','month_total_ot_over_limit') AS public_holiday_day_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_day','year_total_ot_over_limit') AS public_holiday_day_over_y_raw
+
+         -- weekday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_night','month_total_ot') AS weekday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_night','month_total_ot_over_limit') AS weekday_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_night','year_total_ot_over_limit') AS weekday_night_over_y_raw
+
+         -- weekday_af_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_af_night','month_total_ot') AS weekday_af_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_af_night','month_total_ot_over_limit') AS weekday_af_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'weekday_af_night','year_total_ot_over_limit') AS weekday_af_night_over_y_raw
+
+         -- holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_night','month_total_ot') AS holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_night','month_total_ot_over_limit') AS holiday_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                   TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'holiday_night','year_total_ot_over_limit') AS holiday_night_over_y_raw
+
+         -- public_holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','month_total_ot') AS public_holiday_night
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','month_total_ot_over_limit') AS ph_night_over_m_raw
+         ,lgvatt_ot_calculation_pkg.get_item_ot_total(em.subsidiary_code,em.employee_number,
+                                    TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','year_total_ot_over_limit') AS ph_night_over_y_raw
+
+             FROM emp_master em
+			 WHERE em.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			   <![CDATA[
+			   AND em.date_hire_subsidiary <= LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
+		       AND (em.date_retire         >= to_date(#{attendanceYm}, 'YYYYMM') OR date_retire IS NULL) 
+		       AND NVL(em.fse_yn,  'N')    <> 'Y'  
+		       AND NVL(em.flsa_yn, 'N')    <> 'Y'  
+		       ]]>
+				<if test="shiftCode != null and shiftCode != ''">
+					AND em.attribute10 = #{shiftCode}
+				</if>
+				<if test="categoryTitle != null and categoryTitle != ''">
+					   AND em.assignment_category = #{categoryTitle}
+				</if>
+				<if test="orgId != null and orgId != ''">
+					AND em.organization_id = #{orgId}
+				</if>
+				<if test="empNo != null and empNo != ''">
+					AND em.employee_number = UPPER(#{empNo})
+				</if>
+				<if test="empName != null and empName != ''">
+					AND UPPER(em.full_name_local) LIKE '%' || UPPER(#{empName}) || '%'
+				</if>
+				<if test="monthTotalOtFrom != null and monthTotalOtFrom != ''">
+					AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+			                             to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'month_total_ot_result') >= #{monthTotalOtFrom}
+				</if>
+				<if test="monthTotalOtTo != null and monthTotalOtTo != ''">
+					<![CDATA[
+						AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+				                         to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'month_total_ot_result') <= #{monthTotalOtTo}
+				    ]]>
+				</if>
+				<if test="yearTotalOtFrom != null and yearTotalOtFrom != ''">
+					AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+		                                 TRUNC(TO_DATE(#{attendanceYm}, 'YYYYMM'), 'YYYY'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result_yyyy') >= #{yearTotalOtFrom}
+				</if>
+				<if test="yearTotalOtTo != null and yearTotalOtTo != ''">
+					<![CDATA[
+						AND lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
+			                             TRUNC(TO_DATE(#{attendanceYm}, 'YYYYMM'), 'YYYY'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result_yyyy') <= #{yearTotalOtTo}
+					]]>
+				</if>
+              )
+				SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+		            ,to_char(to_date(#{attendanceYm}, 'YYYYMM'), 'MM/YYYY')   AS attendance_ym_start
+			       ,to_char(to_date(#{attendanceYm}, 'YYYYMM'), 'MM/YYYY')    AS attendance_ym_end
+				   ,employee_org
+				     ,employee_no
+				     ,employee_name
+				     ,employee_grade
+				     ,actual_shift_code
+				     ,employee_category
+				     ,TO_CHAR(date_hire_subsidiary, 'DD/MM/YYYY')        AS date_hire_subsidiary
+				     ,to_char(year_ot)
+				     ,to_char(month_total_ot)
+				
+				     ,to_char(weekday_day)
+				     ,to_char(holiday_day)
+				     ,to_char(public_holiday_day)
+				     ,to_char(weekday_night)
+				     ,to_char(weekday_af_night)
+				     ,to_char(holiday_night)
+				     ,to_char(public_holiday_night)
+				     
+				     
+				     ,to_char(CASE WHEN weekday_day_over_m_raw > weekday_day_over_y_raw THEN 0 ELSE weekday_day_over_y_raw END) AS weekday_day_over_y
+				     ,to_char(CASE WHEN holiday_day_over_m_raw > holiday_day_over_y_raw THEN 0 ELSE holiday_day_over_y_raw END) AS holiday_day_over_y
+				     ,to_char(CASE WHEN public_holiday_day_over_m_raw > public_holiday_day_over_y_raw THEN 0 ELSE public_holiday_day_over_y_raw END) AS public_holiday_day_over_y
+				     ,to_char(CASE WHEN weekday_night_over_m_raw > weekday_night_over_y_raw THEN 0 ELSE weekday_night_over_y_raw END) AS weekday_night_over_y
+				     ,to_char(CASE WHEN weekday_af_night_over_m_raw > weekday_af_night_over_y_raw THEN 0 ELSE weekday_af_night_over_y_raw END) AS weekday_af_night_over_y
+				     ,to_char(CASE WHEN holiday_night_over_m_raw > holiday_night_over_y_raw THEN 0 ELSE holiday_night_over_y_raw END) AS holiday_night_over_y
+				     ,to_char(CASE WHEN ph_night_over_m_raw > ph_night_over_y_raw THEN 0 ELSE ph_night_over_y_raw END) AS public_holiday_night_over_y
+				     
+				     ,to_char(CASE WHEN weekday_day_over_m_raw > weekday_day_over_y_raw THEN weekday_day_over_m_raw ELSE 0 END) AS weekday_day_over_m
+				     ,to_char(CASE WHEN holiday_day_over_m_raw > holiday_day_over_y_raw THEN holiday_day_over_m_raw ELSE 0 END) AS holiday_day_over_m
+				     ,to_char(CASE WHEN public_holiday_day_over_m_raw > public_holiday_day_over_y_raw THEN public_holiday_day_over_m_raw ELSE 0 END) AS public_holiday_day_over_m
+				     ,to_char(CASE WHEN weekday_night_over_m_raw > weekday_night_over_y_raw THEN weekday_night_over_m_raw ELSE 0 END) AS weekday_night_over_m
+				     ,to_char(CASE WHEN weekday_af_night_over_m_raw > weekday_af_night_over_y_raw THEN weekday_af_night_over_m_raw ELSE 0 END) AS weekday_af_night_over_m
+				     ,to_char(CASE WHEN holiday_night_over_m_raw > holiday_night_over_y_raw THEN holiday_night_over_m_raw ELSE 0 END) AS holiday_night_over_m
+				     ,to_char(CASE WHEN ph_night_over_m_raw > ph_night_over_y_raw THEN ph_night_over_m_raw ELSE 0 END) AS public_holiday_night_over_m
+				
+				FROM raw_data)) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    </insert>
+
+</mapper>

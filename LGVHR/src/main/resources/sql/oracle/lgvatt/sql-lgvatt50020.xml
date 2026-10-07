@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- HMT_20210323 add public_hours columns--> 
+<!-- HMT_20251201 add shift_type_codes columns--> 
+<mapper namespace="LGVATT50020">
+	<!-- 공휴일 조회 -->
+	<select id="retrieveHoliday" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT50020.retrieveHoliday*/
+				   tah.subsidiary_code	/* 해외법인코드 */
+		          ,tah.time_and_attendance_yyyy	/* 휴일년도 */
+		          ,TO_CHAR(tah.holiday_date, 'DD/MM/YYYY') as holiday_date  /* 휴일 */
+		          ,TO_CHAR(tah.holiday_date, 'YYYY-MM-DD') as before_holiday_date /* 키값 휴일 */
+		          ,tah.holiday_code /* 휴일코드 */
+		          ,tah.holiday_name /* 휴일명 */
+		          ,tah.time_and_attendance_code	/* Attendance Code */
+		          ,tac.time_and_attendance_name /* Attendance name */
+		          ,tah.public_hours /*public hours HMT_20210323*/
+		          ,tah.shift_type_codes /*Add shift_type_codes column HMT_20251201*/
+		          ,(select local_language_full_name from lgcom_user_m where application_user_id = tah.creation_user_id) as creation_user_id /* 등록자ID */
+		          ,TO_CHAR(tah.creation_date, 'DD/MM/YYYY') as creation_date	/* 등록일자 */
+		    FROM tb_att_holiday_info_n tah
+		    LEFT OUTER JOIN tb_att_code_c tac
+		    ON tac.time_and_attendance_code = tah.time_and_attendance_code
+		    WHERE tac.use_flag = 'Y'
+			AND tah.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode} -- Session Parameter로 셋팅
+			AND tah.time_and_attendance_yyyy = #{timeAndAttendanceYyyy}
+			ORDER BY tah.holiday_date asc
+	</select>
+	
+	<!-- 공휴일 휴일명 조회 -->
+	<select id="retrieveHolidayNameList" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT50020.retrieveHolidayNameList*/
+				   lcm.common_code as code, lcm.common_code_name as name
+			FROM lgcom_common_code_multi_lang_c lcm
+			    ,lgcom_common_code_c lcc
+			WHERE lcm.code_type_code = 'LGVHR_HOLIDAY_CODE' 
+			AND lcm.code_type_code = lcc.code_type_code
+			AND lcm.common_code = lcc.common_code
+			AND lcm.language_code = #{languageCode}  -- session language
+			AND lcc.use_flag = 'Y'
+	</select>
+	
+	<!-- Holiday attendance 조회 -->
+	<select id="retrieveHolidayAttendance" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT50020.retrieveHolidayAttendance*/
+				   tac.time_and_attendance_code code, tac.time_and_attendance_name as name
+			FROM tb_att_code_c tac
+			WHERE tac.time_and_attendance_short_name like '%Holiday'
+			AND tac.use_flag = 'Y'
+			AND tac.subsidiary_code = #{subsidiaryCode}
+	</select>
+	
+	<!-- 휴일 등록 -->
+	<insert id="insertHoliday" parameterType="java.util.HashMap">
+		INSERT /*LGVATT50020.insertHoliday*/ INTO tb_att_holiday_info_n
+		( subsidiary_code					/* 해외법인코드 */
+		 ,time_and_attendance_yyyy			/* 휴일년도 */
+		 ,time_and_attendance_code			/* Attendance Code */
+		 ,holiday_date						/* 휴일 */
+		 ,holiday_code 						/* 휴일코드 */
+		 ,holiday_name 						/* 휴일명 */
+		 ,public_hours                      /* public hours HMT_20210323*/
+		 ,shift_type_codes                  /* Add shift_type_codes column HMT_20251201*/
+		 ,creation_user_id 					/* 사용자ID */
+		 ,creation_date 					/* 등록일자 */
+		 ,last_update_user_id 				/* 최종수정자ID */
+		 ,last_update_date 					/* 수정일자 */
+		) values
+		( #{subsidiaryCode}
+		 ,#{timeAndAttendanceYyyy}
+		 ,#{timeAndAttendanceCode}
+		 ,trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+		 ,#{holidayCode}
+		 ,(	SELECT distinct lcm.common_code_name
+			FROM lgcom_common_code_multi_lang_c lcm
+			WHERE lcm.code_type_code = 'LGVHR_HOLIDAY_CODE' 
+			AND lcm.common_code = #{holidayCode}
+			group by lcm.common_code_name)
+		 ,#{publicHours}
+		 ,#{shiftTypeCodes}
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		)
+	</insert>
+	
+	<!-- 휴일 수정 -->
+    <update id="updateHoliday" parameterType="LGCOMData">
+        UPDATE /*LGVATT50020.updateHoliday*/
+               tb_att_holiday_info_n 
+        SET   time_and_attendance_code     	   = #{timeAndAttendanceCode}
+             , holiday_date                    = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))             /* 휴일 */
+             , holiday_code                    = #{holidayCode}                 						  /* 휴일코드 */
+             , holiday_name                    = (	SELECT distinct lcm.common_code_name
+													FROM lgcom_common_code_multi_lang_c lcm
+													WHERE lcm.code_type_code = 'LGVHR_HOLIDAY_CODE' 
+													AND lcm.common_code = #{holidayCode}
+													group by lcm.common_code_name)         					/* 휴일명 */
+             , public_hours                    = #{publicHours}                                             /* public hours HMT_20210323*/
+             , shift_type_codes                = #{shiftTypeCodes}                                          /* Add shift_type_codes column HMT_20251201*/
+             , last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             , last_update_date                = trunc(sysdate)                 							/* 최종수정일자 */
+        WHERE  subsidiary_code                 = #{subsidiaryCode}              							/* 해외법인코드 */
+        AND    time_and_attendance_yyyy        = #{timeAndAttendanceYyyy}       							/* 휴무일 년도 */   
+        AND    holiday_date           		   = trunc(TO_DATE(#{beforeHolidayDate}, 'YYYY-MM-DD'))      	/* 휴일 */                         
+    </update>
+    
+    <!-- 휴일 삭제 -->
+	<delete id="deleteHoliday" parameterType="LGCOMData">
+		 DELETE FROM tb_att_holiday_info_n
+		 WHERE subsidiary_code = #{subsidiaryCode}
+		 AND time_and_attendance_yyyy = #{timeAndAttendanceYyyy}
+         AND holiday_date = trunc(TO_DATE(#{beforeHolidayDate}, 'YYYY-MM-DD'))      /* 휴일 */   
+	</delete>
+	<!--HMT_20251201 Start-->
+	<update id="updateAttBase" parameterType="LGCOMData">
+        <if test="weeklyHolidayCode != null and weeklyHolidayCode != ''">
+             UPDATE tb_att_base_bas_n 
+			    SET TIME_AND_ATTENDANCE_CODE = 'WH'
+			        ,WORK_HOURS = 0
+			        , last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+                    , last_update_date                = trunc(sysdate)                 							/* 최종수정일자 */
+			  WHERE time_and_attendance_date  = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+			  AND SHIFT_TYPE_CODE IN (SELECT TRIM(REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL))
+				    FROM tb_att_holiday_info_n s
+				    WHERE s.holiday_date = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+				    CONNECT BY REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL) IS NOT NULL)
+        </if>
+        <if test="publicHolidayCode != null and publicHolidayCode != ''">
+             UPDATE tb_att_base_bas_n 
+			    SET TIME_AND_ATTENDANCE_CODE = 'PH'
+			       ,last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+                   ,last_update_date                = sysdate                 							/* 최종수정일자 */
+			       ,WORK_HOURS = (CASE WHEN SHIFT_TYPE_CODE  like '32%' THEN 9.5
+					                   WHEN SHIFT_TYPE_CODE  NOT like '32%' 
+					                     AND A_DAY_OF_THE_WEEK_CODE = 'FRI' THEN 8
+					                     ELSE 9 END)
+			  WHERE time_and_attendance_date  = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+			  AND SHIFT_TYPE_CODE IN (SELECT TRIM(REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL))
+				    FROM tb_att_holiday_info_n s
+				    WHERE s.holiday_date = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+				    CONNECT BY REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL) IS NOT NULL)
+        </if>
+    </update>
+    <update id="updateAttPlan" parameterType="LGCOMData">
+        UPDATE tb_att_plan_n 
+		  SET TIME_AND_ATTENDANCE_CODE = #{timeAndAttendanceCode},
+		        TIME_ATTEND_DETAIL_CODE = '',
+		        LAST_UPDATE_USER_ID = #{applicationUserId}, 
+		        LAST_UPDATE_DATE = SYSDATE
+		where TIME_AND_ATTENDANCE_CODE NOT IN ('NN', 'US')
+		  AND time_and_attendance_date  = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+		  AND SHIFT_TYPE_CODE IN (SELECT TRIM(REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL))
+				    FROM tb_att_holiday_info_n s
+				    WHERE s.holiday_date = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+				    CONNECT BY REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL) IS NOT NULL)
+    </update>
+    <update id="updateAttResult" parameterType="LGCOMData">
+        UPDATE tb_att_result_n 
+		  SET TIME_AND_ATTENDANCE_CODE = #{timeAndAttendanceCode},
+		      WORK_HOURS = 0,
+		      NORMAL_NIGHT_OVERTIME_HOURS = 0,
+		      TIME_ATTEND_DETAIL_CODE = '',
+		      LAST_UPDATE_USER_ID = #{applicationUserId}, 
+		      LAST_UPDATE_DATE = SYSDATE
+		where TIME_AND_ATTENDANCE_CODE  NOT IN ('NN', 'US')
+		  AND time_and_attendance_date  = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+		  AND SHIFT_TYPE_CODE IN (SELECT TRIM(REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL))
+				    FROM tb_att_holiday_info_n s
+				    WHERE s.holiday_date = trunc(TO_DATE(#{holidayDate}, 'YYYY-MM-DD'))
+				    CONNECT BY REGEXP_SUBSTR(s.shift_type_codes, '[^,]+', 1, LEVEL) IS NOT NULL)
+    </update>
+    <!--HMT_20251201 End-->
+</mapper>

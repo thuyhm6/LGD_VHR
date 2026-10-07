@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- HMT_20210323 Replace ELSE 8 END by lgvpay_info_pkg.get_type_work_hours(subsidiary_code,trunc(to_date(#{actualDate}, 'dd/mm/yyyy')),'21','1A',8,'perfect_work_hours')--> 
+<!-- HMT_20220705 Add timeAttendInputReasonDesc column at retrieveLWAttList-->
+<mapper namespace="LGVATT20040">
+
+	<!-- Line Worker Plan&Result Retrieve; Add HMT_20210410 month ot total with month ot limit -->
+	<select id="retrieveLWAttList" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		WITH tb_plan_temp AS
+		 (SELECT em.employee_number
+		        ,em.full_name_local
+		        ,em.grade_title
+		        ,ap.time_and_attendance_date
+		        ,ap.a_day_of_the_week_code
+		        ,ac.time_and_attendance_type_code
+		        ,ap.time_and_attendance_code
+		        ,ap.time_attend_detail_code
+		        ,ap.shift_type_code
+		        ,ap.night_shift_flag
+		        ,ap.overtime_sum_hours
+		        ,ac.update_enable_flag
+		        ,lgvatt_common_pkg.get_holiday_flag(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                           ,ap.shift_type_code
+		                                           ,trunc(to_date(#{attDate}, 'dd/mm/yyyy')) + 1) AS holiday_flag
+		        ,em.organization_id
+		    FROM tb_att_plan_n ap
+		        ,emp_master    em
+		        ,tb_att_code_c ac
+		   WHERE 1 = 1
+		     AND ap.time_and_attendance_date = trunc(to_date(#{attDate}, 'dd/mm/yyyy') + 1)
+		     AND ap.employee_no = em.employee_number
+		     AND ap.time_and_attendance_code = ac.time_and_attendance_code
+		     AND em.assignment_category = 'LGD_LW'
+		     AND ap.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		     AND em.status = 'Active Assignment'
+		     AND em.flsa_yn = 'N'
+		     AND em.fse_yn = 'N')
+		,tb_actual_temp AS
+		 (SELECT em.employee_number
+		        ,em.full_name_local
+		        ,em.grade_title
+		        ,ar.time_and_attendance_date
+		        ,ar.a_day_of_the_week_code
+		        ,ac.time_and_attendance_type_code
+		        ,ar.time_and_attendance_code
+		        ,ar.time_attend_detail_code
+		        ,ar.shift_type_code
+		        ,ar.night_shift_flag
+		        ,ar.evening_meal_flag
+		        ,ar.work_start_time
+		        ,ar.time_attend_input_reason_desc
+		        ,ar.overtime_sum_hours
+		        ,ar.weekday_overtime_hours
+		        ,ar.holiday_overtime_hours
+		        ,ar.public_holiday_overtime_hours
+		        ,ar.weekday_night_overtime_hours
+		        ,ar.weekday_ot_af_night_work_hours
+		        ,ar.holiday_night_overtime_hours
+		        ,ar.public_holiday_night_ot_hours
+		        ,ar.normal_night_overtime_hours
+		        ,ar.tardy_hours
+		        ,ar.early_leave_hours
+		        ,ar.going_out_hours
+		        ,ar.special_bonus_hours
+		        ,ar.helpcall_support_hours
+		        ,ac.update_enable_flag
+		        ,lgvatt_common_pkg.get_holiday_flag(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                           ,ar.shift_type_code
+		                                           ,trunc(to_date(#{attDate}, 'dd/mm/yyyy'))) AS holiday_flag
+		        ,to_char(lgvatt_common_pkg.get_idcard_inout_time(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                                                        ,em.employee_number
+                                                        ,trunc(to_date(#{attDate}, 'dd/mm/yyyy'))
+                                                        ,'IN'), 'HH24:MI') AS check_in
+                ,to_char(lgvatt_common_pkg.get_idcard_inout_time(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                                                        ,em.employee_number
+                                                        ,trunc(to_date(#{attDate}, 'dd/mm/yyyy'))
+                                                        ,'OUT'), 'HH24:MI') AS check_out
+                ,em.organization_id
+                ,ac.attendance_days
+                ,em.grade
+		    FROM tb_att_result_n ar
+		        ,emp_master      em
+		        ,tb_att_code_c   ac
+		   WHERE 1 = 1
+		     AND ar.time_and_attendance_date = trunc(to_date(#{attDate}, 'dd/mm/yyyy'))
+		     AND ar.employee_no = em.employee_number
+		     AND ar.time_and_attendance_code = ac.time_and_attendance_code
+		     AND em.assignment_category = 'LGD_LW'
+		     AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		     AND em.status = 'Active Assignment'
+		     AND em.flsa_yn = 'N'
+		     AND em.fse_yn = 'N')
+		SELECT tat.employee_number                        AS employee_no
+		      ,tat.full_name_local                        AS employee_name
+		      ,tat.grade_title                            AS employee_grade
+		      ,to_char(tpt.time_and_attendance_date, 'dd/mm/yyyy') AS plan_date
+		      ,tpt.time_and_attendance_type_code          AS plan_attendance_type
+		      ,tpt.time_and_attendance_code               AS plan_attendance_detail
+		      ,tpt.time_attend_detail_code                AS plan_attend_detail_reason
+		      ,tpt.shift_type_code                        AS plan_shift_code
+		      ,tpt.night_shift_flag                       AS plan_day_night
+		      ,nvl(tpt.overtime_sum_hours, 0)             AS plan_o_t
+		      ,to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') AS actual_date
+		      ,tat.time_and_attendance_type_code          AS actual_attendance_type
+		      ,tat.time_and_attendance_code               AS actual_attendance_detail
+		      ,tat.time_attend_detail_code                AS actual_attend_detail_reason
+		      ,tat.shift_type_code                        AS actual_shift_code
+		      ,tat.night_shift_flag                       AS actual_day_night
+		      ,nvl(tat.evening_meal_flag, 'N')            AS actual_dinner_chk
+		      ,COALESCE((select distinct fl.work_start_time
+                     from tb_att_flexible_result_n fl
+                     where fl.PROGRESS_STATUS_CODE = '40' AND fl.employee_no = tat.employee_number
+                     and fl.time_and_attendance_date = tat.time_and_attendance_date),
+                            tat.work_start_time
+                        )                                 AS actual_start_tm
+		      ,nvl(tat.overtime_sum_hours, 0)             AS actual_o_t
+		      ,tat.time_attend_input_reason_desc         AS time_attend_input_reason_desc
+		      ,lgvatt_ot_calculation_pkg.get_ot_total(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, tpt.employee_number, 
+		                                              tpt.time_and_attendance_date, tpt.time_and_attendance_date, 'month_total_ot_yyyymm') AS month_total_overtime
+              ,(CASE WHEN tpt.shift_type_code IN ('2A','2B') THEN '0'
+                     ELSE lgvatt_ot_level_pkg.get_ot_level(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, tpt.employee_number, 
+                                                 TO_CHAR(tpt.time_and_attendance_date,'YYYYMM'), 'request_lower_limit')
+                     END ) as overtime_limit
+		      ,nvl(tat.weekday_overtime_hours, 0)         AS weekday
+		      ,nvl(tat.holiday_overtime_hours, 0)         AS weekday_holiday
+		      ,nvl(tat.public_holiday_overtime_hours, 0)  AS public_holiday
+		      ,nvl(tat.weekday_night_overtime_hours, 0)   AS at_night_weekday
+		      ,nvl(tat.weekday_ot_af_night_work_hours, 0) AS at_night_weekday_after_o_t
+		      ,nvl(tat.holiday_night_overtime_hours, 0)   AS at_night_weekday_holiday
+		      ,nvl(tat.public_holiday_night_ot_hours, 0)  AS at_night_public_holiday
+		      ,nvl(tat.normal_night_overtime_hours, 0)    AS night_normal
+		      ,nvl(tat.tardy_hours, 0)                    AS deduction_lateness
+		      ,nvl(tat.early_leave_hours, 0)              AS deduction_leaving_early
+		      ,nvl(tat.going_out_hours, 0)                AS deduction_going_out
+		      ,nvl(tat.special_bonus_hours, 0)            AS special_bonus
+		      ,nvl(tat.helpcall_support_hours, 0)         AS help_call
+		      ,tpt.update_enable_flag                     AS plan_update_enable
+		      ,tat.update_enable_flag                     AS actual_update_enable
+		      ,tpt.holiday_flag                           AS plan_holiday_flag
+		      ,(CASE WHEN EXISTS (select 1 from tb_att_flexible_result_n fl where fl.PROGRESS_STATUS_CODE = '40' AND fl.employee_no = tat.employee_number and fl.time_and_attendance_date = tat.time_and_attendance_date) then 'X'
+		             WHEN tat.shift_type_code IN ('2A','2B') THEN 'T' -- HMS_20260601 Add 2A,2B Shift
+                   ELSE tat.holiday_flag END)             AS actual_holiday_flag
+		      ,tat.check_in                               AS actual_in_time
+              ,tat.check_out                              AS actual_out_time
+              ,tat.time_and_attendance_code               AS original_att_code
+              ,CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.check_in, 'DD/MM/YYYY HH24:MI') >= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') + INTERVAL '-5' MINUTE
+		            THEN 'Y' 
+		            ELSE 'N' 
+		            END AS illegal_in_time_flag
+		      ,CASE WHEN tat.shift_type_code LIKE '1%' 
+		            THEN ( CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') < to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' 17:00', 'DD/MM/YYYY HH24:MI') AND
+                                     to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') >= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' 08:00', 'DD/MM/YYYY HH24:MI')
+                                THEN ( CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.check_out, 'DD/MM/YYYY HH24:MI') <= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') + INTERVAL '9' HOUR THEN 'Y' ELSE 'N' END ) -- 1부제 Day
+                                ELSE ( CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.check_out, 'DD/MM/YYYY HH24:MI') + INTERVAL '24' HOUR <= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') + INTERVAL '9' HOUR THEN 'Y' ELSE 'N' END ) -- 1부제 Night
+                                 END )
+                    ELSE ( CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') < to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' 20:00', 'DD/MM/YYYY HH24:MI') AND
+                                     to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') >= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' 08:00', 'DD/MM/YYYY HH24:MI')
+                                THEN ( CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.check_out, 'DD/MM/YYYY HH24:MI') <= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') + INTERVAL '12' HOUR THEN 'Y' ELSE 'N' END ) -- 2부제 Day
+                                ELSE ( CASE WHEN to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.check_out, 'DD/MM/YYYY HH24:MI') + INTERVAL '24' HOUR <= to_date(to_char(tat.time_and_attendance_date, 'dd/mm/yyyy') || ' ' || tat.work_start_time, 'DD/MM/YYYY HH24:MI') + INTERVAL '12' HOUR THEN 'Y' ELSE 'N' END ) -- 2부제 Night
+                                 END )
+		            END AS illegal_out_time_flag
+		      ,'N'                                        AS is_edit_ot
+		      ,tat.attendance_days                        AS attend_days
+		  FROM tb_plan_temp   tpt
+		      ,tb_actual_temp tat
+		 WHERE 1 = 1
+		   AND tpt.employee_number = tat.employee_number
+	]]>
+	<choose>
+		<when test="orgName != null and orgName != ''">
+			AND tat.organization_id = #{orgName}
+		</when>
+		<otherwise>
+			AND tat.organization_id IN ( SELECT tacn.organization_id FROM tb_att_contract_n tacn WHERE tacn.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo})
+		</otherwise>
+	</choose>
+	<if test="shiftCode != null and shiftCode != ''">
+		AND tat.shift_type_code = #{shiftCode}
+	</if>
+	<if test="employeeNo != null and employeeNo != ''">
+		AND tpt.employee_number like '%' || UPPER(#{employeeNo}) || '%'
+	</if>
+	<if test="employeeName != null and employeeName != ''">
+		AND UPPER(tpt.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+	</if>
+	<if test= "regularFlag != null and regularFlag == 'Y'.toString()">
+		AND tat.grade NOT IN (SELECT lcc.common_code
+							  FROM   lgcom_common_code_c lcc
+							  WHERE  1 = 1
+							  AND    lcc.code_type_code = 'LGVHR_ATT_OS_EMP_GRADE'
+							  AND    lcc.use_flag = 'Y')
+	</if>
+	<if test= "regularFlag != null and regularFlag == 'N'.toString()">
+		AND tat.grade IN (SELECT lcc.common_code
+						  FROM   lgcom_common_code_c lcc
+						  WHERE  1 = 1
+						  AND    lcc.code_type_code = 'LGVHR_ATT_OS_EMP_GRADE'
+						  AND    lcc.use_flag = 'Y')
+	</if>
+	
+		ORDER BY tpt.grade_title, tpt.employee_number
+	</select>
+	
+	<!-- Line Worker Plan Save -->
+	<update id="updateLWAttPlanList" parameterType="LGCOMData">
+		UPDATE tb_att_plan_n
+		   SET shift_type_code             = #{planShiftCode}
+		      ,time_and_attendance_code    = #{planAttendanceDetail}
+		      ,time_attend_detail_code     = #{planAttendDetailReason}
+		      ,night_shift_flag            = #{planDayNight}
+		      ,overtime_sum_hours          = #{planOT}
+		      ,last_update_user_id         = #{applicationUserId}
+		      ,last_update_date            = SYSDATE
+		      ,base_time_attend_apply_flag = 'N'
+		 WHERE employee_no = #{employeeNo}
+		   AND time_and_attendance_date = trunc(to_date(#{planDate}, 'dd/mm/yyyy'))
+		   AND subsidiary_code = #{subsidiaryCode}
+	</update>
+	
+	<!-- Line Worker Result Save -->
+	<update id="updateLWAttActualList" parameterType="LGCOMData">
+		UPDATE tb_att_result_n
+		   SET shift_type_code                = #{actualShiftCode}
+		      ,time_and_attendance_code       = #{actualAttendanceDetail}
+		      ,time_attend_detail_code        = #{actualAttendDetailReason}
+		      ,night_shift_flag               = #{actualDayNight}
+		      ,work_hours                     = (SELECT CASE WHEN attendance_days = 1 
+		                                                     THEN CASE WHEN #{actualShiftCode} LIKE '3%' THEN 9.5 
+		                                                     ELSE lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},trunc(to_date(#{actualDate}, 'dd/mm/yyyy')),'21','1A',8,'perfect_work_hours') END /*HMT_20210323*/
+		                                                     WHEN attendance_days = 0.5
+		                                                     THEN CASE WHEN #{actualShiftCode} LIKE '3%' THEN 4 
+		                                                     ELSE lgvpay_info_pkg.get_type_work_hours(#{subsidiaryCode},trunc(to_date(#{actualDate}, 'dd/mm/yyyy')),'21','1A',8,'perfect_work_hours')/2 END /*HMT_20210323*/
+		                                                     ELSE 0
+		                                                     END 
+		                                         FROM   tb_att_code_c
+		                                         WHERE  subsidiary_code          = #{subsidiaryCode}
+		                                         AND    time_and_attendance_code = #{actualAttendanceDetail})
+		      ,work_start_time                = #{actualStartTm}
+		      ,evening_meal_flag              = #{actualDinnerChk}
+		      ,overtime_sum_hours             = #{actualOT}
+		      ,weekday_overtime_hours         = #{weekday}
+		      ,holiday_overtime_hours         = #{weekdayHoliday}
+		      ,public_holiday_overtime_hours  = #{publicHoliday}
+		      ,weekday_night_overtime_hours   = #{atNightWeekday}
+		      ,weekday_ot_af_night_work_hours = #{atNightWeekdayAfterOT}
+		      ,holiday_night_overtime_hours   = #{atNightWeekdayHoliday}
+		      ,public_holiday_night_ot_hours  = #{atNightPublicHoliday}
+		      ,normal_night_overtime_hours    = #{nightNormal}
+		      ,tardy_hours                    = #{deductionLateness}
+		      ,early_leave_hours              = #{deductionLeavingEarly}
+		      ,going_out_hours                = #{deductionGoingOut}
+		      ,special_bonus_hours            = #{specialBonus}
+		      ,helpcall_support_hours         = #{helpCall}
+		      ,time_attend_input_reason_desc  = #{timeAttendInputReasonDesc}
+		      ,last_update_user_id            = #{applicationUserId}
+		      ,last_update_date               = SYSDATE
+		      ,base_time_attend_apply_flag    = 'N'
+		 WHERE employee_no = #{employeeNo}
+		   AND time_and_attendance_date = trunc(to_date(#{actualDate}, 'dd/mm/yyyy'))
+		   AND subsidiary_code = #{subsidiaryCode}
+	</update>
+	
+	<select id="isEnableAttendInput" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		SELECT CASE
+		         WHEN SYSDATE <
+		              lgvatt_common_pkg.get_att_close_time(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                                  ,'INPUT'
+		                                                  ,trunc(to_date(#{attDate}, 'dd/mm/yyyy'))
+		                                                  ,#{shiftCode}
+		                                                  ,'LW_ORG_DATE')
+		         THEN
+		          'Y'
+		         ELSE
+		          'N'
+		       END AS input_flag
+		  FROM dual
+	]]>
+	</select>
+	
+	<select id="isillegalAtt" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		SELECT CASE WHEN to_date(#{attendDate} || ' ' || #{checkIn}, 'DD/MM/YYYY HH24:MI') >= to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') + INTERVAL '-5' MINUTE
+		            THEN 'Y' 
+		            ELSE 'N' 
+		            END AS illegal_in_time_flag
+		      ,CASE WHEN #{shiftCode} LIKE '1%' 
+		            THEN ( CASE WHEN to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') < to_date(#{attendDate} || ' 17:00', 'DD/MM/YYYY HH24:MI') AND
+                                     to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') >= to_date(#{attendDate} || ' 08:00', 'DD/MM/YYYY HH24:MI')
+                                THEN ( CASE WHEN to_date(#{attendDate} || ' ' || #{checkOut}, 'DD/MM/YYYY HH24:MI') <= to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') + INTERVAL '9' HOUR THEN 'Y' ELSE 'N' END ) -- 1부제 Day
+                                ELSE ( CASE WHEN to_date(#{attendDate} || ' ' || #{checkOut}, 'DD/MM/YYYY HH24:MI') + INTERVAL '24' HOUR <= to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') + INTERVAL '9' HOUR THEN 'Y' ELSE 'N' END ) -- 1부제 Night
+                                 END )
+                    ELSE ( CASE WHEN to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') < to_date(#{attendDate} || ' 20:00', 'DD/MM/YYYY HH24:MI') AND
+                                     to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') >= to_date(#{attendDate} || ' 08:00', 'DD/MM/YYYY HH24:MI')
+                                THEN ( CASE WHEN to_date(#{attendDate} || ' ' || #{checkOut}, 'DD/MM/YYYY HH24:MI') <= to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') + INTERVAL '12' HOUR THEN 'Y' ELSE 'N' END ) -- 2부제 Day
+                                ELSE ( CASE WHEN to_date(#{attendDate} || ' ' || #{checkOut}, 'DD/MM/YYYY HH24:MI') + INTERVAL '24' HOUR <= to_date(#{attendDate} || ' ' || #{workStartTm}, 'DD/MM/YYYY HH24:MI') + INTERVAL '12' HOUR THEN 'Y' ELSE 'N' END ) -- 2부제 Night
+                                 END )
+		            END AS illegal_out_time_flag
+		  FROM dual
+	]]>
+	</select>
+	
+	<!-- OT계산 누락체크 쿼리  -->
+	<insert id="insertAgainCalculHis" parameterType="LGCOMData">
+		INSERT INTO tb_att_ot_validation_n
+		  (validation_seq
+		  ,work_type
+		  ,employee_no
+		  ,subsidiary_code
+		  ,time_and_attendance_date
+		  ,shift_type_code
+		  ,time_and_attendance_code
+		  ,night_shift_flag
+		  ,work_start_time
+		  ,evening_meal_flag
+		  ,overtime_sum_hours
+		  ,weekday_overtime_hours
+		  ,holiday_overtime_hours
+		  ,public_holiday_overtime_hours
+		  ,weekday_night_overtime_hours
+		  ,weekday_ot_af_night_work_hours
+		  ,holiday_night_overtime_hours
+		  ,public_holiday_night_ot_hours
+		  ,normal_night_overtime_hours
+		  ,tardy_hours
+		  ,early_leave_hours
+		  ,going_out_hours
+		  ,creation_date)
+		VALUES
+		  (tb_att_ot_validation_seq.nextval
+		  ,#{workType}
+		  ,#{employeeNo}
+		  ,#{subsidiaryCode}
+		  ,#{actualDate}
+		  ,#{actualShiftCode}
+		  ,#{actualAttendanceDetail}
+		  ,#{actualDayNight}
+		  ,#{actualStartTm}
+		  ,#{actualDinnerChk}
+		  ,#{actualOT}
+		  ,#{weekday}
+		  ,#{weekdayHoliday}
+		  ,#{publicHoliday}
+		  ,#{atNightWeekday}
+		  ,#{atNightWeekdayAfterOT}
+		  ,#{atNightWeekdayHoliday}
+		  ,#{atNightPublicHoliday}
+		  ,#{nightNormal}
+		  ,#{deductionLateness}
+		  ,#{deductionLeavingEarly}
+		  ,#{deductionGoingOut}
+		  ,SYSDATE)
+	</insert>
+	
+</mapper>

@@ -1,0 +1,76 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  
+  <groupId>com.lgd</groupId>
+  <artifactId>lgcom</artifactId>
+  <packaging>war</packaging>
+  <version>0.0.1-SNAPSHOT</version>
+  
+  <name>Check Out LGCOM SVN (PROD)</name>
+  
+  <repositories>
+		<repository>
+			<id>central</id>
+			<name>repository for LGCOM</name>
+			<layout>default</layout>
+			<url>http://172.19.79.162:6065/nexus/content/groups/public</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</repository>
+	</repositories>
+
+	<pluginRepositories>
+		<pluginRepository>
+			<id>central</id>
+			<name>repository for LGCOM</name>
+			<layout>default</layout>
+			<url>http://172.19.79.162:6065/nexus/content/groups/public</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</pluginRepository>
+	</pluginRepositories>
+
+  <profiles>
+		<profile>
+			<id>prod</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<properties>
+				<svn.connectionUrl>scm:svn:svn://localhost:3690/svn/branches/LGCOM_PROD</svn.connectionUrl>
+				<svn.checkout.directory>D://engn001/jussvc01/ciserv/hudson/jobs/prod_LGCOM_Changelog/svn</svn.checkout.directory>
+			</properties>
+		</profile>
+	</profiles>
+  
+  	<build>
+
+		<defaultGoal>scm:checkout</defaultGoal>
+		
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+	            <artifactId>maven-scm-plugin</artifactId>
+	            <version>1.9.5</version>
+                <configuration>
+	            	<connectionUrl>${svn.connectionUrl}</connectionUrl>
+	                <checkoutDirectory>${svn.checkout.directory}</checkoutDirectory>
+	                <!-- for scm:changelog -->
+	                <basedir>${svn.checkout.directory}</basedir>
+	                <startDate>${startDate} 07:00:00</startDate>
+	                <userDateFormat>yyyy-MM-dd HH:mm:ss</userDateFormat>
+                </configuration>
+            </plugin>
+		</plugins>
+	</build>
+	
+</project>

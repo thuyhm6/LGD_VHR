@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT00015">
+    <!-- HMT_20260401  Request for OS KPI Master Employee List -->
+    <select id="retrieveRequestOsKpiMasterList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT00015.retrieveRequestOsKpiMasterList */
+               kor.REQUEST_NO
+               ,kor.REQUEST_SEQ_NO 
+               ,kor.REQUEST_DATE
+               ,kor.SUBSIDIARY_CODE
+		       ,kor.VENDOR_CODE
+		       ,VM.VENDOR_NAME        AS VENDOR_NAME
+		       ,kor.TIME_AND_ATTENDANCE_YYYYMM
+               ,kor.ORGANIZATION_ID
+               ,om.ORG_NAME_LOCAL  AS ORG_NAME
+               ,kor.ITEM_NO
+               ,kos.ITEM_NAME
+               ,kor.PERFECT_TARGET
+               ,kor.PERFECT_POINT
+               ,kor.ACTUAL_TARGET
+               ,kor.ACTUAL_POINT
+               ,kos.CRITERIA
+		       ,kor.REASON_DESC
+		       ,kor.CREATION_USER_ID
+		       ,kor.CREATION_DATE
+		       ,kor.LAST_UPDATE_USER_ID
+		       ,kor.LAST_UPDATE_DATE
+		  FROM TB_PAY_KPI_OS_REQUEST kor LEFT OUTER JOIN TB_VENDOR_MASTER VM ON (kor.VENDOR_CODE = VM.VENDOR_CODE)
+		  LEFT OUTER JOIN ORG_MASTER om ON (om.ORGANIZATION_ID = kor.ORGANIZATION_ID)
+		  LEFT OUTER JOIN TB_PAY_KPI_OS_STANDARD kos ON (kos.ITEM_NO = kor.ITEM_NO)
+		 WHERE 1=1		 
+		   <if test="requestNo != null and requestNo != ''">
+		      AND kor.REQUEST_NO = #{requestNo}
+		   </if>
+		   <if test="timeAndAttendanceYyyymm != null and timeAndAttendanceYyyymm != ''">
+	          AND (kor.TIME_AND_ATTENDANCE_YYYYMM) = #{timeAndAttendanceYyyymm}
+	        </if>
+	        <if test="vendorCode != null and vendorCode != ''">
+	          AND (kor.VENDOR_CODE) = #{vendorCode}
+	        </if>
+		 ORDER BY kor.ORGANIZATION_ID, kor.VENDOR_CODE, kor.ITEM_NO  ASC
+    </select>
+
+    
+    
+    <update id="updateRequestOsKpiMaster" parameterType="LGCOMData">
+        UPDATE /*LGVATT00015.updateRequestOsKpiMaster*/
+               TB_PAY_KPI_OS_REQUEST 
+		SET  PERFECT_TARGET		= #{perfectTarget}
+			 ,PERFECT_POINT		= #{perfectPoint}
+			 ,ACTUAL_TARGET		= #{actualTarget}
+			 ,ACTUAL_POINT		= #{actualPoint}
+			 ,REASON_DESC		= #{reasonDesc}
+             , last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  REQUEST_SEQ_NO   = #{requestSeqNo}
+    </update>
+
+    <!-- CSV 다운로드 -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVATT00015.createDirectCSVDownloadData */
+              REQUEST_SEQ_NO
+            , VENDOR_CODE
+			, VENDOR_NAME
+			, TIME_AND_ATTENDANCE_YYYYMM
+			, ORGANIZATION_ID
+			, ORG_NAME
+			, ITEM_NO
+			, ITEM_NAME
+			, PERFECT_TARGET
+			, PERFECT_POINT
+			, ACTUAL_TARGET
+			, ACTUAL_POINT
+			, CRITERIA
+			, REASON_DESC
+        FROM (
+                  SELECT '1' gubun
+                        , 'Request SEQ Code' AS REQUEST_SEQ_NO
+                        ,'Vendor Code' AS VENDOR_CODE
+						,'Vendor Name' AS VENDOR_NAME
+						,'Attendance Month' AS TIME_AND_ATTENDANCE_YYYYMM
+						,'Organization Id' AS ORGANIZATION_ID
+						,'Org Name' AS ORG_NAME
+						,'Item No' AS ITEM_NO
+						,'Item Name' AS ITEM_NAME
+						,'Perfect Target' AS PERFECT_TARGET
+						,'Perfect Point' AS PERFECT_POINT
+						,'Actual Target' AS ACTUAL_TARGET
+						,'Actual Point' AS ACTUAL_POINT
+						,'Criteria' AS CRITERIA
+						,'Reason Desc' AS REASON_DESC
+                   FROM DUAL
+                  UNION ALL
+                      SELECT '2' gubun
+                       ,TO_CHAR(kor.REQUEST_SEQ_NO) AS REQUEST_SEQ_NO
+                       ,kor.VENDOR_CODE
+				       ,VM.VENDOR_NAME        AS VENDOR_NAME
+				       ,kor.TIME_AND_ATTENDANCE_YYYYMM
+		               ,kor.ORGANIZATION_ID
+		               ,om.ORG_NAME_LOCAL  AS ORG_NAME
+		               ,kor.ITEM_NO
+		               ,kos.ITEM_NAME
+		               ,TO_CHAR(kor.PERFECT_TARGET) AS PERFECT_TARGET
+		               ,TO_CHAR(kor.PERFECT_POINT) AS PERFECT_POINT
+		               ,TO_CHAR(kor.ACTUAL_TARGET) AS ACTUAL_TARGET
+		               ,TO_CHAR(kor.ACTUAL_POINT) AS ACTUAL_POINT
+		               ,kos.CRITERIA
+				       ,kor.REASON_DESC
+				  FROM TB_PAY_KPI_OS_REQUEST kor LEFT OUTER JOIN TB_VENDOR_MASTER VM ON (kor.VENDOR_CODE = VM.VENDOR_CODE)
+				  LEFT OUTER JOIN ORG_MASTER om ON (om.ORGANIZATION_ID = kor.ORGANIZATION_ID)
+				  LEFT OUTER JOIN TB_PAY_KPI_OS_STANDARD kos ON (kos.ITEM_NO = kor.ITEM_NO)
+				 WHERE 1 = 1
+				   <if test="requestNo != null and requestNo != ''">
+				   AND kor.REQUEST_NO = #{requestNo}
+				   </if>
+				   <if test="timeAndAttendanceYyyymm != null and timeAndAttendanceYyyymm != ''">
+			          AND (kor.TIME_AND_ATTENDANCE_YYYYMM) = #{timeAndAttendanceYyyymm}
+			        </if>
+			        <if test="vendorCode != null and vendorCode != ''">
+			          AND (kor.VENDOR_CODE) = #{vendorCode}
+			        </if>
+                        
+        )
+        ORDER BY gubun, REQUEST_SEQ_NO, ORGANIZATION_ID, VENDOR_CODE, ITEM_NO asc
+    </select>
+
+    <!-- Excel Upload 후속 처리 -->
+    <select id="createRequestOsKpiMasterUpload" statementType="CALLABLE" parameterType="LGCOMData">
+        {call lgvpay_upload_pkg.upload_request_os_kpi_master(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},                      /* p_errcode */
+                                                          #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},                    /* p_errbuf */
+                                                          #{sessionId, mode=IN , jdbcType=NUMERIC, javaType=string},
+                                                          #{timeAndAttendanceYyyymm , mode=IN, jdbcType=VARCHAR, javaType=string},                    /* p_pay_month */
+                                                          #{applicationUserId, mode=IN , jdbcType=NUMERIC, javaType=string}             /* p_application_user_id */
+                                                         )}
+    </select>
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVATT00015.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10 , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    ,'Vendor Code' AS VENDOR_CODE
+					,'Vendor Name' AS VENDOR_NAME
+					,'Attendance Month' AS TIME_AND_ATTENDANCE_YYYYMM
+					,'Organization Id' AS ORGANIZATION_ID
+					,'Org Name' AS ORG_NAME
+					,'Item No' AS ITEM_NO
+					,'Item Name' AS ITEM_NAME
+					,'Perfect Target' AS PERFECT_TARGET
+					,'Perfect Point' AS PERFECT_POINT
+					,'Actual Target' AS ACTUAL_TARGET
+					,'Actual Point' AS ACTUAL_POINT
+					,'Criteria' AS CRITERIA
+					,'Reason Desc' AS REASON_DESC
+               FROM DUAL
+               UNION ALL
+               SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+                     ,kor.VENDOR_CODE
+			       ,VM.VENDOR_NAME        AS VENDOR_NAME
+			       ,kor.TIME_AND_ATTENDANCE_YYYYMM
+	               ,kor.ORGANIZATION_ID
+	               ,om.ORG_NAME_LOCAL  AS ORG_NAME
+	               ,kor.ITEM_NO
+	               ,kos.ITEM_NAME
+	               ,TO_CHAR(kor.PERFECT_TARGET) AS PERFECT_TARGET
+	               ,TO_CHAR(kor.PERFECT_POINT) AS PERFECT_POINT
+	               ,TO_CHAR(kor.ACTUAL_TARGET) AS ACTUAL_TARGET
+	               ,TO_CHAR(kor.ACTUAL_POINT) AS ACTUAL_POINT
+	               ,kos.CRITERIA
+			       ,kor.REASON_DESC
+			  FROM TB_PAY_KPI_OS_REQUEST kor LEFT OUTER JOIN TB_VENDOR_MASTER VM ON (kor.VENDOR_CODE = VM.VENDOR_CODE)
+			  LEFT OUTER JOIN ORG_MASTER om ON (om.ORGANIZATION_ID = kor.ORGANIZATION_ID)
+			  LEFT OUTER JOIN TB_PAY_KPI_OS_STANDARD kos ON (kos.ITEM_NO = kor.ITEM_NO)
+			 WHERE 1=1		 
+			   <if test="requestNo != null and requestNo != ''">
+			   AND kor.REQUEST_NO = #{requestNo}
+			   </if>
+			   <if test="timeAndAttendanceYyyymm != null and timeAndAttendanceYyyymm != ''">
+		          AND (kor.TIME_AND_ATTENDANCE_YYYYMM) = #{timeAndAttendanceYyyymm}
+		        </if>
+		        <if test="vendorCode != null and vendorCode != ''">
+		          AND (kor.VENDOR_CODE) = #{vendorCode}
+		        </if>
+			 ORDER BY ORGANIZATION_ID, VENDOR_CODE, ITEM_NO ASC
+              ) AA
+              ORDER BY ORDER_BY, AA.ORGANIZATION_ID, AA.VENDOR_CODE, AA.ITEM_NO asc
+    </insert>
+
+
+</mapper>

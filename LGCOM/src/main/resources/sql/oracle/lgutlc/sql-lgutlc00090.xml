@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00090">
+	<!-- Dynamic Query 목록 조회 -->
+	<select id="retrieveDynamicQueryList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00090.retrieveDynamicQueryList */
+		         a.query_id
+		       , a.query_name
+		       , a.description AS query_desc
+		       , a.access_level
+		       , b.common_code_name AS access_level_name
+		       , a.access_group
+		    FROM XXLGE_QUERY a
+		       , (
+		          SELECT lct.code_type_code
+		               , lcc.common_code
+		               , lccm.common_code_name
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+		             AND lcc.inventory_organization_id = lccm.inventory_organization_id
+		             AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lccm.language_code = #{USER_SESSION.languageCode}
+		             AND lcc.code_type_code = 'LGCOM_DYNAMIC_ACCESSL_LEVEL'
+		             AND NVL(lcc.apply_start_date, SYSDATE) &gt;= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) &lt;= SYSDATE
+		         ) b
+		   WHERE a.access_level = b.common_code(+)
+		     AND a.access_group = #{accessGroup}
+		<if test="queryName != null and queryName != ''">
+		     AND UPPER(a.query_name) LIKE UPPER(#{queryName}) || '%'
+		</if>
+		ORDER BY a.access_group, a.query_name
+	</select>
+
+	<!-- Dynamic Query 목록 조회 -->
+	<select id="retrieveDynamicQueryDetail" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00090.retrieveDynamicQueryDetail */
+		       query_id
+		     , query_name
+		     , description AS query_desc
+		     , distinct_flag
+		     , hint_clause
+		     , from_clause
+		     , where_clause
+		     , order_by_clause
+		     , access_level
+		     , access_group
+		  FROM XXLGE_QUERY
+		 WHERE query_id = #{queryId}
+	</select>
+
+	<!-- Dynamic Query 목록 조회 -->
+	<select id="retrieveDynamicQueryColumnList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00090.retrieveDynamicQueryColumnList */
+		       query_id
+		       , seq AS column_seq
+		       , prompt AS column_prompt
+		       , field AS column_field
+		       , data_type
+		       , length AS column_length
+		       , width AS column_width
+		       , format_mask
+		    FROM XXLGE_QUERY_COLUMNS
+		   WHERE query_id = #{queryId}
+		ORDER BY seq
+	</select>
+
+	<!-- Dynamic Query 신규 ID 채번 -->
+	<select id="retrieveNewDynamicQueryId" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00090.retrieveNewDynamicQueryId */
+		       XXLGE_QUERY_ID_SEQ.NEXTVAL AS next_query_id
+		  FROM DUAL
+	</select>
+
+	<!-- Dynamic Query 등록 -->
+	<insert id="insertDynamicQueryData" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00090.insertDynamicQueryData */
+		            XXLGE_QUERY (
+		    query_id,query_name,description,distinct_flag,hint_clause,
+		    from_clause,where_clause,order_by_clause,access_level,access_group,
+		    created_by,creation_date,last_updated_by,last_update_date,last_update_login
+		) VALUES (
+		    #{queryId},#{queryName},#{queryDesc},#{distinctFlag},#{hintClause},
+		    #{fromClause},#{whereClause},#{orderByClause},#{accessLevel},#{accessGroup},
+		    #{USER_SESSION.applicationUserId},SYSDATE,#{USER_SESSION.applicationUserId},SYSDATE,#{USER_SESSION.applicationUserId}
+		)
+	</insert>
+
+	<!-- Dynamic Query 수정 -->
+	<update id="updateDynamicQueryData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00090.updateDynamicQueryData */
+		       XXLGE_QUERY
+		   SET query_name        = #{queryName}
+		     , description       = #{queryDesc}
+		     , distinct_flag     = #{distinctFlag}
+		     , hint_clause       = #{hintClause}
+		     , from_clause       = #{fromClause}
+		     , where_clause      = #{whereClause}
+		     , order_by_clause   = #{orderByClause}
+		     , access_level      = #{accessLevel}
+		     , access_group      = #{accessGroup}
+		     , last_updated_by   = #{USER_SESSION.applicationUserId}
+		     , last_update_date  = SYSDATE
+		     , last_update_login = #{USER_SESSION.applicationUserId}
+		 WHERE query_id          = #{queryId}
+	</update>
+
+	<!-- Dynamic Query Column 등록 -->
+	<insert id="insertDynamicQueryColumnData" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00090.insertDynamicQueryColumnData */
+		            XXLGE_QUERY_COLUMNS (
+		    query_id,seq,prompt,field,
+		    data_type,length,width,format_mask
+		) VALUES (
+		    #{queryId},#{columnSeq},#{columnPrompt},#{columnField},
+		    #{dataType},#{columnLength},#{columnWidth},#{formatMask}
+		)
+	</insert>
+
+	<!-- Dynamic Query Column 수정 -->
+	<update id="updateDynamicQueryColumnData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00090.updateDynamicQueryColumnData */
+		       XXLGE_QUERY_COLUMNS
+		   SET prompt      = #{columnPrompt}
+		     , field       = #{columnField}
+		     , data_type   = #{dataType}
+		     , length      = #{columnLength}
+		     , width       = #{columnWidth}
+		     , format_mask = #{formatMask}
+		 WHERE query_id    = #{queryId}
+		   AND seq         = #{columnSeq}
+	</update>
+
+	<!-- Dynamic Query Column 삭제 -->
+	<delete id="deleteDynamicQueryColumnData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00090.deleteDynamicQueryColumnData */
+		            XXLGE_QUERY_COLUMNS
+		      WHERE query_id = #{queryId}
+		        AND seq      = #{columnSeq}
+	</delete>
+
+	<!-- Dynamic Query Parameter 목록 조회 -->
+	<select id="retrieveDynamicQueryParamList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00090.retrieveDynamicQueryParamList */
+		         query_id
+		       , para_name
+		       , para_name AS org_para_name
+		       , distinct_flag
+		       , code_col
+		       , desc_col
+		       , from_clause
+		       , order_by_clause
+		       , type para_type
+		       , where_clause
+		       , format_mask
+		    FROM XXLGE_QUERY_PARAMETERS
+		   WHERE query_id = #{queryId}
+		ORDER BY creation_date
+	</select>
+
+	<!-- Dynamic Query Parameter 등록 -->
+	<insert id="insertDynamicQueryParamData" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00090.insertDynamicQueryParamData */
+		            XXLGE_QUERY_PARAMETERS (
+		    query_id,para_name,type,distinct_flag,code_col,
+		    desc_col,format_mask,from_clause,where_clause,order_by_clause,
+		    created_by,creation_date,lsat_updated_by,last_update_date,last_update_login
+		) VALUES (
+		    #{queryId},#{paraName},#{paraType},#{distinctFlag},#{codeCol},
+		    #{descCol},#{formatMask},#{fromClause},#{whereClause},#{orderByClause},
+		    #{sessionUserId},SYSDATE,#{sessionUserId},SYSDATE,#{sessionUserId}
+		)
+	</insert>
+
+	<!-- Dynamic Query Parameter 수정 -->
+	<update id="updateDynamicQueryParamData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00090.updateDynamicQueryParamData */
+		       XXLGE_QUERY_PARAMETERS
+		   SET para_name       = #{paraName}
+		     , type            = #{paraType}
+		     , distinct_flag   = #{distinctFlag}
+		     , code_col        = #{codeCol}
+		     , desc_col        = #{descCol}
+		     , format_mask     = #{formatMask}
+		     , from_clause     = #{fromClause}
+		     , where_clause    = #{whereClause}
+		     , order_by_clause = #{orderByClause}
+		 WHERE ROWID           = (SELECT ROWID
+		                            FROM XXLGE_QUERY_PARAMETERS
+		                           WHERE query_id  = #{queryId}
+		                             AND para_name = #{orgParaName})
+	</update>
+
+	<!-- Dynamic Query Parameter 삭제 -->
+	<delete id="deleteDynamicQueryParamData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00090.deleteDynamicQueryParamData */
+		            XXLGE_QUERY_PARAMETERS
+		      WHERE ROWID = (SELECT ROWID
+		                       FROM XXLGE_QUERY_PARAMETERS
+		                      WHERE query_id  = #{queryId}
+		                        AND para_name = #{orgParaName})
+	</delete>
+
+	<!-- Dynamic Query Parameter Value 목록 조회 -->
+	<select id="retrieveDynamicQueryParamValueList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00090.retrieveDynamicQueryParamValueList */
+		         query_id
+		       , para_name
+		       , para_name AS org_para_name
+		       , default_value
+		       , NVL(required_flag,'N') AS required_flag
+		    FROM XXLGE_QUERY_PARAMETER_VALUE
+		   WHERE query_id = #{queryId}
+		ORDER BY query_id, para_name
+	</select>
+
+	<!-- Dynamic Query Parameter Value 등록 -->
+	<insert id="insertDynamicQueryParamValueData" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00090.insertDynamicQueryParamValueData */
+		            XXLGE_QUERY_PARAMETER_VALUE (
+		    query_id,para_name,default_value,required_flag,created_by,
+		    creation_date,lsat_updated_by,last_update_date,last_update_login
+		) VALUES (
+		    #{queryId},#{paraName},#{defaultValue},#{requiredFlag},#{sessionUserId},
+		    SYSDATE,#{sessionUserId},SYSDATE,#{sessionUserId}
+		)
+	</insert>
+
+	<!-- Dynamic Query Parameter Value 수정 -->
+	<update id="updateDynamicQueryParamValueData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00090.updateDynamicQueryParamValueData */
+		       XXLGE_QUERY_PARAMETER_VALUE
+		   SET para_name         = #{paraName}
+		     , default_value     = #{defaultValue}
+		     , required_flag     = #{requiredFlag}
+		     , lsat_updated_by   = #{sessionUserId}
+		     , last_update_date  = SYSDATE
+		     , last_update_login = #{sessionUserId}
+		 WHERE ROWID           = (SELECT ROWID
+		                            FROM XXLGE_QUERY_PARAMETER_VALUE
+		                           WHERE query_id  = #{queryId}
+		                             AND para_name = #{orgParaName})
+	</update>
+
+	<!-- Dynamic Query Parameter Value 삭제 -->
+	<delete id="deleteDynamicQueryParamValueData" parameterType="java.util.HashMap">
+		DELETE FROM /* LGUTLC00090.deleteDynamicQueryParamValueData */
+		            XXLGE_QUERY_PARAMETER_VALUE
+		      WHERE ROWID = (SELECT ROWID
+		                       FROM XXLGE_QUERY_PARAMETER_VALUE
+		                      WHERE query_id  = #{queryId}
+		                        AND para_name = #{orgParaName})
+	</delete>
+
+	<!-- Dynamic Query Parameter Value 목록 조회 -->
+	<select id="retrieveParamValueListForInput" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00090.retrieveParamValueListForInput */
+		         a.query_id
+		       , a.para_name
+		       , a.default_value
+		       , NVL(b.type,'C') AS para_type
+		       , NVL(a.required_flag,'N') AS required_flag
+		       , CASE WHEN b.from_clause IS NOT NULL AND LENGTH(b.from_clause) > 0 THEN 'Y' ELSE 'N' END AS is_code_type
+		    FROM XXLGE_QUERY_PARAMETER_VALUE a
+		       , XXLGE_QUERY_PARAMETERS      b
+		   WHERE a.query_id  = #{queryId}
+		     AND a.para_name = #{paraName}
+		     AND a.query_id  = b.query_id(+)
+		     AND a.para_name = b.para_name(+)
+	</select>
+
+	<!-- Dynamic Query Parameter Value 목록 조회 -->
+	<select id="retrieveParamSearchListForInput" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00090.retrieveParamSearchListForInput */
+		       query_id
+		     , para_name
+		     , distinct_flag
+		     , code_col
+		     , desc_col
+		     , type AS para_type
+		     , format_mask
+		     , from_clause
+		     , where_clause
+		     , order_by_clause
+		  FROM XXLGE_QUERY_PARAMETERS
+		 WHERE query_id  = #{queryId}
+		   AND para_name = #{paraName}
+	</select>
+
+	<!-- Dynamic Query Preview를 위한 Query 정보 조회 -->
+	<select id="retrieveDynamicQueryPreviewData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00090.retrieveDynamicQueryPreviewData */
+		       query_id
+		     , hint_clause
+		     , distinct_flag
+		     , from_clause
+		     , where_clause
+		     , order_by_clause
+		  FROM XXLGE_QUERY
+		 WHERE query_id = #{queryId}
+	</select>
+
+	<!-- Dynamic Query Preview를 위한 Column 정보 조회 -->
+	<select id="retrieveDynamicQueryColumnData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00090.retrieveDynamicQueryColumnData */
+		         query_id
+		       , field AS column_name
+		       , prompt AS display_name
+		       , data_type
+		       , format_mask
+		    FROM XXLGE_QUERY_COLUMNS
+		   WHERE query_id = #{queryId}
+		ORDER BY seq
+	</select>
+</mapper>

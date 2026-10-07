@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT00023">
+	<!-- Search Vendor Infomation -->
+	<select id="retrieveVendorInfomation" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT00023.retrieveVendorInfomation*/
+				   vm.vendor_id                                   AS vendor_id
+		          ,vm.vendor_code                                 AS vendor_code
+		          ,vm.vendor_name                                 AS vendor_name
+		          ,vm.remark                                      AS remark
+		          ,TO_CHAR(vm.effective_start_date, 'DD/MM/YYYY') AS effective_start_date
+		          ,TO_CHAR(vm.effective_end_date, 'DD/MM/YYYY')   AS effective_end_date
+		          ,(select local_language_full_name from lgcom_user_m where application_user_id = vm.creation_user_id) as creation_user_id /* 등록자ID */
+		          ,TO_CHAR(vm.creation_date, 'DD/MM/YYYY') as creation_date	/* 등록일자 */
+		    FROM TB_VENDOR_MASTER vm
+		    WHERE 1 = 1
+		    <if test="vendorName != null and vendorName != ''">
+	          AND (UPPER(vm.vendor_name) LIKE '%' || UPPER(#{vendorName}) || '%')
+	        </if>
+			ORDER BY vm.vendor_id, vm.vendor_code asc
+	</select>
+	
+	<!-- 휴일 등록 -->
+	<insert id="insertVendorInfomation" parameterType="java.util.HashMap">
+		INSERT /*LGVATT00023.insertVendorInfomation*/ INTO TB_VENDOR_MASTER
+		( vendor_id		
+		 ,vendor_code						
+		 ,vendor_name 						
+		 ,remark	
+		 ,effective_start_date
+		 ,effective_end_date					
+		 ,creation_user_id 					/* 사용자ID */
+		 ,creation_date 					/* 등록일자 */
+		 ,last_update_user_id 				/* 최종수정자ID */
+		 ,last_update_date 					/* 수정일자 */
+		) values
+		( SQ_TB_VENDOR_MASTER.NEXTVAL
+		 ,#{vendorCode}
+		 ,#{vendorName}
+		 ,#{remark}
+		 ,to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+		 ,to_date(#{effectiveEndDate}, 'DD/MM/YYYY')
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		)
+	</insert>
+	
+	<!-- 휴일 수정 -->
+    <update id="updateVendorInfomation" parameterType="LGCOMData">
+        UPDATE /*LGVATT00023.updateVendorInfomation*/
+               TB_VENDOR_MASTER 
+        SET    vendor_code                     = #{vendorCode}
+             , vendor_name                     = #{vendorName}
+             , remark                          = #{remark}
+             , effective_start_date            = to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+             , effective_end_date              = to_date(#{effectiveEndDate}, 'DD/MM/YYYY')
+             , last_update_user_id             = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             , last_update_date                = trunc(sysdate)                 							/* 최종수정일자 */
+        WHERE  vendor_id                     = #{vendorId}              
+    </update>
+    
+    <!-- 휴일 삭제 -->
+	<delete id="deleteVendorInfomation" parameterType="LGCOMData">
+		 DELETE FROM TB_VENDOR_MASTER
+		 WHERE vendor_id = #{vendorId}
+	</delete>
+    
+</mapper>

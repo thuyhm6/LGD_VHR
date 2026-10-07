@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT30094">
+	<!-- Search overtime level -->
+	<select id="retrieveShiftChangeHistory" parameterType="LGCOMData" resultType="LGCOMData">
+			select 
+			         a.employee_number 			as employee_Number
+			        ,a.status
+			        ,a.full_name_english 		as full_name_english
+			        ,a.organization_id			as organization_id
+			        ,a.org_name_eng				as org_name_eng
+			        ,a.person_type				as person_type
+			        ,a.position
+			        ,b.employee_no 				as employee_no
+			        ,b.time_and_attendance_date as time_and_attendance_date
+			        ,b.check_in_date			as check_in_date
+			        ,b.check_out_date			as check_out_date
+			        ,c.shift_type_code			as shift_type_code
+			        ,c.time_and_attendance_code	as time_and_attendance_code
+			        ,c.night_shift_flag			as night_shift_flag
+			        ,d.time_and_attendance_code as res_time_and_attendance_code
+			        ,d.a_Day_Of_The_Week_Code	as a_Day_Of_The_Week_Code	
+			        ,d.work_start_time			as work_start_time
+			        ,d.night_shift_flag 		as res_night_shift_flag
+			        ,to_date(to_char(b.time_and_attendance_date,'YYYY-MM-DD')||' '||d.work_start_time,'YYYY-MM-DD HH24:MI') as work_start_datetime
+			        ,case
+			           when b.CHECK_IN_DATE > to_date(to_char(b.time_and_attendance_date,'YYYY-MM-DD')||' '||d.work_start_time,'YYYY-MM-DD HH24:MI') then 'Y'
+			           ELSE 'N'
+			         end 					as in_time_over_yn
+			        ,case
+			           when d.a_Day_Of_The_Week_Code = 'FRI' and c.shift_type_code = '1A' THEN to_date(to_char(b.time_and_attendance_date,'YYYY-MM-DD')||' 17:00','YYYY-MM-DD HH24:MI')
+			           when c.shift_type_code = '1A' THEN to_date(to_char(b.time_and_attendance_date,'YYYY-MM-DD')||' 18:00','YYYY-MM-DD HH24:MI') 
+			           when c.shift_type_code != '1A' and d.night_shift_flag = 'N' THEN to_date(to_char(b.time_and_attendance_date,'YYYY-MM-DD')||' 20:00','YYYY-MM-DD HH24:MI')
+			           when c.shift_type_code != '1A' and d.night_shift_flag = 'Y' THEN to_date(to_char(b.time_and_attendance_date,'YYYY-MM-DD')||' 08:00','YYYY-MM-DD HH24:MI')+1
+			         end 					as work_end_datetime
+			  from  emp_master a
+			       ,tb_att_idcard_acs_time_n b
+			       ,tb_att_plan_n c
+			       ,tb_att_result_n d
+			  where a.employee_number = b.employee_no
+			    and b.time_and_attendance_date = c.time_and_attendance_date
+			    and b.employee_no = c.employee_no
+			    and b.time_and_attendance_date = d.time_and_attendance_date
+			    and b.employee_no = d.employee_no
+			    and status = 'Active Assignment'
+			    <if test="employeeNo != null and employeeNo != ''">
+			    and a.employee_number = #{employeeNo}
+			    </if>
+			    <if test="orgId != null and orgId != ''">
+			    and a.organization_id =	#{orgId}
+			    </if>
+			    and b.TIME_AND_ATTENDANCE_DATE = trunc(to_date(#{attDate},'DD/MM/YYYY'))
+		   order by a.employee_number asc
+	</select>
+    
+</mapper>

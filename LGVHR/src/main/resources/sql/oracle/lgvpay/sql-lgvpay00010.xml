@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00010">
+
+    <!-- Payment Master 조회 -->
+    <select id="retrievePaymentMasterData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH em AS (
+            SELECT  /*LGVPAY00010.retrievePaymentMasterData*/
+                    em0.employee_number
+                  , em0.full_name_local
+                  , em0.date_hire_subsidiary
+                  , em0.date_retire
+                  , em0.probation_start_date
+                  , em0.probation_end_date
+                  , em0.apply_start_ins_yyyymm
+                  , em0.calculate_yn
+                  , em0.bank_name
+                  , em0.account_number
+                  /* 유효일자가 퇴직일 이후인 경우 퇴직일로, 이전인 경우 유효일자로 조회 */
+                  , LEAST(NVL(em0.date_retire, TO_DATE('47121231', 'YYYYMMDD')), TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY')) AS search_date
+                  , TO_CHAR(LEAST(NVL(em0.date_retire, TO_DATE('47121231', 'YYYYMMDD')), TO_DATE(REPLACE(#{effectiveDate}, '/', ''), 'DDMMYYYY')), 'YYYYMMDD') AS search_yyyymmdd
+            FROM    emp_master em0
+            WHERE   em0.employee_number = #{employeeNo}
+        )
+        SELECT
+               em.employee_number     AS employee_no
+             , em.full_name_local     AS employee_name
+             , cccm.common_code_name  AS emp_category_name
+             , ea.grade               AS grade_code
+             , cccm1.common_code_name AS job_title_name
+             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS hire_date
+             , TO_CHAR(em.date_retire         , 'DD/MM/YYYY') AS resignation_date
+             , ea.organization_id
+             , om.org_name_local      AS organization_name
+             , TO_CHAR(em.probation_start_date, 'DD/MM/YYYY') AS probation_start_date
+             , TO_CHAR(em.probation_end_date  , 'DD/MM/YYYY') AS probation_end_date
+             , TO_CHAR(CASE WHEN em.search_date BETWEEN em.probation_start_date AND em.probation_end_date THEN
+                                 lgvpay_info_pkg.get_base_pay(em.employee_number, em.search_yyyymmdd, #{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'A')
+                            ELSE NULL
+                       END, 'FM999,999,999,999,990') AS probation_base_salary
+             , TO_CHAR(lgvpay_info_pkg.get_base_pay(em.employee_number, em.search_yyyymmdd, #{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'B'), 'FM999,999,999,999,990') AS base_salary
+             , TO_CHAR(lgvpay_info_pkg.get_position_allowance(em.employee_number, em.search_yyyymmdd)                                    , 'FM999,999,999,999,990') AS position_allowance
+             , TO_CHAR(lgvpay_info_pkg.get_job_allowance(em.employee_number, em.search_yyyymmdd)                                         , 'FM999,999,999,999,990') AS job_allowance
+             , TO_CHAR(lgvpay_info_pkg.get_qualification_allowance(em.employee_number, em.search_yyyymmdd, #{LGVHR_PROJECT_SESSION.subsidiaryCode}), 'FM999,999,999,999,990') AS qualification_allowance
+             , TO_CHAR(NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, em.search_date, 'ADJ_ALLOWANCE1', 'BASE_AMOUNT', #{LGVHR_PROJECT_SESSION.subsidiaryCode}),0), 'FM999,999,999,999,990') AS adjustment1_allowance
+             , TO_CHAR(NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, em.search_date, 'ADJ_ALLOWANCE2', 'BASE_AMOUNT', #{LGVHR_PROJECT_SESSION.subsidiaryCode}),0), 'FM999,999,999,999,990') AS adjustment2_allowance
+             , TO_CHAR(NVL(lgvpay_common_pkg.get_planned_item_value(em.employee_number, em.search_date, 'ADJ_ALLOWANCE3', 'BASE_AMOUNT', #{LGVHR_PROJECT_SESSION.subsidiaryCode}),0), 'FM999,999,999,999,990') AS adjustment3_allowance
+             , ea.job_family
+             , ea.job_group
+             , ea.attribute10 AS shift_type
+             , TO_CHAR(TO_DATE(em.apply_start_ins_yyyymm, 'YYYYMM'), 'MM/YYYY') AS ins_start_month
+             , NVL(em.calculate_yn, 'N') AS pit_manual_flag
+             ,( SELECT lgvhr_common_pkg.decode_lookup('IF_CONTRACT_TYPE', ecn.contract_type_code, null, #{USER_SESSION.languageCode})  FROM tb_pay_emp_contract_n ecn WHERE ecn.employee_no = em.employee_number AND em.search_date BETWEEN ecn.contract_period_start_date AND ecn.contract_period_end_date ) AS contract_type
+             ,( SELECT aa.competency_grade_point_code  FROM tb_pay_emp_grade_point_n aa WHERE aa.employee_no = em.employee_number AND em.search_yyyymmdd BETWEEN aa.start_yyyymmdd AND NVL(aa.end_yyyymmdd,'47121231')) AS band
+             ,( SELECT count(*)
+                FROM tb_pay_emp_family_n pef
+                WHERE pef.employee_no = em.employee_number
+                <![CDATA[
+                AND ( pef.relation_start_date is NULL OR pef.relation_start_date <= em.search_date )
+                ]]>
+                AND pef.dependent_flag = 'Y') AS dependant_count
+             ,( SELECT MAX(ccc1.common_code_desc)
+                FROM   lgcom_common_code_c ccc1
+                      ,tb_pay_emp_certification_acq_n pca
+                WHERE  ccc1.code_type_code = 'LGVPAY_QUALIFICATION_TYPE_CODE'
+                AND   (NVL(ccc1.code_data1_value, ccc1.common_code), nvl(ccc1.code_data2_value,'x') ) IN (
+                                                                                                          SELECT nvl(ccc.code_data1_value, ccc.common_code), MAX(nvl(ccc.code_data2_value,'x'))
+                                                                                                          FROM   tb_pay_emp_certification_acq_n a
+                                                                                                               , lgcom_common_code_c ccc
+                                                                                                          WHERE  a.employee_no               = em.employee_number
+                                                                                                          AND    ccc.code_type_code          = 'LGVPAY_QUALIFICATION_TYPE_CODE'
+                                                                                                          AND    ccc.common_code             = TO_CHAR(a.qualification_type_id)
+                                                                                                          <![CDATA[
+                                                                                                          AND    a.qlfc_acquisition_yyyymmdd <= em.search_yyyymmdd
+                                                                                                          ]]>
+                                                                                                          GROUP BY nvl(ccc.code_data1_value, ccc.common_code)
+                                                                                                          )
+                AND  pca.employee_no           = em.employee_number
+                <![CDATA[
+                AND  pca.qlfc_acquisition_yyyymmdd <= em.search_yyyymmdd
+                ]]>
+                AND  pca.qualification_type_id = to_number( ccc1.common_code )) AS qualification
+             , em.bank_name
+             , em.account_number
+             , DECODE(em.date_retire, NULL, 'N', 'Y') AS retire_flag /* 퇴직여부. Y-퇴직 */
+
+        FROM   emp_assig ea
+             , em
+             , lgcom_common_code_multi_lang_c cccm
+             , lgcom_common_code_multi_lang_c cccm1
+             , org_master om
+
+        /* 유효일자가 퇴직일 이후인 경우 퇴직일로, 이전인 경우 유효일자로 조회 */
+        WHERE  em.search_yyyymmdd BETWEEN to_char(ea.assignment_start_date,'yyyymmdd') AND ea.attribute1
+        AND    em.employee_number    = ea.employee_number
+        AND    cccm.code_type_code   = 'IF_EMP_CAT'
+        AND    cccm.common_code      = ea.assignment_category
+        AND    cccm.language_code    = #{USER_SESSION.languageCode}
+        AND    cccm1.code_type_code  = 'IF_VIETNAM_GRADE_TITLE'
+        AND    cccm1.common_code     = ea.grade_title
+        AND    cccm1.language_code   = #{USER_SESSION.languageCode}
+        AND    om.organization_id(+) = ea.organization_id
+    </select>
+
+    <!-- Payment Basic 정보 수정 -->
+    <update id="updatePaymentBasicData" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00010.updatePaymentBasicData */
+               emp_master
+        SET    apply_start_ins_yyyymm = TO_CHAR(TO_DATE(REPLACE(#{insStartMonth}, '/', ''), 'MMYYYY'), 'YYYYMM')
+             , calculate_yn = #{pitManualFlag}
+        WHERE  employee_number = #{employeeNo}
+    </update>
+
+</mapper>

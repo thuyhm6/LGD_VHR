@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0022">
+
+    <!-- Payroll Item List 조회 -->
+    <select id="retrievePayrollItemList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0022.retrievePayrollItemList */
+               a.payroll_item_name
+             , a.inquiry_name
+             , a.payroll_item_id
+             , to_char(to_date(A.start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS start_date
+             , to_char(to_date(A.end_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy')   AS end_date
+        FROM   tb_pay_payroll_item_m a
+        WHERE  a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    a.payroll_item_name LIKE #{payrollItemName}||'%'
+        AND    a.inquiry_name LIKE #{inquiryName}||'%'
+        ORDER BY a.payroll_item_id
+    </select>
+
+</mapper>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT60030">
+
+    <select id="retrieveWorkingLateList" parameterType="LGCOMData" resultType="LGCOMData">
+    <![CDATA[
+    select /* LGVATT60030.retrieveWorkingLateList */
+              a.TIME_AND_ATTENDANCE_DATE 
+             , a.employee_no
+             , a.english_name
+             , a.log_in_date
+             , a.item_rank
+             , a.IN_OUT_TYPE_NO
+             , a.shift_type_code
+             , a.a_day_of_the_week_code
+             , a.actual_work_time_attend_code
+             , a.ACTUAL_NIGHT_SHIFT_FLAG
+             , a.actual_work_start_time
+             , decode(a.actual_night_shift_flag, 'N', '20:00','Y', '08:00') as leaving_office_time
+    from tb_att_result_s a
+    where to_char(a.log_in_date, 'A.M.') <> TO_CHAR(to_date(actual_work_start_time,'HH24:MI'), 'A.M.')
+       and A.ITEM_RANK = 1
+       and A.IN_OUT_TYPE_NO = 'IN'
+       and round((to_date(to_char(log_in_date,'HH24:MI'),'HH24:MI')- to_date(actual_work_start_time,'HH24:MI'))*24*60,2) >= 480
+       and TIME_AND_ATTENDANCE_DATE = TO_DATE(#{effectiveDate},'DD/MM/YYYY')
+    order by IN_OUT_TYPE_NO, TIME_AND_ATTENDANCE_DATE, employee_no
+    ]]>
+    </select>
+    
+    
+    
+    
+    
+        <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        <![CDATA[
+        SELECT /* LGVATT60030.createDirectCSVDownloadData */
+            TIME_AND_ATTENDANCE_DATE  
+          , employee_no
+          , english_name
+          , log_in_date
+          , item_rank
+          , IN_OUT_TYPE_NO
+          , shift_type_code
+          , a_day_of_the_week_code
+          , actual_work_time_attend_code
+          , ACTUAL_NIGHT_SHIFT_FLAG
+          , actual_work_start_time
+          , leaving_office_time
+        FROM (
+                  SELECT '1' gubun
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.date'                  AND lslm.language_code = 'en') as TIME_AND_ATTENDANCE_DATE
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.employeeNo'                AND lslm.language_code = 'en') as employee_no
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.employeeName'              AND lslm.language_code = 'en') as english_name
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.logInDate'                              AND lslm.language_code = 'en') as log_in_date
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.itemRank'               AND lslm.language_code = 'en') as item_rank
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.inOutTypeNo'                   AND lslm.language_code = 'en') as IN_OUT_TYPE_NO
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.shiftTypeCode'                 AND lslm.language_code = 'en') as shift_type_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.aDayOfTheWeekCode'        AND lslm.language_code = 'en') as a_day_of_the_week_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.planWorkCode'                   AND lslm.language_code = 'en') as actual_work_time_attend_code
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualNightFlag'          AND lslm.language_code = 'en') as ACTUAL_NIGHT_SHIFT_FLAG
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.actualWorkStartTime'               AND lslm.language_code = 'en') as actual_work_start_time
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.att.leavingOfficeTime'                 AND lslm.language_code = 'en') as leaving_office_time
+                          
+                   FROM DUAL
+                  UNION ALL
+                   SELECT '2' gubun
+			             , a.TIME_AND_ATTENDANCE_DATE 
+			             , a.employee_no
+			             , a.english_name
+			             , a.log_in_date
+			             , a.item_rank
+			             , a.IN_OUT_TYPE_NO
+			             , a.shift_type_code
+			             , a.a_day_of_the_week_code
+			             , a.actual_work_time_attend_code
+			             , a.ACTUAL_NIGHT_SHIFT_FLAG
+			             , a.actual_work_start_time
+			             , decode(a.actual_night_shift_flag, 'N', '20:00','Y', '08:00') as leaving_office_time
+				    from tb_att_result_s a
+				    where to_char(a.log_in_date, 'A.M.') <> TO_CHAR(to_date(actual_work_start_time,'HH24:MI'), 'A.M.')
+				       and A.ITEM_RANK = 1
+				       and A.IN_OUT_TYPE_NO = 'IN'
+				       and round((to_date(to_char(log_in_date,'HH24:MI'),'HH24:MI')- to_date(actual_work_start_time,'HH24:MI'))*24*60,2) >= 480
+				       and TIME_AND_ATTENDANCE_DATE = TO_DATE(#{effectiveDate},'DD/MM/YYYY')
+              )
+       	ORDER BY  gubun,TIME_AND_ATTENDANCE_DATE, IN_OUT_TYPE_NO , EMPLOYEE_NO
+       ]]>
+    </select>
+    
+</mapper>

@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="Approval">
+	<select id="retrieveRequestInfoList" parameterType="java.util.HashMap" resultType="LGCOMData">
+			SELECT   /*Approval.retrieveRequestInfoList*/ 
+			         larn.request_master_id            as approval_req_no
+			        ,larn.request_no                   as request_no
+			        ,larn.request_title                as request_title
+			        ,larn.comment_content              as request_comment
+                    ,larn.submission_objective_content as request_remark
+			        ,larn.request_code                 as document_type_code
+			        ,lcc_doctype.common_code_desc      as document_type
+			        ,larn.status_code                  as request_status_code
+			        ,lcc_status.common_code_desc       as request_status
+			        ,larn.department_code              as request_dept_code
+			        ,lumv.organization_name_eng        as request_dept
+			        ,TO_CHAR( larn.request_date, 'YYYY-MM-DD HH24:MI' ) as request_date
+			        ,larn.requestor_id                 as requestor_id			        
+			        ,lumv.full_name_local|| '/' ||NVL(lumv.position_name,lumv.title_name) || '/' || lumv.organization_name_eng as requestor
+			        ,larn.source_document_code
+			        ,larn.request_code
+	                ,larn.approver_screen_url_addr
+	                ,larn.approval_url_addr
+	                ,larn.requestor_screen_url_addr
+	                ,larn.request_url_addr
+	                ,larn.organization_id
+	                ,larn.request_creation_code
+			from     lgcom_approval_request_n        larn
+			        ,lgcom_user_m_v                  lumv
+			        ,lgcom_common_code_c             lcc_status
+			        ,lgcom_common_code_c             lcc_doctype
+			WHERE    1=1
+			AND      larn.status_code             = lcc_status.common_code
+			and      lcc_status.code_type_code    = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+			and      larn.request_code            = lcc_doctype.common_code
+			and      lcc_doctype.code_type_code   = 'LGCOM_APPROVAL_REQUEST_CODE'
+			and      larn.requestor_id            = lumv.application_user_id
+			and      larn.status_code             in ('20', '30', '40', '50')
+			and      larn.request_master_id       =  #{requestMasterId}
+			and      larn.request_code            =  #{requestCode}       
+	</select>
+
+    <select id="retrieveRegionAndOrgInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+        <![CDATA[
+		SELECT lcc.common_code AS default_org_id
+		      ,lcc.code_data3_value AS request_region_code
+		      ,lcc.code_data4_value AS request_region_name
+		      ,lcc.code_data5_value AS default_org_short_code
+		      ,lcm.common_code_name AS default_org_name
+		      ,(SELECT x.code_data4_value
+		        FROM   lgcom_common_code_c x
+		        WHERE  x.code_type_code = 'LGCOM_TIMEZONE_DEFAULT_COMPANY'
+		        AND    x.common_code = lcc.code_data3_value
+		        AND    ROWNUM = 1) AS server_time_difference_seqs
+		FROM   lgcom_code_type_code_c         lc
+		      ,lgcom_common_code_c            lcc
+		      ,lgcom_common_code_multi_lang_c lcm
+		WHERE  lc.code_type_code = lcc.code_type_code
+		AND    lcc.code_type_code = lcm.code_type_code
+		AND    lcc.common_code = lcm.common_code
+		AND    lcc.company_id = lcm.company_id
+		AND    lcc.inventory_organization_id = lcm.inventory_organization_id
+		AND    lc.code_type_code = 'LGCOM_COMPANY_REGION_MAPPING'
+		AND    lc.use_flag = 'Y'
+		AND    lcc.use_flag = 'Y'
+		AND    NVL(lcc.apply_start_date, SYSDATE) < SYSDATE + 1
+		AND    NVL(lcc.apply_end_date, SYSDATE) >= SYSDATE
+		AND    lcc.common_code  = #{organizationId}
+		AND    lcm.language_code = 'en'
+    ]]>
+    </select>
+
+
+	<update id="updateReadDate" parameterType="java.util.HashMap">
+	<![CDATA[
+		UPDATE lgcom_approval_status_n lasn
+		SET    lasn.approval_date = DECODE(lasn.approval_date,NULL,sysdate,lasn.approval_date)
+		      ,lasn.share_flag = 'Y'
+		      ,lasn.approval_status_code = '3'
+		WHERE lasn.request_master_id = #{requestMasterId}
+		AND   lasn.request_code = #{requestCode}
+		AND   lasn.user_no =  #{USER_SESSION.userName}
+		AND   lasn.approval_action_code in ('REFERENCE', 'FORWARD')
+		AND   lasn.approval_status_code = '2'
+		AND   lasn.approval_date is null
+    ]]>
+	</update>
+
+    <select id="retrieveApproverList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+		SELECT /*approval.retrieveApproverList*/
+				 x.approval_seqs
+				,x.approval_action_code
+				,z2.common_code_name approval_action_name
+				,y.common_code_desc
+				,NVL(e1.position_name, e1.title_name) AS position
+				,x.user_no
+				,x.mandator_employee_no
+				,e1.full_name_local || '/' || NVL(e1.position_name,e1.title_name) || '/' || e1.organization_name_eng AS approver
+				,REPLACE(e2.full_name_local || '/' || NVL(e2.position_name,e2.title_name) || '/' || e2.organization_name_eng, '//', '') AS mandator
+				,x.approval_status_code
+				,y.common_code_desc AS approval_status_code_name
+				,TO_CHAR(x.approval_date, 'YYYY-MM-DD HH24:MI') AS approval_date
+			    ,x.approval_comment
+		 FROM   lgcom_approval_status_n        x
+		       ,lgcom_common_code_c            y
+		       ,lgcom_common_code_c            z1
+		       ,lgcom_common_code_multi_lang_c z2
+		       ,lgcom_user_m_v                 e1
+		       ,lgcom_user_m_v                 e2
+	    WHERE  1 = 1
+	    AND    x.approval_status_code = y.common_code
+	    AND    y.code_type_code = 'LGCOM_APPROVAL_STATUS_CODE'
+	    AND    x.approval_action_code = z1.common_code
+	    AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+	    AND    z1.code_type_code = z2.code_type_code
+	    AND    z1.common_code = z2.common_code
+	    AND    z2.language_code = #{USER_SESSION.languageCode}
+	    AND    x.request_master_id = #{requestMasterId}
+	    AND    x.request_code = #{requestCode}
+	    AND    x.approval_seqs > 0
+	    AND    x.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL', 'PARAGREE_OR')
+	    AND    x.user_no = e1.user_name
+	    AND    x.mandator_employee_no = e2.user_name(+)
+	    ORDER  BY x.approval_seqs
+    ]]>
+    </select>
+
+    <select id="retrieveAttachmentList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+	    SELECT  /*approval.retrieveAttachmentList*/
+	            xadi.file_id
+	           ,xadi.file_group_id   as request_master_id
+	           ,xadi.file_name
+	    FROM    lgcom_attach_file_info     xadi
+	           ,lgcom_approval_request_n   larn
+	    WHERE   1=1
+	    AND     xadi.file_group_id          = larn.attach_file_id
+	    AND     larn.request_master_id = #{requestMasterId}
+	    AND     larn.request_code = #{requestCode}
+	    ORDER BY xadi.file_id
+    ]]>
+    </select>
+
+
+    <select id="retrieveInspectionList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+			SELECT /*Approval.retrieveInspectionList*/
+			       ROWNUM AS seq
+			      ,x.approval_action_code AS TYPE
+			      ,user2.full_name_local AS approver
+			      ,x.approval_comment AS approval_comment
+			      ,user1.full_name_local AS inspector
+			      ,user1.department_code AS inspector_dept_code
+			      ,user1.organization_name_eng AS inspector_dept
+			      ,x.inspection_comment AS inspection_comment
+			FROM   lgcom_approval_status_n      x
+			      ,lgcom_user_m_v               user1
+			      ,lgcom_user_m_v               user2
+			WHERE  1 = 1
+			AND    x.request_master_id = #{requestMasterId}
+			AND    x.request_code = #{requestCode}
+			AND    x.approval_seqs >= '10000'
+			AND    x.approval_action_code IN ('INSPECTION')
+			AND    x.user_no = user1.user_name
+			AND    x.sign_user_no = user2.user_name
+			ORDER  BY x.approval_seqs
+    ]]>
+    </select>
+
+    <select id="retrieveCarbonCopyList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+	      SELECT /*Approval.retrieveCarbonCopyList*/
+			       z2.common_code_name AS approval_action_name
+			      ,x.approval_action_code AS TYPE
+			      ,lumv.department_code AS refer_dept_code
+			      ,lumv.organization_name_eng AS refer_dept
+			      ,e1.full_name_local || '/' ||NVL(e1.position_name,e1.title_name) || '/' || e1.organization_name_eng AS refer_emp_name
+			      ,TO_CHAR(x.approval_date, 'YYYY-MM-DD HH24:MI') AS approval_date
+			FROM   lgcom_approval_status_n        x
+			      ,lgcom_user_m_v                 lumv
+			      ,lgcom_common_code_c            z1
+			      ,lgcom_common_code_multi_lang_c z2
+			      ,lgcom_user_m_v                 e1
+			WHERE  1 = 1
+			AND    x.request_master_id = #{requestMasterId}
+			AND    x.request_code = #{requestCode}
+			AND    x.approval_seqs >= '10000'
+			AND    x.approval_action_code IN ('REFERENCE')
+			AND    x.approval_action_code = z1.common_code
+			AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+			AND    x.user_no = lumv.user_name
+			AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+			AND    z1.code_type_code = z2.code_type_code
+			AND    z1.common_code = z2.common_code
+			AND    z2.language_code = 'en'
+			AND    x.user_no = e1.user_name
+			ORDER  BY x.approval_seqs
+
+    ]]>
+    </select>
+
+    <select id="retrieveForwardList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+		SELECT /*Approval.retrieveForwardList*/
+		       z2.common_code_name AS approval_action_name
+		      ,lasn.approval_seqs
+		      ,lasn.user_no
+		      ,lasn.approval_action_code AS TYPE
+		      ,lumv.department_code AS refer_dept_code
+		      ,lumv.full_name_local || '/' || NVL(lumv.position_name,lumv.title_name) || '/' || lumv.organization_name_eng AS refer_emp_name
+		      ,TO_CHAR(lasn.approval_date, 'YYYY-MM-DD HH24:MI') AS approval_date
+		FROM   lgcom_approval_status_n        lasn
+		      ,lgcom_user_m_v                 lumv
+		      ,lgcom_common_code_c            z1
+		      ,lgcom_common_code_multi_lang_c z2
+		WHERE  lasn.approval_action_code = 'FORWARD'
+		AND    lasn.user_no = lumv.user_name
+		AND    lasn.approval_action_code = z1.common_code
+		AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+		AND    z1.code_type_code = z2.code_type_code
+		AND    z1.common_code = z2.common_code
+		AND    z2.language_code = 'en'
+		AND    lasn.request_master_id = #{requestMasterId}
+		AND    lasn.request_code = #{requestCode}
+		ORDER  BY lasn.approval_seqs
+    ]]>
+    </select>
+
+    <select id="retrieveReviewerList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+		SELECT /*Approval.retrieveReviewerList*/
+		        approval_seqs
+		      , approval_action_name
+		      , TYPE
+		      , open_flag
+		      , request_emp_name
+		      , request_comment
+		      , request_date
+		      , review_emp_name
+		      , review_comment
+		      , review_date
+		      , attachment_req_number
+		FROM (  SELECT x.approval_seqs AS approval_seqs
+				      ,z2.common_code_name AS approval_action_name
+				      ,x.approval_action_code AS TYPE
+				      ,x.share_flag AS open_flag
+				      ,r2.full_name_local || '/' || NVL(r2.position_name,r2.title_name) || '/' || r2.organization_name_eng AS request_emp_name
+				      ,x.inspection_comment AS request_comment
+				      ,TO_CHAR(x.creation_date, 'YYYY-MM-DD HH24:MI') AS request_date
+				      ,r1.full_name_local || '/' || NVL(r1.position_name,r1.title_name) || '/' || r1.organization_name_eng AS review_emp_name
+				      ,x.approval_comment AS review_comment
+				      ,TO_CHAR(x.approval_date, 'YYYY-MM-DD HH24:MI') AS review_date
+				      ,x.approval_line_id as attachment_req_number
+				FROM   lgcom_approval_status_n        x
+				      ,lgcom_common_code_c            z1
+				      ,lgcom_common_code_multi_lang_c z2
+				      ,lgcom_user_m_v                 r1
+				      ,lgcom_user_m_v                 r2
+				WHERE  1 = 1
+				AND    x.request_master_id = #{requestMasterId}
+				AND    x.request_code = #{requestCode}
+				AND    x.approval_seqs >= '30000'
+				AND    x.approval_action_code IN ('PREVIEW')
+				AND    x.approval_action_code = z1.common_code
+				AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+				AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+				AND    z1.code_type_code = z2.code_type_code
+				AND    z1.common_code = z2.common_code
+				AND    z2.language_code = 'en'
+				AND    x.user_no = r1.user_name
+				AND    x.mandator_employee_no = r2.user_name
+				AND    (x.mandator_employee_no = #{USER_SESSION.userName} OR x.user_no = #{USER_SESSION.userName} )
+				UNION
+				SELECT x.approval_seqs AS approval_seqs
+				      ,z2.common_code_name AS approval_action_name
+				      ,x.approval_action_code AS TYPE
+				      ,x.share_flag AS open_flag
+				      ,r2.full_name_local || '/' || NVL(r2.position_name,r2.title_name) || '/' || r2.organization_name_eng AS request_emp_name
+				      ,x.inspection_comment AS request_comment
+				      ,TO_CHAR(x.creation_date, 'YYYY-MM-DD HH24:MI') AS request_date
+				      ,r1.full_name_local || '/' || NVL(r1.position_name,r1.title_name) || '/' || r1.organization_name_eng AS review_emp_name
+				      ,x.approval_comment AS review_comment
+				      ,TO_CHAR(x.approval_date, 'YYYY-MM-DD HH24:MI') AS approval_date
+				      ,x.approval_line_id as attachment_req_number
+				FROM   lgcom_approval_status_n        x
+				      ,lgcom_common_code_c            z1
+				      ,lgcom_common_code_multi_lang_c z2
+				      ,lgcom_user_m_v                 r1
+				      ,lgcom_user_m_v                 r2
+				WHERE  1 = 1
+				AND    x.request_master_id = #{requestMasterId}
+				AND    x.request_code = #{requestCode}
+				AND    x.approval_seqs >= '30000'
+				AND    x.approval_action_code IN ('PREVIEW')
+				AND    x.approval_action_code = z1.common_code
+				AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+				AND    z1.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+				AND    z1.code_type_code = z2.code_type_code
+				AND    z1.common_code = z2.common_code
+				AND    z2.language_code = 'en'
+				AND    x.user_no = r1.user_name
+				AND    x.mandator_employee_no = r2.user_name
+				AND    x.mandator_employee_no <> #{USER_SESSION.userName}
+				AND    x.user_no <> #{USER_SESSION.userName}
+				AND    x.share_flag = 'Y'
+				AND    EXISTS (SELECT 'Y'
+				        FROM   lgcom_approval_status_n lasn
+				        WHERE  lasn.request_master_id = x.request_master_id
+				        AND    lasn.request_code = x.request_code
+				        AND    lasn.approval_action_code = x.approval_action_code
+				        AND ( lasn.user_no = #{USER_SESSION.userName} OR lasn.mandator_employee_no =  #{USER_SESSION.userName} )
+				        )
+		)
+		ORDER BY approval_seqs
+    ]]>
+    </select>
+
+	<!-- 요청 헤더 정보 조회 -->
+	<select id="retrieveRequestEmptyHeadInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Approval.retrieveRequestEmptyHeadInfo */
+		       '' AS request_master_id
+		     , '' AS request_code
+		     , '' AS organization_id
+		     , '' AS request_no
+		     , '' AS request_title
+		     , '' AS request_comment
+		     , '' AS request_remark
+		     , '10' AS status_code
+		     , (SELECT common_code_name
+		          FROM lgcom_common_code_multi_lang_c
+		         WHERE code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+		           AND language_code  = NVL(#{USER_SESSION.languageCode},'en')
+		           AND common_code    = '10') AS status_name
+		     , TO_CHAR(SYSDATE,'YYYY-MM-DD') AS request_date
+		     , application_user_id AS requestor_id
+		     , full_name_local || '/' || NVL(umv.position_name,umv.title_name) || '/' || organization_name_eng AS requestor_info
+		  FROM LGCOM_USER_M_V
+		 WHERE application_user_id = #{USER_SESSION.applicationUserId}
+	</select>
+
+	<!-- 요청 헤더 정보 조회 -->
+	<select id="retrieveRequestHeadInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Approval.retrieveRequestHeadInfo */
+		       arn.request_master_id
+		     , arn.request_code
+		     , arn.organization_id
+		     , arn.request_no
+		     , arn.request_title
+		     , arn.comment_content AS request_comment
+		     , arn.submission_objective_content AS request_remark
+		     , arn.status_code
+		     , (SELECT common_code_name
+		          FROM lgcom_common_code_multi_lang_c
+		         WHERE code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+		           AND language_code  = NVL(#{USER_SESSION.languageCode},'en')
+		           AND common_code    = arn.status_code) AS status_name
+		     , TO_CHAR(request_date,'YYYY-MM-DD') AS request_date
+		     , arn.requestor_id
+		     , umv.full_name_local || '/' || NVL(umv.position_name,umv.title_name) || '/' || umv.organization_name_eng AS requestor_info
+		  FROM LGCOM_APPROVAL_REQUEST_N arn
+		     , LGCOM_USER_M_V           umv
+		 WHERE arn.request_master_id = #{requestMasterId}
+		   AND arn.request_code      = #{requestCode}
+		   AND arn.requestor_id      = umv.application_user_id(+)
+	</select>
+
+	<!-- 위임정보 조회 -->
+	<select id="retrievePortalMandatorInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Approval.retrieveRequestHeadInfo */
+		       p_approval_seqs AS approval_seqs
+		     , p_process_seq_no AS process_seq_no
+		     , p_approval_action_code AS approval_action_code
+		     , p_approval_action_name AS approval_action_name
+		     , p_user_dept_code AS department_code
+		     , p_user_dept_name AS department_name
+		     , NVL(p_user_position_name,p_user_title_name) AS position_name
+		     , p_user_title_name AS title_name
+		     , p_user_id AS application_user_id
+		     , p_user_no AS employee_no
+		     , p_user_name AS employee_name
+		     , CASE WHEN TRIM(p_user_name) IS NULL THEN NULL
+		            ELSE p_user_name || ' / ' || NVL(p_user_position_name,p_user_title_name) || ' / ' || p_user_dept_name END AS approver_info
+		     , p_approval_status_code AS approval_status_code
+		     , p_approval_status_name AS approval_status_name
+		     , TO_CHAR(p_approval_date,'YYYY-MM-DD') AS approval_date
+		     , p_approval_comment AS approval_comment
+		     , p_mand_emp_user_id AS mandator_user_id
+		     , p_mandator_employee_no AS mandator_employee_no
+		     , p_mand_emp_name AS mandator_employee_name
+		     , p_mand_emp_dept_code AS mandator_department_code
+		     , p_mand_emp_dept_name AS mandator_department_name
+		     , NVL(p_mand_position_name,p_mand_emp_title_name) AS mandator_position_name
+		     , p_mand_emp_title_name AS mandator_title_name
+		     , CASE WHEN TRIM(p_mand_emp_name) IS NULL THEN NULL
+		            ELSE p_mand_emp_name || ' / ' || NVL(p_mand_position_name,p_mand_emp_title_name) || ' / ' || p_mand_emp_dept_name END AS mandator_info
+		     , NVL(p_settlement_delete_flag,'Y') AS settlement_delete_flag
+		     , p_approval_line_id AS approval_line_id
+		  FROM TABLE(LGCOM_BIZWEB_APPROVAL_PKG.GET_PORTAL_MANDATOR_INFO(#{applicationUserId}))
+	</select>
+
+	<!-- 결재자 목록 조회 -->
+	<select id="retrieveApprovalLineList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* Approval.retrieveApprovalLineList */
+		         rm.request_master_id
+		       , rm.request_code
+		       , ap.approval_seqs
+		       , ((ap.process_seq_no / 10) - 1) AS process_seq_no
+		       , ap.approval_action_code
+		       , cd.common_code_name AS approval_action_name
+		       , rm.process_status_code
+		       , umv.department_code
+		       , umv.organization_name_eng AS department_name
+		       , NVL(umv.position_name,umv.title_name) AS position_name
+		       , umv.title_name
+		       , umv.application_user_id
+		       , ap.user_no AS employee_no
+		       , umv.full_name_local AS employee_name
+		       , CASE WHEN TRIM(umv.full_name_local) IS NULL THEN NULL
+		              ELSE umv.full_name_local || ' / ' || NVL(umv.position_name,umv.title_name) || ' / ' || umv.organization_name_eng END AS approver_info
+		       , ap.approval_status_code
+		       , cd1.common_code_name AS approval_status_name
+		       , TO_CHAR(ap.approval_date,'YYYY-MM-DD') AS approval_date
+		       , ap.approval_comment
+		       , mum.application_user_id AS mandator_user_id
+		       , ap.mandator_employee_no
+		       , mum.full_name_local AS mandator_employee_name
+		       , mum.department_code AS mandator_department_code
+		       , mum.organization_name_eng AS mandator_department_name
+		       , NVL(mum.position_name, mum.title_name) AS mandator_position_name
+		       , mum.title_name AS mandator_title_name
+		       , CASE WHEN TRIM(mum.full_name_local) IS NULL THEN NULL
+		              ELSE mum.full_name_local || ' / ' || NVL(mum.position_name,mum.title_name) || ' / ' || mum.organization_name_eng END AS mandator_info
+		       , NVL(ap.settlement_delete_flag,'Y') AS settlement_delete_flag
+		       , ap.approval_line_id
+		       , umv.susp_resignation_flag AS approver_resignation_flag
+		    FROM LGCOM_APPROVAL_REQUEST_N rm
+		       , LGCOM_APPROVAL_STATUS_N  ap
+		       , LGCOM_USER_M_V           umv
+		       , LGCOM_USER_M_V           mum
+		       , (
+		          SELECT /* Approval Action Code */
+		                 lcc.common_code
+		               , lccm.common_code_name
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+		             AND lcc.inventory_organization_id = lccm.inventory_organization_id
+		             AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lccm.language_code = #{USER_SESSION.languageCode}
+		             AND lcc.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+		             AND NVL(lcc.apply_start_date, SYSDATE) &lt;= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) &gt;= SYSDATE
+		         ) cd
+		       , --
+		         (
+		          SELECT /* 결재상태코드 */
+		                 lcc.common_code
+		               , lccm.common_code_name
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+		             AND lcc.inventory_organization_id = lccm.inventory_organization_id
+		             AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lccm.language_code = #{USER_SESSION.languageCode}
+		             AND lcc.code_type_code = 'LGCOM_APPROVAL_STATUS_CODE'
+		             AND NVL(lcc.apply_start_date, SYSDATE) &lt;= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) &gt;= SYSDATE
+		         ) cd1
+		   WHERE rm.request_master_id    = ap.request_master_id
+		     AND rm.request_code         = ap.request_code
+		     AND ap.user_no              = umv.user_name(+)
+		     AND ap.mandator_employee_no = mum.user_name(+)
+		     AND ap.approval_action_code = cd.common_code(+)
+		     AND ap.approval_status_code = cd1.common_code(+)
+		     AND rm.request_master_id    = #{requestMasterId}
+		     AND rm.request_code         = #{requestCode}
+		     AND ap.approval_seqs BETWEEN 1 AND 9999
+		ORDER BY ap.approval_seqs
+	</select>
+</mapper>

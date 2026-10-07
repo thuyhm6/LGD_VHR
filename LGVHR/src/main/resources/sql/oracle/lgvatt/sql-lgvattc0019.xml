@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTC0019">
+<!-- HMT_20251010  Employee Unpaid Leave Warning -->
+	<select id="executeCreateEmployeeULWarrning" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVATTC0019.executeCreateEmployeeULWarrning */
+		       lgvatt_batch_pkg.create_emp_ul_warning( #{errorCode, mode=OUT, jdbcType=VARCHAR}, 
+		                                           #{errorBuf,  mode=OUT, jdbcType=VARCHAR} 
+		                                         ) }
+	</select>
+	
+</mapper>

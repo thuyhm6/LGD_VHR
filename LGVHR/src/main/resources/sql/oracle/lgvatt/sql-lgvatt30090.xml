@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT30090">
+	<!-- Search Daily Att Summary List -->
+	<select id="getDailySummaryList" parameterType="LGCOMData" resultType="LGCOMData">
+		 <if test='organizationId == "25777"'>
+		 	SELECT 
+		           nvl((select org_name_local from org_master where organization_id = team_organization_origin_id),' ') as team
+			      ,nvl((select org_name_local from org_master where organization_id = section_code),' ') as section
+			      ,nvl((select org_name_local from org_master where organization_id = task_code),' ') as task
+			      ,nvl((select org_name_local from org_master where organization_id = part_group_code),' ') as part
+			      ,nvl((select org_name_local from org_master where organization_id = unit_code),' ') as unit
+			      ,employee_head_count as total
+			      ,tardy_count as lateness
+			      ,early_leave_days as leaving_early
+			      ,going_out_count as outing
+			      ,sel_training_complt_count as training
+			      ,use_annual_leave_days as annual_leave
+			      ,time_and_attendance_date
+			FROM   tb_att_daily_report_s
+		   WHERE 1=1
+		     and time_and_attendance_date = trunc(to_date(#{attDate},'DD/MM/YYYY'))
+		   order by unit_code asc, part_group_code asc, task_code asc, section_code asc, team_organization_origin_id asc
+		 </if>
+		  
+		 <if test='organizationId != "25777"'>
+		   SELECT 
+		            nvl((select org_name_local from org_master where organization_id = team_organization_origin_id),' ') as team
+			      , nvl((select org_name_local from org_master where organization_id = section_code),' ') as section
+			      , nvl((select org_name_local from org_master where organization_id = task_code),' ') as task
+			      , nvl((select org_name_local from org_master where organization_id = part_group_code),' ') as part
+			      , nvl((select org_name_local from org_master where organization_id = unit_code),' ') as unit
+			      ,employee_head_count as total
+			      ,tardy_count as lateness
+			      ,early_leave_days as leaving_early
+			      ,going_out_count as outing
+			      ,sel_training_complt_count as training
+			      ,use_annual_leave_days as annual_leave
+			      ,time_and_attendance_date
+			FROM   tb_att_daily_report_s
+		   WHERE 1=1
+		     and time_and_attendance_date = trunc(to_date(#{attDate},'DD/MM/YYYY'))
+		   <if test='orgType == "650"'>
+			   	and unit_code = #{organizationId}
+			</if>
+			<if test='orgType == "500"'>
+			   	and part_group_code = #{organizationId}
+			</if>
+			<if test='orgType == "400"'>
+			   	and task_code = #{organizationId}
+			</if>
+			<if test='orgType == "350"'>
+			   	and section_code = #{organizationId}
+			</if>
+			<if test='orgType == "300"'>
+			   	and team_organization_origin_id = #{organizationId}
+			</if>
+			<if test='orgType == "250"'>
+			   	and department_code = #{organizationId}
+			</if>
+			<if test='orgType == "200"'>
+				and division_code = #{organizationId}
+		   </if>
+		   order by unit_code asc, part_group_code asc, task_code asc, section_code asc, team_organization_origin_id asc
+		 </if>
+		  
+	</select>
+	
+	<select id="getOrgId" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT 
+			   b.org_type
+			  ,b.organization_id
+			  ,parent_org_id
+		  FROM emp_master a
+		      ,org_master b
+		 WHERE a.organization_id = b.organization_id
+		 <if test="employeeNo != null and employeeNo != ''">
+		   AND employee_number = #{employeeNo}
+		 </if>
+	</select>
+</mapper>

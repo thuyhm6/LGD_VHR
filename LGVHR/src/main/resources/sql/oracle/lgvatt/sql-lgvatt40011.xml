@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- HMT_20210315 Replace TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')+TO_DSINTERVAL(DECODE(ar.shift_type_code, '1A', '0 09:00:00', '0 12:00:00'))
+                   by lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT')--> 
+<mapper namespace="LGVATT40011">
+	
+	<select id="retrieveInitData" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+		SELECT /* LGVATT40011.retrieveInitData */
+		       TO_CHAR(ar.time_and_attendance_date, 'DD/MM/YYYY') AS attendance_ymd /* 근태일자 */
+		      ,TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY') AS attendance_yyyymmdd_result /* 근태일자 */
+		      ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_DAY_OF_WEEK', ar.a_day_of_the_week_code, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS screen_week_name /* 화면에 보여줄 요일명 */
+		      ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN'), 'HH24:MI') FROM dual)  AS in_time /* 출근시간 */
+		      ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT'), 'HH24:MI') FROM dual) AS out_time /* 퇴근시간 */
+		      ,ar.shift_type_code                 AS shift_type_name /* 교대유형코드 */
+		      ,NVL(ar.night_shift_flag, 'N')      AS night_shift_flag /* 주야여부 */
+		      ,ac.time_and_attendance_type_code   AS attendance_type /* 근태유형코드 */
+		      ,ar.time_and_attendance_code        AS attendance_code /* 근태코드 */
+		      ,ar.time_and_attendance_code        AS origin_attendance_code /* 근태코드 */
+		      ,ar.time_attend_detail_code         AS time_attend_detail_code /* 근태상세코드 */
+		      ,ar.work_start_time                 AS work_start_time /* 근무시작시간 */
+		      ,ar.work_start_time                 AS work_start_time_ori /* 근무시작시간. 값 초기화시 사용 */
+		      ,ar.tardy_hours                     AS tardy_hours /* 지각시간수 */
+		      ,ar.early_leave_hours               AS early_leave_hours /* 조퇴시간수 */
+		      ,ar.going_out_hours                 AS going_out_hours /* 외출시간수 */
+		      ,ar.overtime_sum_hours              AS overtime_sum_hours /* 연장근무합계시간수 */
+		      ,ar.time_attend_input_reason_desc   AS time_attend_input_reason_desc /* 근태입력사유설명 */
+		      ,NVL(ar.evening_meal_flag, 'N')     AS evening_meal_flag /* 저녁식사여부 */
+		      ,ar.normal_night_overtime_hours     AS normal_night_overtime_hours /* 정상야간연장근무시간수 */
+		      ,ar.weekday_overtime_hours          AS weekday_overtime_hours /* 평일연장근무시간수 */
+		      ,ar.holiday_overtime_hours          AS holiday_overtime_hours /* 휴일연장근무시간수 */
+		      ,ar.public_holiday_overtime_hours   AS public_holiday_overtime_hours /* 공공휴일연장근무시간수 */
+		      ,ar.weekday_night_overtime_hours    AS weekday_night_overtime_hours /* 평일야간연장근무시간수 */
+		      ,ar.weekday_ot_af_night_work_hours  AS weekday_ot_af_night_work_hours /* 평일연장근무후야간근무시간수 */
+		      ,ar.holiday_night_overtime_hours    AS holiday_night_overtime_hours /* 휴일야간연장근무시간수 */
+		      ,ar.public_holiday_night_ot_hours   AS public_holiday_night_ot_hours /* 공공휴일야간연장근무시간수 */
+		      ,ac.update_enable_flag              AS update_enable_flag /* 수정가능 근태코드여부 */
+		      ,NVL((SELECT lgvatt_common_pkg.get_holiday_flag(ar.subsidiary_code, ar.shift_type_code, ar.time_and_attendance_date) FROM DUAL), 'N') AS holiday_flag  /* 휴일여부 */
+		      ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN' ) >= TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+                                AND lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') <  lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') THEN 'Y' /*HMT_20210315*/
+                           ELSE 'N'
+                      END
+               FROM   dual) AS in_out_time_red_flag /* 출퇴근시간 적색표시여부 */
+		      ,ar.approval_request_id             AS request_master_id_result /* 요청서아이디(실적) */
+		      ,ar.request_code                    AS request_code_result /* 요청서코드(실적) */
+		      ,CASE WHEN dtr.approval_enable_flag = 'Y' AND SYSDATE < lgvatt_common_pkg.get_att_close_time(ar.subsidiary_code, 'APPROVAL', (ar.time_and_attendance_date+1), ar.shift_type_code) THEN
+				             CASE WHEN    MAX(lasn.approval_status_code) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs) = '2' /* 1차결재 가능한 상태 */
+							           OR MAX(lasn.approval_status_code) KEEP (DENSE_RANK LAST  ORDER BY lasn.approval_seqs) = '2' /* 최종결재 가능한 상태 */ THEN 'Y'
+								  ELSE 'N'
+							 END
+                        ELSE 'N'
+                   END AS wait_flag_result
+              ,ap.approval_request_id             AS request_master_id_plan /* 요청서아이디(실적) */
+		      ,ap.request_code                    AS request_code_plan /* 요청서코드(실적) */
+		      ,CASE WHEN dtp.approval_enable_flag = 'Y' AND SYSDATE < lgvatt_common_pkg.get_att_close_time(ap.subsidiary_code, 'APPROVAL', (ap.time_and_attendance_date), ap.shift_type_code) THEN
+				             CASE WHEN    MAX(lasn.approval_status_code) KEEP (DENSE_RANK FIRST ORDER BY lasn.approval_seqs) = '2' /* 1차결재 가능한 상태 */
+							           OR MAX(lasn.approval_status_code) KEEP (DENSE_RANK LAST  ORDER BY lasn.approval_seqs) = '2' /* 최종결재 가능한 상태 */ THEN 'Y'
+								  ELSE 'N'
+							 END
+                        ELSE 'N'
+                   END AS wait_flag_plan
+              ,ac.attendance_days AS attend_days
+		  FROM tb_att_result_n ar
+		      ,tb_att_plan_n   ap
+		      ,tb_att_code_c   ac
+		      ,lgcom_approval_status_n  lasn /* 공통결재자별 결재상태(실적) */
+		      ,TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{attendanceYyyymmdd}, 'DDMMYYYY'), 'RESULT', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dtr /* 결재가능일자 확인하기 위한 join */
+		      ,TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{attendanceYyyymmdd}, 'DDMMYYYY'), 'PLAN', TRUNC(SYSDATE)) AS lgvatt_input_date_tbl)) dtp /* 결재가능일자 확인하기 위한 join */
+		 WHERE ar.subsidiary_code = ac.subsidiary_code 
+		   AND ar.time_and_attendance_code = ac.time_and_attendance_code
+		   AND ar.time_and_attendance_date = dtr.time_and_attendance_date
+           AND ap.time_and_attendance_date = dtp.time_and_attendance_date
+		   AND ar.time_and_attendance_date = ap.time_and_attendance_date-1
+		   AND ar.employee_no = ap.employee_no
+		   AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		   AND ar.time_and_attendance_date = to_date(#{attendanceYyyymmdd}, 'DDMMYYYY')-1
+		   AND ar.employee_no = #{employeeNo}
+		   AND ar.approval_request_id = lasn.request_master_id
+           AND ar.request_code = lasn.request_code
+         GROUP BY  TO_CHAR(ar.time_and_attendance_date, 'DD/MM/YYYY')
+			      ,TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY')
+			      ,lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN' )
+		          ,lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT' )
+		          ,TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+		          ,lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT')  /*HMT_20210315*/
+			      ,TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN'), 'HH24:MI')
+			      ,TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT'), 'HH24:MI')
+			      ,ar.a_day_of_the_week_code
+			      ,ar.subsidiary_code
+			      ,ap.subsidiary_code
+			      ,ar.employee_no
+			      ,ar.shift_type_code
+			      ,NVL(ar.night_shift_flag, 'N')
+			      ,ac.time_and_attendance_type_code
+			      ,ar.time_and_attendance_code
+			      ,ar.time_attend_detail_code
+			      ,ar.work_start_time
+			      ,ar.tardy_hours
+			      ,ar.early_leave_hours
+			      ,ar.going_out_hours
+			      ,ar.overtime_sum_hours
+			      ,ar.time_attend_input_reason_desc
+			      ,NVL(ar.evening_meal_flag, 'N')
+			      ,ar.normal_night_overtime_hours
+			      ,ar.weekday_overtime_hours
+			      ,ar.holiday_overtime_hours
+			      ,ar.public_holiday_overtime_hours
+			      ,ar.weekday_night_overtime_hours
+			      ,ar.weekday_ot_af_night_work_hours
+			      ,ar.holiday_night_overtime_hours
+			      ,ar.public_holiday_night_ot_hours
+			      ,ac.update_enable_flag
+			      ,lgvatt_common_pkg.get_holiday_flag(ar.subsidiary_code, ar.shift_type_code, ar.time_and_attendance_date)
+			      ,ar.approval_request_id
+			      ,ar.request_code
+			      ,ap.approval_request_id
+			      ,ap.request_code
+			      ,dtp.approval_enable_flag
+			      ,dtr.approval_enable_flag
+			      ,lgvatt_common_pkg.get_att_close_time(ar.subsidiary_code, 'APPROVAL', (ar.time_and_attendance_date+1), ar.shift_type_code)
+			      ,lgvatt_common_pkg.get_att_close_time(ap.subsidiary_code, 'APPROVAL', (ap.time_and_attendance_date), ap.shift_type_code)
+			      ,ac.attendance_days
+		]]>
+	</select>
+	
+	<select id="retrieveNonRequestorData" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+		SELECT /* LGVATT40011.retrieveNonRequestorData */
+		       TO_CHAR(ar.time_and_attendance_date, 'DD/MM/YYYY') AS attendance_ymd /* 근태일자 */
+		      ,TO_CHAR(ar.time_and_attendance_date, 'DDMMYYYY') AS attendance_yyyymmdd_result /* 근태일자 */
+		      ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_DAY_OF_WEEK', ar.a_day_of_the_week_code, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS screen_week_name /* 화면에 보여줄 요일명 */
+		      ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN'), 'HH24:MI') FROM dual)  AS in_time /* 출근시간 */
+		      ,(SELECT TO_CHAR(lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT'), 'HH24:MI') FROM dual) AS out_time /* 퇴근시간 */
+		      ,ar.shift_type_code                 AS shift_type_name /* 교대유형코드 */
+		      ,NVL(ar.night_shift_flag, 'N')      AS night_shift_flag /* 주야여부 */
+		      ,ac.time_and_attendance_type_code   AS attendance_type /* 근태유형코드 */
+		      ,ar.time_and_attendance_code        AS attendance_code /* 근태코드 */
+		      ,ar.time_and_attendance_code        AS origin_attendance_code /* 근태코드 */
+		      ,ar.time_attend_detail_code         AS time_attend_detail_code /* 근태상세코드 */
+		      ,ar.work_start_time                 AS work_start_time /* 근무시작시간 */
+		      ,ar.work_start_time                 AS work_start_time_ori /* 근무시작시간. 값 초기화시 사용 */
+		      ,ar.tardy_hours                     AS tardy_hours /* 지각시간수 */
+		      ,ar.early_leave_hours               AS early_leave_hours /* 조퇴시간수 */
+		      ,ar.going_out_hours                 AS going_out_hours /* 외출시간수 */
+		      ,ar.overtime_sum_hours              AS overtime_sum_hours /* 연장근무합계시간수 */
+		      ,ar.time_attend_input_reason_desc   AS time_attend_input_reason_desc /* 근태입력사유설명 */
+		      ,NVL(ar.evening_meal_flag, 'N')     AS evening_meal_flag /* 저녁식사여부 */
+		      ,ar.normal_night_overtime_hours     AS normal_night_overtime_hours /* 정상야간연장근무시간수 */
+		      ,ar.weekday_overtime_hours          AS weekday_overtime_hours /* 평일연장근무시간수 */
+		      ,ar.holiday_overtime_hours          AS holiday_overtime_hours /* 휴일연장근무시간수 */
+		      ,ar.public_holiday_overtime_hours   AS public_holiday_overtime_hours /* 공공휴일연장근무시간수 */
+		      ,ar.weekday_night_overtime_hours    AS weekday_night_overtime_hours /* 평일야간연장근무시간수 */
+		      ,ar.weekday_ot_af_night_work_hours  AS weekday_ot_af_night_work_hours /* 평일연장근무후야간근무시간수 */
+		      ,ar.holiday_night_overtime_hours    AS holiday_night_overtime_hours /* 휴일야간연장근무시간수 */
+		      ,ar.public_holiday_night_ot_hours   AS public_holiday_night_ot_hours /* 공공휴일야간연장근무시간수 */
+		      ,ac.update_enable_flag              AS update_enable_flag /* 수정가능 근태코드여부 */
+		      ,NVL((SELECT lgvatt_common_pkg.get_holiday_flag(ar.subsidiary_code, ar.shift_type_code, ar.time_and_attendance_date) FROM DUAL), 'N') AS holiday_flag  /* 휴일여부 */
+		      ,(SELECT CASE WHEN     lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'IN' ) >= TO_DATE(TO_CHAR(ar.time_and_attendance_date, 'YYYYMMDD')||ar.work_start_time, 'YYYYMMDDHH24:MI')
+                                AND lgvatt_common_pkg.get_idcard_inout_time(ar.subsidiary_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') <  lgvatt_common_pkg.get_shift_inout_time(ar.subsidiary_code, ar.shift_type_code, ar.employee_no, ar.time_and_attendance_date, 'OUT') THEN 'Y'
+                           ELSE 'N'
+                      END
+               FROM   dual) AS in_out_time_red_flag /* 출퇴근시간 적색표시여부 */
+              ,ac.attendance_days AS attend_days
+		  FROM tb_att_result_n ar
+		      ,tb_att_code_c   ac
+		 WHERE ar.subsidiary_code = ac.subsidiary_code 
+		   AND ar.time_and_attendance_code = ac.time_and_attendance_code
+		   AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		   AND ar.time_and_attendance_date = to_date(#{attendanceYyyymmdd}, 'DDMMYYYY')-1
+		   AND ar.employee_no = #{employeeNo}
+		]]>
+	</select>
+
+	<!-- 근태 실적 테이블에 수정사항 반영 -->
+    <update id="updateAttendanceResult" parameterType="LGCOMData">
+        UPDATE /* LGVATT40011.updateAttendanceResult */
+               tb_att_result_n ar
+        SET    time_and_attendance_code               = #{attendanceCode}
+		     , time_attend_detail_code                = #{timeAttendDetailCode}
+		     , work_start_time                        = #{workStartTime}
+		     , tardy_hours                            = #{tardyHours}
+		     , early_leave_hours                      = #{earlyLeaveHours}
+		     , going_out_hours                        = #{goingOutHours}
+		     , overtime_sum_hours                     = #{overtimeSumHours}
+		     , time_attend_input_reason_desc          = #{timeAttendInputReasonDesc}
+		     , evening_meal_flag                      = #{eveningMealFlag}
+		     , normal_night_overtime_hours            = #{normalNightOvertimeHours}
+		     , weekday_overtime_hours                 = #{weekdayOvertimeHours}
+		     , holiday_overtime_hours                 = #{holidayOvertimeHours}
+		     , public_holiday_overtime_hours          = #{publicHolidayOvertimeHours}
+		     , weekday_night_overtime_hours           = #{weekdayNightOvertimeHours}
+		     , weekday_ot_af_night_work_hours         = #{weekdayOtAfNightWorkHours}
+		     , holiday_night_overtime_hours           = #{holidayNightOvertimeHours}
+		     , public_holiday_night_ot_hours          = #{publicHolidayNightOtHours}
+             , last_update_user_id                    = #{applicationUserId}
+             , last_update_date                       = SYSDATE
+             , base_time_attend_apply_flag            = 'N'
+        WHERE  subsidiary_code                        = #{subsidiaryCode}
+        AND    employee_no                            = #{employeeNo}
+        AND    time_and_attendance_date               = TO_DATE(#{attendanceYyyymmddResult}, 'DDMMYYYY')
+    </update>
+
+</mapper>

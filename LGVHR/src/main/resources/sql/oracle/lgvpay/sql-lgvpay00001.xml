@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00001">
+
+    <!-- 기본정보 조회 -->
+    <!-- HMT_20220901 add dependant_count and other_income_kind -->
+    <select id="retrieveEmployeeData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveEmployeeData */
+               a.employee_No      AS employee_no
+             , b.full_name_local  AS employee_name
+             , a.grade_title_code AS grade_title_code
+             , a.grade_name       AS grade_title_name
+             , a.organization_name
+             , a.employment_category_name AS emp_category_name
+             /*, a.job_family_name||'.' ||a.job_group_name||'.' ||a.job_series_name AS work_type_name*/
+             /*, DECODE(a.employment_category_code, 'LGD_OW', NULL, a.job_group_name)  AS work_type_name*/
+             , lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode},a.employee_no, nvl(to_date(a.resignation_yyyymmdd,'yyyymmdd'), c.basis_date))  AS work_type_name
+             , to_char(to_Date(a.hire_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy')          AS hire_date
+             , (SELECT COUNT(*) FROM tb_pay_emp_family_n pef WHERE  pef.employee_no = a.employee_no AND pef.dependent_flag  = 'Y')    AS dependant_count
+             , (SELECT TO_CHAR(SUM(RESULT_VALUE), 'FM999,999,999,999,990') FROM tb_pay_calc_result_n rs 
+                     WHERE rs.PAYROLL_ITEM_ID = '57' and rs.employee_no = a.employee_no 
+                     and rs.PAYROLL_CALCULATION_EXEC_ID IN (select P.PAYROLL_CALCULATION_EXEC_ID from tb_pay_calc_exec_n P where P.CONFIRM_FLAG = 'Y' and P.BASIS_DATE = c.BASIS_DATE) 
+                     and rs.RESULT_VALUE > 0)    AS other_income_kind
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_CONTRACT_TYPE',pec.contract_type_code, NULL, #{USER_SESSION.languageCode})
+               FROM   tb_pay_emp_contract_n  pec
+               WHERE  ( employee_no, contract_period_start_date ) IN (  SELECT employee_no, MAX(a.contract_period_start_date)
+                                                                        FROM  tb_pay_emp_contract_n a
+                                                                        WHERE employee_no = #{employeeNo}
+                                                                        GROUP BY employee_no
+                                                                     )) contract_type_name
+
+        FROM    tb_pay_result_s  a
+              , emp_master b
+              , tb_pay_calc_exec_n c
+        WHERE a.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND   a.employee_no                 = #{employeeNo}
+        AND   b.employee_number             = a.employee_no
+        AND   c.payroll_calculation_exec_id = a.payroll_calculation_exec_id
+    </select>
+
+    <!-- contract salary info -->
+    <select id="retrieveContractSalaryData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveContractSalaryData */
+                TO_CHAR(NVL(a.probation_period_odwg_amount, 0), 'FM999,999,999,999,990') AS probation_period_odwg_amount /*Prob. Sal/Old Sal.*/
+              , TO_CHAR(NVL(a.ordinary_wages_amount       , 0), 'FM999,999,999,999,990') AS ordinary_wages_amount        /*Nor.Sal/New Sal.*/
+              
+              /* annual leave info */
+              ,(select TO_CHAR(NVL(al.use_annual_leave_days, 0), 'FM9990.0')
+				FROM   tb_att_annual_leave_n al
+				WHERE  al.employee_no = a.employee_no
+				AND    al.time_and_attendance_yyyymm = TO_CHAR(TO_DATE(#{payMonth}, 'MM/YYYY'), 'YYYYMM')) AS use_al_days /* 사용연차 */
+				
+              ,(select TO_CHAR(NVL(al.residual_annual_leave_days, 0) + NVL(al.annual_compensation_days, 0), 'FM9990.0')
+				FROM   tb_att_annual_leave_n al
+				WHERE  al.employee_no = a.employee_no
+				AND    al.time_and_attendance_yyyymm = TO_CHAR(TO_DATE(#{payMonth}, 'MM/YYYY'), 'YYYYMM')) AS remain_al_days /* 잔여연차 */
+			  ,(SELECT COUNT(*) FROM tb_pay_emp_family_n pef WHERE  pef.employee_no = a.employee_no AND pef.dependent_flag  = 'Y') AS dependant_count_pay
+        FROM  tb_pay_result_s a
+        WHERE a.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND   a.employee_no = #{employeeNo}
+    </select>
+
+    <!-- salary detail -->
+    <select id="retrieveSalaryDetailData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveSalaryDetailData */
+             <![CDATA[
+               TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'NT'   THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM9990.0')  AS night_hours
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'OT'   THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM9990.0')  AS ot_hours
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'OTNT' THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM9990.0')  AS otnt_hours
+
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'ATT_DED' AND NVL(ccc.common_code, 'x') = 'LATENESS'      THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM9990.0')  AS lateness_hours
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'ATT_DED' AND NVL(ccc.common_code, 'x') = 'LEAVING_EARLY' THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM9990.0')  AS leaving_early_hours
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'ATT_DED' AND NVL(ccc.common_code, 'x') = 'GOOUT'         THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM9990.0')  AS goout_hours
+             ]]>
+             , TO_CHAR(NVL(prs.helpcall_support_hours, 0), 'FM9990.0')  AS helpcall_support_hours /* special ot */
+
+             , TO_CHAR(NVL(prs.working_days,              0), 'FM9990')  AS act_working_days
+             , TO_CHAR(NVL(prs.absence_days,              0), 'FM9990')  AS absence_leave_days
+             , TO_CHAR(NVL(prs.paid_vacation_days,        0), 'FM9990')  AS paid_leave_days
+             , TO_CHAR(NVL(prs.unpaid_vacation_days,      0), 'FM9990')  AS unpaid_leave_days
+             , TO_CHAR(NVL(prs.unpaid_absence_leave_days, 0) + NVL(prs.paid_absence_leave_days, 0), 'FM9990') AS suspension_leave_days
+             <![CDATA[
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') = 'PAY_VALUE' AND NVL(ccc1.code_data1_value, 'x') = 'INCOME' AND NVL(ccc1.code_data2_value, 'x') = 'TIME_N' THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM999,999,999,999,990')  AS income_time_n_amount
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') = 'PAY_VALUE' AND NVL(ccc1.code_data1_value, 'x') = 'INCOME' AND NVL(ccc1.code_data2_value, 'x') = 'TIME_Y' THEN to_number(pcr.result_value) ELSE 0 END), 0), 'FM999,999,999,999,990')  AS income_time_y_amount
+             , TO_CHAR(NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') = 'PAY_VALUE' AND NVL(ccc1.code_data1_value, 'x') = 'DEDUCTION'                                             THEN
+                                         /* deduction의 attendance 만 abs처리 하고 그외는 원래 값으로 계산 함 */
+                                         CASE WHEN NVL(ccc1.common_code, 'x') = 'ATT_DED' THEN ABS(to_number(pcr.result_value))
+                                              ELSE to_number(pcr.result_value)
+                                         END
+                                    ELSE 0
+                               END), 0), 'FM999,999,999,999,990')  AS deduction_amount /* deduction의 attendance항목 금액이 (-)이므로 abs처리 함 */
+             ]]>
+             , prs.bank_name                AS bank_name
+             , prs.payment_bank_account_no  AS bank_account_no
+             , TO_CHAR(NVL(prs.salary_total_amount   , 0), 'FM999,999,999,999,990') AS salary_total_amount    /* gross salary */
+             , TO_CHAR(NVL(prs.deduction_total_amount, 0), 'FM999,999,999,999,990') AS deduction_total_amount /* deduction */
+             , TO_CHAR(NVL(prs.bank_transfer_amount  , 0), 'FM999,999,999,999,990') AS bank_transfer_amount   /* net salary */
+
+        FROM   tb_pay_calc_exec_n    pce
+             , tb_pay_calc_result_n  pcr
+             , tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi2
+             , lgcom_common_code_c   ccc
+             , lgcom_common_code_c   ccc1
+             , tb_pay_result_s       prs
+        WHERE pcr.payroll_calculation_exec_id   = pce.payroll_calculation_exec_id
+        AND   ppi.payroll_item_id               = pcr.payroll_item_id
+        AND   pid.payroll_item_id               = ppi.payroll_item_id
+        AND   pcr.payroll_item_detail_detail_id = pid.payroll_item_detail_detail_id
+        AND   ppi2.payroll_item_id              = NVL(ppi.parent_payroll_item_id, ppi.payroll_item_id)
+        AND   pcr.payroll_calculation_exec_id   = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND   pcr.employee_no                   = #{employeeNo}
+        AND   ccc.code_type_code                = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND   ccc.common_code                   = ppi.payroll_item_inq_class_code
+        AND   ccc1.code_type_code               = ccc.parent_code_type_code  --'LGDVH_PAY_SLIP_INQ_1ST_TYPE_CODE'
+        AND   ccc1.common_code                  = ccc.parent_common_code
+        AND   prs.payroll_calculation_exec_id   = pcr.payroll_calculation_exec_id
+        AND   prs.employee_no                   = pcr.employee_no
+
+        GROUP BY TO_CHAR(NVL(prs.helpcall_support_hours, 0), 'FM9990.0')
+               , TO_CHAR(NVL(prs.working_days,              0), 'FM9990')
+               , TO_CHAR(NVL(prs.absence_days,              0), 'FM9990')
+               , TO_CHAR(NVL(prs.paid_vacation_days,        0), 'FM9990')
+               , TO_CHAR(NVL(prs.unpaid_vacation_days,      0), 'FM9990')
+               , TO_CHAR(NVL(prs.unpaid_absence_leave_days, 0) + NVL(prs.paid_absence_leave_days, 0), 'FM9990')
+
+               , prs.bank_name
+               , prs.payment_bank_account_no
+               , TO_CHAR(NVL(prs.salary_total_amount   , 0), 'FM999,999,999,999,990')
+               , TO_CHAR(NVL(prs.deduction_total_amount, 0), 'FM999,999,999,999,990')
+               , TO_CHAR(NVL(prs.bank_transfer_amount  , 0), 'FM999,999,999,999,990')
+    </select>
+
+    <!-- salary detail (income, deduction별 조회) -->
+    <select id="retrieveSalaryDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveSalaryDetailList */
+               cccm1.common_code_name AS code_name1 /*1차분류*/
+             , cccm.common_code_name  AS code_name2 /*2차분류*/
+
+             , TO_CHAR(SUM(CASE WHEN pid.additional_input_value = 'PAY_VALUE' THEN
+                                     /* deduction의 attendance 만 abs 처리하고, 그외는 그냥 보여줌 */
+                                     CASE WHEN ccc1.code_data1_value = 'DEDUCTION' AND ccc1.common_code = 'ATT_DED' THEN ABS(NVL(to_number(pcr.result_value), 0))
+                                          ELSE NVL(to_number(pcr.result_value), 0)
+                                     END
+                           END), 'FM999,999,999,999,990') AS item_amount /* 금액 */
+             , TO_CHAR(SUM(CASE WHEN pid.additional_input_value = 'PAY_VALUE' THEN NULL
+                                ELSE
+                                     CASE WHEN ccc1.code_data2_value = 'TIME_N' THEN NULL
+                                          /* Non Working인 경우  DEDUCTION_DAYS만 가져오기 위한 조건 */
+                                          WHEN ccc1.code_data2_value = 'TIME_Y' AND ccc1.common_code = 'ATT_DED' AND ccc.common_code = 'NON_WORKING' THEN DECODE( pid.additional_input_value, 'DEDUCTION_DAYS', pcr.result_value)
+                                          ELSE pcr.result_value END
+                           END), DECODE(ccc.code_data1_value, 'D', 'FM9990', 'FM9990.0'))   AS item_hours /* 시간/기타정보. TIME_Y인 경우만 값 조회되도록 함. */
+
+             , dense_rank() OVER (PARTITION BY ccc1.common_code ORDER BY ccc1.sort_order_no, DECODE( #{incomeDeductionCode}||'_'||#{incomeDeductionTimeCode}, 'INCOME_TIME_Y', 1, SIGN(ABS(SUM(decode(pid.additional_input_value, 'PAY_VALUE', NVL(pcr.result_value, 0))))) ) DESC, ccc.sort_order_no) AS rank1 /* 2차분류 순서 */
+             , COUNT(1) OVER (PARTITION BY ccc1.common_code) AS rowspan_cnt1 /* 1차분류 병합 행수 */
+             , ccc1.code_data2_value AS time_display_code /* 시간 보여줄지 여부. TIME_Y:보여줌, TIME_N:안보여줌 */
+             , ccc.code_data1_value  AS day_hour_code /* 일자(D), 시간(H) 구분코드 */
+             , ccc1.common_code      AS code1 /*1차분류코드*/
+             , ccc.common_code       AS code2 /*2차분류코드*/
+        FROM   tb_pay_calc_exec_n    pce
+             , tb_pay_calc_result_n  pcr
+             , tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi2
+             , lgcom_common_code_c   ccc
+             , lgcom_common_code_c   ccc1
+             , lgcom_common_code_multi_lang_c cccm
+             , lgcom_common_code_multi_lang_c cccm1
+             , tb_pay_result_s       prs /* pay result 있는 경우만 데이터 조회되도록 join 추가 */
+        WHERE pcr.payroll_calculation_exec_id   = pce.payroll_calculation_exec_id
+        AND   ppi.payroll_item_id               = pcr.payroll_item_id
+        AND   pid.payroll_item_id               = ppi.payroll_item_id
+        AND   pcr.payroll_item_detail_detail_id = pid.payroll_item_detail_detail_id
+        AND   ppi2.payroll_item_id              = NVL(ppi.parent_payroll_item_id, ppi.payroll_item_id)
+        AND   pcr.payroll_calculation_exec_id   = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND   pcr.employee_no                   = #{employeeNo}
+        AND   ccc.code_type_code                = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND   ccc.common_code                   = ppi.payroll_item_inq_class_code
+        AND   ccc1.code_type_code               = ccc.parent_code_type_code  --'LGDVH_PAY_SLIP_INQ_1ST_TYPE_CODE'
+        AND   ccc1.common_code                  = ccc.parent_common_code
+        AND   cccm1.code_type_code              = ccc1.code_type_code
+        AND   cccm1.common_code                 = ccc1.common_code
+        AND   cccm.code_type_code               = ccc.code_type_code
+        AND   cccm.common_code                  = ccc.common_code
+        AND   cccm1.language_code               = #{USER_SESSION.languageCode}
+        AND   cccm.language_code                = #{USER_SESSION.languageCode}
+        AND   ccc1.code_data1_value             = #{incomeDeductionCode} /* INCOME, DEDUCTION 구분 */
+        <if test="incomeDeductionTimeCode != null and incomeDeductionTimeCode != ''">
+        AND   ccc1.code_data2_value             = #{incomeDeductionTimeCode} /* TIME_N, TIME_Y 구분 */
+        </if>
+        AND   prs.payroll_calculation_exec_id   = pcr.payroll_calculation_exec_id
+        AND   prs.employee_no                   = pcr.employee_no
+
+        GROUP BY  cccm1.common_code_name
+                , cccm.common_code_name
+                , ccc.sort_order_no
+                , ccc1.sort_order_no
+                , ccc1.common_code
+                , ccc1.code_data2_value
+                , ccc.code_data1_value
+                , ccc1.common_code
+                , ccc.common_code
+
+        ORDER BY ccc1.sort_order_no
+               , DECODE( #{incomeDeductionCode}||'_'||#{incomeDeductionTimeCode}, 'INCOME_TIME_Y', 1, SIGN(ABS(SUM(decode(pid.additional_input_value, 'PAY_VALUE', NVL(pcr.result_value, 0))))) ) DESC /* 금액이 있는 건을 우선 보여준다. 단, OT는 항목순서대로 */
+               , ccc.sort_order_no
+    </select>
+
+    <!-- etc의 adjustment element 세부 리스트 조회 -->
+    <select id="retrieveAdjustmentList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveAdjustmentList */
+               ppi.payroll_item_name  AS element_code
+             , ppi.inquiry_name       AS element_name
+             , TO_CHAR(SUM(decode(pid.additional_input_value, 'PAY_VALUE', NVL(pcr.result_value, 0))), 'FM999,999,999,999,990') AS element_amount
+        FROM   tb_pay_calc_exec_n    pce
+             , tb_pay_calc_result_n  pcr
+             , tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi2
+             , lgcom_common_code_c ccc
+        WHERE pcr.payroll_calculation_exec_id   = pce.payroll_calculation_exec_id
+        AND   ppi.payroll_item_id               = pcr.payroll_item_id
+        AND   pid.payroll_item_id               = ppi.payroll_item_id
+        AND   pcr.payroll_item_detail_detail_id = pid.payroll_item_detail_detail_id
+        AND   ppi2.payroll_item_id              = NVL(ppi.parent_payroll_item_id, ppi.payroll_item_id)
+        AND   pcr.payroll_calculation_exec_id   = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND   pcr.employee_no                   = #{employeeNo}
+        AND   ccc.code_type_code                = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND   ccc.common_code                   = ppi.payroll_item_inq_class_code
+        AND   ccc.common_code                   = 'ADJ_INCOME'
+
+        GROUP BY  ppi.payroll_item_name, ppi.inquiry_name
+    </select>
+
+    <!-- Calculation Detail 리스트 조회 -->
+    <select id="retrieveCalculationDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveCalculationDetailList */
+               ppi.inquiry_name
+             , TO_CHAR(pdc.basis_start_date, 'DD/MM/YYYY') AS base_start_date
+             , TO_CHAR(pdc.basis_end_date,   'DD/MM/YYYY') AS base_end_date
+             , TO_CHAR(pdc.payment_base_amount, 'FM999,999,999,999,990') AS payment_base_amount
+             , pdc.working_days
+        FROM   tb_pay_detail_calc_t pdc
+             , tb_pay_payroll_item_m  ppi
+        WHERE  pdc.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND    pdc.employee_no                 = #{employeeNo}
+        AND    ppi.payroll_item_id             = pdc.payroll_item_id
+    </select>
+
+    <!-- Contribution/PIT 조회 -->
+    <select id="retrieveContributionPitList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveContributionPitList */
+               cccm.common_code_name                            AS element_name
+             , TO_CHAR(a.result_value, 'FM999,999,999,999,990') AS element_amount
+             , b.payroll_item_inq_class_code
+        FROM   tb_pay_calc_result_n a
+             , tb_pay_payroll_item_m b
+             , tb_pay_item_detail_n c
+             , lgcom_common_code_c ccc
+             , lgcom_common_code_multi_lang_c cccm
+        WHERE  a.payroll_calculation_exec_id   = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND    a.employee_no                   = #{employeeNo}
+        AND    b.payroll_item_id               = a.payroll_item_id
+        AND    c.payroll_item_detail_detail_id = a.payroll_item_detail_detail_id
+        AND    c.additional_input_value        = 'PAY_VALUE'
+        AND    B.PAY_ITEM_CLASSIFICATION_CODE  = 'ER_CHARGES'
+        AND    ccc.code_type_code              = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND    ccc.common_code                 = b.payroll_item_inq_class_code
+        AND    cccm.code_type_code             = ccc.code_type_code
+        AND    cccm.common_code                = ccc.common_code
+        AND    cccm.language_code              = #{USER_SESSION.languageCode}
+        ORDER BY ccc.sort_order_no
+    </select>
+
+    <!-- Salary Change Info 리스트 조회 -->
+    <select id="retrieveSalaryChangeInfoList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00001.retrieveSalaryChangeInfoList */
+               TO_CHAR(b.basis_start_date, 'DD/MM/YYYY')                       AS start_date
+             , TO_CHAR(SUM(pdc1.payment_base_amount), 'FM999,999,999,999,990') AS base_amount
+        FROM   tb_pay_detail_calc_t pdc1
+             ,(SELECT DISTINCT pdc.basis_start_date
+               FROM   tb_pay_detail_calc_t pdc
+               WHERE  pdc.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+               AND    pdc.employee_no = #{employeeNo}
+              ) b
+        WHERE  pdc1.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND    pdc1.employee_no = #{employeeNo}
+        AND    b.basis_start_date BETWEEN pdc1.basis_start_date AND pdc1.basis_end_date
+        GROUP BY b.basis_start_date
+    </select>
+
+    <!-- Retroactive Payroll Detail 리스트 조회 -->
+    <select id="retrieveRetroPayDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAY00001.retrieveRetroPayDetailList */
+               t.payroll_calculation_exec_id
+		      ,t.employee_no
+		      ,t.retroactive_pay_target_yyyymm
+		      ,TO_CHAR(TO_DATE(t.retroactive_pay_target_yyyymm,'yyyymm'),'MM/YYYY') AS retroactive_target_month
+		      ,t.payroll_item_id
+		      ,b.payroll_item_name
+		      ,b.detail_desc AS pay_item_description
+		      ,t.retroact_act_pay_diff_amount AS different_amt
+		FROM   tb_retro_actual_pay_diff_n t
+		      ,tb_pay_payroll_item_m b
+		WHERE  t.payroll_item_id = b.payroll_item_id
+		AND    t.employee_no = #{employeeNo}
+		AND    t.payroll_calculation_exec_id IN (select a.payroll_calculation_exec_id
+		                                         from   tb_pay_calc_exec_n a
+		                                               ,tb_pay_calc_exec_n c
+		                                         where  c.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+		                                         and    c.basis_date                  = a.basis_date
+		                                         and    a.payroll_type_code           IN ('MTH', 'MTH_RS')
+		                                         and    a.retroactive_flag            = 'Y')
+		ORDER BY TO_CHAR(TO_DATE(t.retroactive_pay_target_yyyymm,'yyyymm'),'MM/YYYY'), b.detail_desc
+    </select>
+    
+    <!-- HMT_20251010  Retrieve Other Income Employee List-->
+    <select id="retrieveOtherIncomeInputList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAY00001.retrieveOtherIncomeInputList */
+		    TO_CHAR(peo.payment, 'FM999,999,999,999,990') AS payment
+		    , peo.remark                AS remark
+		    , peo.ap_number             AS ap_number
+		    , peo.pic_id                AS pic_id
+		    , peo.pic_name              AS pic_name
+		FROM tb_pay_emp_other_income_n peo, tb_pay_result_s prs
+		WHERE peo.employee_no = prs.employee_no
+		  AND peo.payment_yyyymm = prs.basis_yyyymm
+		  AND prs.employee_no = #{employeeNo}
+		  AND prs.payroll_type_code      = 'MTH'
+		  AND prs.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+    </select>
+    
+
+</mapper>

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSETC00035">
+	<!-- Value Set 목록 조회 -->
+	<select id="retrieveCodeValSetList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /*LGSETC00035.retrieveCodeValSetList*/
+		  		 inquiry_terms_creation_sql_Id AS value_set_id
+		       , inquiry_terms_crt_sql_name AS value_set_name
+		  	   , system_code
+		       , module_code
+		       , TO_CHAR(apply_start_date,'YYYY-MM-DD') AS apply_start_date
+		       , TO_CHAR(apply_end_date,'YYYY-MM-DD') AS apply_end_date	       
+		       , source_column_name
+		       , meaning_column_name
+		       , sql_text
+		       , from_sql_text
+		       , where_sql_text
+		       , rule_sql_text
+		       , dynamic_sql_text
+		    FROM LGCOM_INQUIRY_TERMS_CRT_SQL_M
+		   WHERE 1 = 1
+		<if test="systemCode != null and systemCode != ''">
+			AND system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+			AND module_code = #{moduleCode}
+		</if>
+		<if test="valueSetId != null and valueSetId != ''">
+			AND 
+			<foreach collection="valueSetId" index="idx" open="(" close=")" separator="OR">
+				(UPPER(inquiry_terms_creation_sql_Id) LIKE '%' || UPPER(#{valueSetId[${idx}].valueSetId}) || '%')
+			</foreach>
+		</if>
+		<if test="valueSetName != null and valueSetName != ''">
+			AND (UPPER(inquiry_terms_crt_sql_name) LIKE '%' || UPPER(#{valueSetName}) || '%')
+		</if>
+		ORDER BY system_code, module_code											   
+	</select>
+	
+	<!-- Value Set 정보 등록 -->
+	<insert id="insertCodeValSetList" parameterType="java.util.HashMap">
+	/*LGSETC00035.insertCodeValSetList*/
+		INSERT INTO LGCOM_INQUIRY_TERMS_CRT_SQL_M
+		( inquiry_terms_creation_sql_Id
+		, inquiry_terms_crt_sql_name
+		, system_code
+		, module_code
+		, apply_start_date
+		, apply_end_date		       
+		, source_column_name
+		, meaning_column_name
+		, sql_text
+		, from_sql_text
+		, where_sql_text
+		, rule_sql_text
+		, dynamic_sql_text
+ 		, created_by
+ 		, creation_date
+ 		, last_updated_by
+ 		, last_update_date
+		) values
+		( #{valueSetId}
+		 ,#{valueSetName}
+		 ,#{systemCode}
+		 ,#{moduleCode}
+		 ,TO_DATE(#{applyStartDate},'YYYY-MM-DD')
+		 ,TO_DATE(#{applyEndDate},'YYYY-MM-DD')
+		 ,#{sourceColumnName}
+		 ,#{meaning_column_name}
+		 ,#{sqlText}
+		 ,#{fromSqlText}
+		 ,#{whereSqlText}
+		 ,#{ruleSqlText}
+		 ,#{dynamicSqlText}		 		 
+		 ,#{sessionUserId}
+		 ,SYSDATE
+		 ,#{sessionUserId}
+		 ,SYSDATE
+		)
+	</insert>
+	
+		<!-- Value Set 정보 수정 -->
+	<update id="updateCodeValSetList" parameterType="java.util.HashMap">
+	/*LGSETC00035.updateCodeValSetList*/
+		UPDATE LGCOM_INQUIRY_TERMS_CRT_SQL_M
+		   SET inquiry_terms_crt_sql_name    = #{valueSetName}
+		     , apply_start_date		 		 = TO_DATE(#{applyStartDate},'YYYY-MM-DD')
+		 	 , apply_end_date		  		 = TO_DATE(#{applyEndDate},'YYYY-MM-DD')
+		 	 , source_column_name	  		 = #{sourceColumnName}		
+		 	 , meaning_column_name	  		 = #{meaningColumnName}
+		 	 , sql_text				  		 = #{sqlText}
+		 	 , from_sql_text		  		 = #{fromSqlText}
+		 	 , where_sql_text		  		 = #{whereSqlText}
+		 	 , rule_sql_text		  		 = #{ruleSqlText}
+		 	 , dynamic_sql_text		  		 = #{dynamicSqlText}
+		     , last_updated_by    	  		 = #{sessionUserId}
+		     , last_update_date    	  		 = SYSDATE
+		 WHERE inquiry_terms_creation_sql_Id = #{valueSetId}
+	</update>
+	
+		<!-- Value Set 중복 체크 -->
+	<select id="retrieveValueSetIdChk" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /*LGSETC00060.retrieveValueSetIdChk*/
+		 	   COUNT(*) AS cnt
+		  FROM LGCOM_INQUIRY_TERMS_CRT_SQL_M
+		 WHERE inquiry_terms_creation_sql_Id = #{valueSetId}
+	]]>			 					  
+	</select>			
+
+</mapper>

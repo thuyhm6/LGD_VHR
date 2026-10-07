@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVCOM00100">
+	<!-- 사용자 목록 조회 -->
+	<select id="retrieveUserPopupList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /*LGVCOM00100.retrieveUserPopupList*/
+		       em.employee_number AS employee_no
+		      ,em.full_name_local AS employee_name
+		      ,lcc.common_code_desc AS employee_grade
+		      ,em.organization_id AS organization_id
+		      ,em.org_name_local AS organization_name
+		      ,lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                                ,em.employee_number
+		                                                ,TRUNC( to_date(#{attDate}, 'DD/MM/YYYY') )) AS shift_type
+		      ,lum.application_user_id AS application_user_id
+		      ,lum.department_code AS organization_code
+		  FROM emp_master          em
+		      ,lgcom_common_code_c lcc
+		      ,lgcom_user_m        lum
+		 WHERE lcc.common_code = em.grade_title
+		   AND em.employee_number = lum.user_name
+		   AND lcc.code_type_code = 'IF_VIETNAM_GRADE_TITLE'
+		<if test="employeeNo != null and employeeNo != ''">
+		     AND em.employee_number like '%' || UPPER(#{employeeNo}) || '%'
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+		     AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+		</if>
+		<if test="orgId != null and orgId != ''">
+		     AND em.organization_id = #{orgId}
+		</if>
+		<if test="assignmentCategory != null and assignmentCategory != ''">
+		     AND em.assignment_category = #{assignmentCategory}
+		</if>
+		<if test="picFlag != null and picFlag != ''">
+		     AND em.organization_id IN ( SELECT tacn.organization_id
+                                           FROM tb_att_contract_n tacn
+                                          WHERE tacn.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo} )
+		</if>
+		<if test="underOrgFlag != null and underOrgFlag != ''">
+		     AND em.organization_id IN ( SELECT DISTINCT t.organization_id
+									     FROM   emp_master t
+									     WHERE  assignment_category = 'LGD_OW'
+									     START WITH subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}     /* 변수: 세션 법인코드 */
+								         AND        employee_number = #{LGVHR_PROJECT_SESSION.employeeNo}  	      /* 변수: 세션 로긴자 사번 */
+								         CONNECT BY NOCYCLE PRIOR employee_number = supervisor
+									   )
+		</if>
+		<if test="fseYn != null and fseYn != ''">
+		     AND em.fse_yn = #{fseYn}
+		</if>
+		<if test="flsaYn != null and flsaYn != ''">
+		     AND em.flsa_yn = #{flsaYn}
+		</if>
+		ORDER BY em.employee_number
+	</select>
+</mapper>

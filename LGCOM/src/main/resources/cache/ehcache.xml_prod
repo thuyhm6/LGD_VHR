@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="ehcache.xsd" updateCheck="true"
+  monitoring="autodetect" dynamicConfig="true" maxBytesLocalHeap="150M">
+  
+  	<diskStore path="D://sorc001/jussvc01/LGCOM/ehcache" />
+	<defaultCache eternal="false" timeToIdleSeconds="120"
+		timeToLiveSeconds="120" diskSpoolBufferSizeMB="2"
+		diskExpiryThreadIntervalSeconds="120" memoryStoreEvictionPolicy="LRU">
+	</defaultCache>
+
+	<cache name="menuCache" diskSpoolBufferSizeMB="30"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+	</cache>
+
+	<cache name="debugCache" diskSpoolBufferSizeMB="8"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+	</cache>
+
+	<cache name="serviceCache" diskSpoolBufferSizeMB="20"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+	</cache>
+
+	<cache name="pushCacheReq" diskSpoolBufferSizeMB="20"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+  	</cache>
+
+	<cache name="pushCachePro" diskSpoolBufferSizeMB="20"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+  	</cache>
+
+	<cache name="pushCacheEnd" diskSpoolBufferSizeMB="20"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+  	</cache>
+
+	<cache name="profileCacheSite" diskSpoolBufferSizeMB="10"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+	</cache>
+
+	<cache name="profileCacheSystem" diskSpoolBufferSizeMB="10"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+	</cache>
+
+	<cache name="profileCacheUser" diskSpoolBufferSizeMB="10"
+		timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+	</cache>
+    
+    <cache name="dataPerformaceCache" diskSpoolBufferSizeMB="10"
+        timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+    </cache>    	
+  
+    <cache name="logInfoCache" diskSpoolBufferSizeMB="10"
+        timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+    </cache>
+    
+    <cache name="batchSecheduleInfoCache" diskSpoolBufferSizeMB="10"
+        timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+    </cache>  
+  
+    <cache name="batchRunningInfoCache" diskSpoolBufferSizeMB="10"
+        timeToIdleSeconds="0" timeToLiveSeconds="0" memoryStoreEvictionPolicy="LRU">
+    </cache>
+
+</ehcache>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVCOMMAIL">    
+    <!-- 메일발송 테이블에 등록한 결과 조회 -->
+    <select id="retrieveInsertSendMail" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVCOMMAIL.retrieveInsertSendMail */
+              lgvhr_transaction_pkg.send_mail(#{retCode , mode=OUT, jdbcType=VARCHAR}     /*po_return_code. 필수: 양수이면 성공(메일생성 Seq 리턴됨), 음수이면 에러*/,
+                                              #{errorMessage, mode=OUT, jdbcType=VARCHAR} /*po_return_msg. 필수: 양수이면 '', 음수이면 에러메시지*/,
+                                              #{sessionAppUserId}                         /*p_user_id. 필수: 로긴자 lgcom_user_m.applicatoin_user_id. 없으면 -1*/,
+                                              #{subsidiaryCode}                           /*p_subsidiary_code. 필수: 법인코드*/,
+                                              #{mailCode}                                 /*p_mail_code. 메일코드.code_type_code='LGVHR_MAIL_TEMPLATE_LIST'*/,
+                                              #{receiptInfo}                              /*p_receipt_info. 필수: 수신자메일 : 사원번호 가능(1명만),  이메일 여러명 가능(콤마 구분). */,
+                                              #{languageCode}                             /*p_language_code. 생략: 언어, 디폴트 en*/,
+                                              #{mailMappData}                             /*p_mail_mapp. 생략: 매핑데이타*/,
+                                              #{senderInfo}                              /*p_sender_info. 생략: 송신자메일: 생락시 디폴트(hrsys@lgdisplay.com), 사원번호 가능(1명만),  이메일 여러명 가능(콤마 구분)*/,
+                                              #{ccInfo}                                  /*p_cc_info. 생략: 참조자메일 */
+                                            )
+        }
+    </select>
+</mapper>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean id="sqlSessionFactory" class="devonframe.dataaccess.mybatis.factory.CommonDaoSqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+	  	<property name="configLocation" value="classpath:/sql/configuration.xml"/>
+	  	<property name="mapperLocations" value= "classpath:/sql/oracle/**/sql-*.xml"/>
+	  	<property name="developmentMode" value="true" />
+    	<property name="cacheSeconds" value="10" /> 
+	</bean>
+
+	<bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">
+		<constructor-arg ref="sqlSessionFactory" />
+	</bean>
+
+	<bean id="mybatisDao" class="devonframe.dataaccess.mybatis.MyBatisCommonDao">
+		<property name="sqlSessionFactory" ref="sqlSessionFactory" />
+		<property name="pagingExecutor" ref="myBatisPagingExecutor" />
+	</bean>
+	
+	<bean id="myBatisPagingExecutor" class="devonframe.paging.executor.MyBatisPagingExecutor" />
+	
+</beans>

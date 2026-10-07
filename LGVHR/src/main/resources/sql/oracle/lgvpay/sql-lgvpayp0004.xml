@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0004">
+
+    <!-- Formula List 조회 -->
+    <select id="retrieveFormulaList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0004.retrieveFormulaList */
+               a.payroll_calculation_formula_id
+             , a.payroll_calc_formula_value
+        FROM   tb_pay_calc_formula_n a
+        WHERE  a.payroll_calc_formula_value LIKE #{formulaName}||'%'
+        ORDER BY 1
+    </select>
+
+</mapper>

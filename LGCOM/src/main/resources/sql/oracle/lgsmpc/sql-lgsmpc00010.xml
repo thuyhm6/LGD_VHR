@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSMPC00010">
+	<!-- 이관이력 목록 목록 조회 -->
+	<select id="retrieveTransferList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00500.retrieveTransferList */
+		         tmn.transfer_seq_no
+		       , tmn.system_code
+		       , tmn.module_code
+		       , tmn.file_path_name
+		       , tmn.changed_detail
+		       , tmn.changed_version_no
+		       , TO_CHAR(tmn.trans_req_date,'YYYY-MM-DD') AS trans_req_date
+		       , tmn.req_user_name
+		       , tmn.dev_trans_user_id
+		       , dev_umv.full_name_local AS dev_trans_user_name
+		       , TO_CHAR(tmn.dev_transfer_date,'YYYY-MM-DD HH24:MI') AS dev_transfer_date
+		       , tmn.prod_trans_user_id
+		       , prod_umv.full_name_local AS prod_trans_user_name
+		       , TO_CHAR(tmn.prod_transfer_date,'YYYY-MM-DD HH24:MI') AS prod_transfer_date
+		       , tmn.attribute001
+		       , tmn.attribute002
+		       , tmn.attribute003
+		       , tmn.attribute004
+		       , tmn.attribute005
+		       , tmn.attribute006
+		       , tmn.attribute007
+		       , tmn.attribute008
+		       , tmn.attribute009
+		       , tmn.attribute010
+		    FROM LGCOM_TRANSFER_MNGT_N tmn
+		       , LGCOM_USER_M_V        dev_umv
+		       , LGCOM_USER_M_V        prod_umv
+		   WHERE tmn.dev_trans_user_id = dev_umv.application_user_id(+)
+		     AND tmn.prod_trans_user_id = prod_umv.application_user_id(+)
+		<if test="systemCode != null and systemCode != ''">
+		     AND tmn.system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+		     AND tmn.module_code = #{moduleCode}
+		</if>
+		<if test="fileName != null and fileName != ''">
+		     AND tmn.file_path_name LIKE '%' || #{fileName} || '%'
+		</if>
+		<if test="transReqDate != null and transReqDate != ''">
+		     AND tmn.trans_req_date = TO_DATE(#{transReqDate},'YYYYMMDD')
+		</if>
+		<if test="userName != null and userName != ''">
+		     AND tmn.req_user_name LIKE '%' || #{userName} || '%'
+		</if>
+		<if test="etcOptions != null and etcOptions != ''">
+		     AND tmn.attribute001 LIKE '%' || #{etcOptions} || '%'
+		</if>
+		ORDER BY tmn.trans_req_date DESC
+	</select>
+
+	<!-- 이관이력 신규건 등록 -->
+	<insert id="insertTransferData" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00500.insertTransferData */
+		            LGCOM_TRANSFER_MNGT_N (
+		    transfer_seq_no, system_code, module_code, file_path_name,
+		    changed_detail, changed_version_no, trans_req_date, req_user_name,
+		    attribute001, attribute002, attribute003, attribute004,
+		    attribute005, attribute006, attribute007, attribute008,
+		    attribute009, attribute010, creation_date, created_by, last_update_date, last_updated_by
+		) VALUES (
+		    LGCOM_TRANSFER_MNGT_N_SEQ.NEXTVAL, #{systemCode}, #{moduleCode}, #{filePathName},
+		    #{changedDetail}, #{changedVersionNo}, TO_DATE(#{transReqDate},'YYYY-MM-DD'), #{reqUserName},
+		    #{attribute001}, #{attribute002}, #{attribute003}, #{attribute004},
+		    #{attribute005}, #{attribute006}, #{attribute007}, #{attribute008},
+		    #{attribute009}, #{attribute010}, SYSDATE, #{applicationUserId}, SYSDATE, #{applicationUserId}
+		)
+	</insert>
+
+	<!-- 이관이력 수정건 저장 -->
+	<update id="updateTransferData" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00500.updateTransferData */
+		       LGCOM_TRANSFER_MNGT_N
+		   SET system_code        = #{systemCode}
+		     , module_code        = #{moduleCode}
+		     , file_path_name     = #{filePathName}
+		     , changed_detail     = #{changedDetail}
+		     , changed_version_no = #{changedVersionNo}
+		     , trans_req_date     = TO_DATE(#{transReqDate},'YYYY-MM-DD')
+		     , req_user_name      = #{reqUserName}
+		     , attribute001       = #{attribute001}
+		     , attribute002       = #{attribute002}
+		     , attribute003       = #{attribute003}
+		     , attribute004       = #{attribute004}
+		     , attribute005       = #{attribute005}
+		     , attribute006       = #{attribute006}
+		     , attribute007       = #{attribute007}
+		     , attribute008       = #{attribute008}
+		     , attribute009       = #{attribute009}
+		     , attribute010       = #{attribute010}
+		     , last_update_date   = SYSDATE
+		     , last_updated_by    = #{applicationUserId}
+		 WHERE transfer_seq_no    = #{transferSeqNo}
+	</update>
+
+	<!-- 개발서버 이관 내역 수정 -->
+	<update id="updateDevTransferResult" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00500.updateDevTransferResult */
+		       LGCOM_TRANSFER_MNGT_N
+		   SET dev_trans_user_id = #{applicationUserId}
+		     , dev_transfer_date = SYSDATE
+		     , last_update_date  = SYSDATE
+		     , last_updated_by   = #{applicationUserId}
+		 WHERE transfer_seq_no   = #{transferSeqNo}
+	</update>
+
+	<!-- 운영서버 이관 내역 수정 -->
+	<update id="updateProdTransferResult" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00500.updateProdTransferResult */
+		       LGCOM_TRANSFER_MNGT_N
+		   SET prod_trans_user_id = #{applicationUserId}
+		     , prod_transfer_date = SYSDATE
+		     , last_update_date   = SYSDATE
+		     , last_updated_by    = #{applicationUserId}
+		 WHERE transfer_seq_no    = #{transferSeqNo}
+	</update>
+</mapper>

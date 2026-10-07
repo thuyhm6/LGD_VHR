@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT30050">
+
+	<!-- Employee Monthly OT Level Retrieve -->
+	<select id="retrieveMonthlyEmpLevelList" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+			SELECT A.*,  
+				(CASE WHEN substr(A.level_actual, 2) > substr(A.level_requested, 2) THEN 'Over' ELSE '' END) AS ot_check
+			FROM (
+			SELECT ar.time_and_attendance_yyyymm                AS attendance_ym
+			      ,em.organization_id                           AS employee_org
+			      ,ar.employee_no                               AS employee_no
+			      ,em.full_name_local                           AS employee_name
+			      ,em.grade_type                                AS grade_type
+			      ,em.grade_title                               AS employee_grade
+			      ,em.ATTRIBUTE10                               AS actual_shift_code
+			      ,TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
+			      ,ar.level_0                                   AS level_0
+			      ,ar.level_1                                   AS level_1
+			      ,ar.level_2                                   AS level_2
+			      ,ar.level_3                                   AS level_3
+			      ,ar.level_4                                   AS level_4
+			      ,lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, time_and_attendance_yyyymm, 'level_requested') AS level_requested
+			      ,lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, time_and_attendance_yyyymm, 'level_actual') AS level_actual
+			      ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code, em.employee_number, 
+			                                             TO_DATE(time_and_attendance_yyyymm, 'YYYYMM'), TO_DATE(time_and_attendance_yyyymm, 'YYYYMM'), 'month_total_ot_yyyymm') AS total_overtime
+			  FROM tb_att_ot_level_info_n             ar
+			      ,emp_master                         em
+			 WHERE ar.employee_no = em.employee_number
+			   AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			   AND ar.time_and_attendance_yyyymm = #{attendanceYm}
+			   AND em.organization_id = #{orgId}
+			   ) A WHERE 1 = 1
+		]]>
+		<if test="shiftCode != null and shiftCode != ''">
+			   AND A.actual_shift_code = #{shiftCode}
+		</if>
+		<if test="empNo != null and empNo != ''">
+			   AND UPPER(A.employee_no) = UPPER(#{empNo})
+		</if>
+		<if test="empName != null and empName != ''">
+			   AND UPPER(A.employee_name) LIKE '%' || UPPER(#{empName}) || '%'
+		</if>
+		<if test="otLevelCheck != null and otLevelCheck != ''">
+			   AND substr(A.level_actual, 2) > substr(A.level_requested, 2)
+		</if>
+			 ORDER BY A.employee_no asc
+	</select>
+	
+</mapper>

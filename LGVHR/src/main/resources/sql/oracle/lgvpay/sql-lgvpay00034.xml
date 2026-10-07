@@ -1,0 +1,1110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00034">
+    <!-- HMT_20260701  Retrieve Annual Leave Sumary Employee List -->
+    <select id="retrieveAlSummaryEmpList" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH CTE_YEAR_CURRENT AS ( /* LGVPAY00034.retrieveAlSumaryEmpList */
+          SELECT 
+            SUBSIDIARY_CODE, 
+            EMPLOYEE_NO,
+            SUM(NVL(OCCUR_BASIC_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_BASIC_CURR,
+            SUM(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = #{payMonth} THEN 0 
+                     WHEN ANNUAL_CALIBRATION_DAYS > 0 THEN ANNUAL_CALIBRATION_DAYS ELSE 0 END)       AS TOTAL_CALIB_CURR,
+            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0))         AS TOTAL_USE_CURR,
+            SUM(NVL(OCCUR_MONTHLY_ANN_LV_DAYS, 0)) AS TOTAL_OCCUR_CURR,
+            NVL(MAX(RESIDUAL_ANNUAL_LEAVE_DAYS) KEEP (DENSE_RANK LAST ORDER BY TIME_AND_ATTENDANCE_YYYYMM), 0) AS LATEST_RESIDUAL_LEAVE
+        FROM TB_ATT_ANNUAL_LEAVE_N
+        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+	    ),
+	    CTE_YEAR_PREVIOUS AS (
+	        SELECT 
+	            SUBSIDIARY_CODE, 
+	            EMPLOYEE_NO,
+	            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+	                 THEN RESIDUAL_ANNUAL_LEAVE_DAYS END), 0) AS RESIDUAL_DEC_PREV,
+	            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+	                 THEN OCCUR_MONTHLY_ANN_LV_DAYS END), 0) AS OCCUR_MONTHLY_DEC_PREV,
+	            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_USE_PREV
+	        FROM TB_ATT_ANNUAL_LEAVE_N
+	        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '%'
+	        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+	    ),
+	    CTE_PREV_MONTH_ATT AS (
+	        SELECT 
+	            R.SUBSIDIARY_CODE,
+	            R.EMPLOYEE_NO,
+	            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PREV_PERFECT_DAYS
+	        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+	        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+	          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+	          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+	          AND R.TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(ADD_MONTHS(TO_DATE(#{payMonth}, 'YYYYMM'), -1), 'YYYYMM')
+	        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO
+	    ),
+	    <![CDATA[ 
+	    CTE_ATT AS (
+	        SELECT 
+	            R.SUBSIDIARY_CODE,
+	            R.EMPLOYEE_NO,
+	            SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+	            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PERFECT_DAYS,
+	            SUM(CASE WHEN (C.PAID_DAYS > 0 OR C.ATTENDANCE_DAYS > 0 OR R.TIME_ATTEND_DETAIL_CODE = 'US_CHB') THEN 1 END) ACTUAL_DAYS,
+	            SUM(CASE WHEN (C.UNPAID_DAYS > 0 AND R.TIME_ATTEND_DETAIL_CODE != 'US_CHB') THEN 1 ELSE 0 END) AS UNPAID_LEAVE
+	        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+	        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+	          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+	          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+	          AND R.TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+	        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO, SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+	    ),
+	    CTE_AL AS (
+	        SELECT 
+	            SUBSIDIARY_CODE,
+	            EMPLOYEE_NO,
+	            SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+	            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS ANNUAL_LEAVE_USED
+	        FROM TB_ATT_ANNUAL_LEAVE_N
+	        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+	        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+	    ),
+	    CTE_COMBINED AS (
+	        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, PERFECT_DAYS, ACTUAL_DAYS, UNPAID_LEAVE, 0 AS ANNUAL_LEAVE_USED FROM CTE_ATT
+	        UNION ALL
+	        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, 0 AS PERFECT_DAYS, 0 AS ACTUAL_DAYS, 0 AS UNPAID_LEAVE, ANNUAL_LEAVE_USED FROM CTE_AL
+	    ),
+	    CTE_SUMMARY AS (
+	        SELECT 
+	            SUBSIDIARY_CODE,
+	            EMPLOYEE_NO,
+	            MM,
+	            SUM(PERFECT_DAYS) AS PERFECT_DAYS,
+	            SUM(ACTUAL_DAYS) AS ACTUAL_DAYS,
+	            SUM(UNPAID_LEAVE) AS UNPAID_LEAVE,
+	            (CASE WHEN SUM(PERFECT_DAYS) = 0 THEN 1
+	                  WHEN SUM(ACTUAL_DAYS) = 0 THEN 0
+	                      WHEN (SUM(ACTUAL_DAYS) / SUM(PERFECT_DAYS)) < 0.5 THEN 0.5 ELSE 1  END) AS WORK_COEF,
+	            SUM(ANNUAL_LEAVE_USED) AS ANNUAL_LEAVE_USED
+	        FROM CTE_COMBINED
+	        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, MM
+	    )
+	    ]]> 
+	    SELECT 
+	        EM.SUBSIDIARY_CODE,
+	        EM.EMPLOYEE_NUMBER, 
+	        EM.full_name_local AS EMPLOYEE_NAME, 
+	        EM.organization_id AS ORGANIZATION_ID,
+	        EM.ORG_NAME_LOCAL,
+	        TO_CHAR(EM.DATE_HIRE_SUBSIDIARY, 'DD/MM/YYYY') AS DATE_HIRE_SUBSIDIARY,
+	        TO_CHAR((GREATEST(em.date_hire_subsidiary, TO_DATE(NVL(TO_CHAR(em.date_retire, 'YYYY'), '1990') || '0101', 'YYYYMMDD'))), 'DD/MM/YYYY') AS TIME_AND_ATTENDANCE_YYYYMM,
+	        TO_CHAR(EM.DATE_RETIRE, 'DD/MM/YYYY') AS RESIGNATION_DATE,
+	        
+	        NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0)  AS TOTAL_BASIC_CURR_YEAR, --AL plus every 5 years (1.1)
+	        NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0)  AS TOTAL_CALIB_CURR_YEAR, --Other AL bonus (1.2)
+	        NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) AS RESIDUAL_DEC_PREV_YEAR, --AL remain last year (1.3)
+	        NVL(MAX(Y_PREV.OCCUR_MONTHLY_DEC_PREV), 0) AS OCCUR_MONTHLY_DEC_PREV_YEAR, --AL in advance last year (plan) (1.4) TOTAL_OCCUR_CURR
+	        CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+	            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+	             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END AS AL_CREATE_CURR_YEAR, --AL Create in year (plan) (1)
+		    
+		    SUM(CASE WHEN S.MM = '01' THEN S.PERFECT_DAYS ELSE 0 END) AS M01_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '01' THEN S.ACTUAL_DAYS ELSE 0 END) AS M01_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '01' THEN S.UNPAID_LEAVE ELSE 0 END) AS M01_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '01' THEN S.WORK_COEF ELSE 0 END) AS M01_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '02' THEN S.PERFECT_DAYS ELSE 0 END) AS M02_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '02' THEN S.ACTUAL_DAYS ELSE 0 END) AS M02_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '02' THEN S.UNPAID_LEAVE ELSE 0 END) AS M02_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '02' THEN S.WORK_COEF ELSE 0 END) AS M02_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '03' THEN S.PERFECT_DAYS ELSE 0 END) AS M03_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '03' THEN S.ACTUAL_DAYS ELSE 0 END) AS M03_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '03' THEN S.UNPAID_LEAVE ELSE 0 END) AS M03_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '03' THEN S.WORK_COEF ELSE 0 END) AS M03_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '04' THEN S.PERFECT_DAYS ELSE 0 END) AS M04_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '04' THEN S.ACTUAL_DAYS ELSE 0 END) AS M04_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '04' THEN S.UNPAID_LEAVE ELSE 0 END) AS M04_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '04' THEN S.WORK_COEF ELSE 0 END) AS M04_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '05' THEN S.PERFECT_DAYS ELSE 0 END) AS M05_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '05' THEN S.ACTUAL_DAYS ELSE 0 END) AS M05_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '05' THEN S.UNPAID_LEAVE ELSE 0 END) AS M05_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '05' THEN S.WORK_COEF ELSE 0 END) AS M05_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '06' THEN S.PERFECT_DAYS ELSE 0 END) AS M06_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '06' THEN S.ACTUAL_DAYS ELSE 0 END) AS M06_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '06' THEN S.UNPAID_LEAVE ELSE 0 END) AS M06_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '06' THEN S.WORK_COEF ELSE 0 END) AS M06_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '07' THEN S.PERFECT_DAYS ELSE 0 END) AS M07_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '07' THEN S.ACTUAL_DAYS ELSE 0 END) AS M07_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '07' THEN S.UNPAID_LEAVE ELSE 0 END) AS M07_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '07' THEN S.WORK_COEF ELSE 0 END) AS M07_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '08' THEN S.PERFECT_DAYS ELSE 0 END) AS M08_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '08' THEN S.ACTUAL_DAYS ELSE 0 END) AS M08_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '08' THEN S.UNPAID_LEAVE ELSE 0 END) AS M08_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '08' THEN S.WORK_COEF ELSE 0 END) AS M08_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '09' THEN S.PERFECT_DAYS ELSE 0 END) AS M09_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '09' THEN S.ACTUAL_DAYS ELSE 0 END) AS M09_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '09' THEN S.UNPAID_LEAVE ELSE 0 END) AS M09_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '09' THEN S.WORK_COEF ELSE 0 END) AS M09_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '10' THEN S.PERFECT_DAYS ELSE 0 END) AS M10_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '10' THEN S.ACTUAL_DAYS ELSE 0 END) AS M10_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '10' THEN S.UNPAID_LEAVE ELSE 0 END) AS M10_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '10' THEN S.WORK_COEF ELSE 0 END) AS M10_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '11' THEN S.PERFECT_DAYS ELSE 0 END) AS M11_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '11' THEN S.ACTUAL_DAYS ELSE 0 END) AS M11_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '11' THEN S.UNPAID_LEAVE ELSE 0 END) AS M11_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '11' THEN S.WORK_COEF ELSE 0 END) AS M11_AL_DAYS,
+		    
+		    SUM(CASE WHEN S.MM = '12' THEN S.PERFECT_DAYS ELSE 0 END) AS M12_PERFECT_DAYS,
+		    SUM(CASE WHEN S.MM = '12' THEN S.ACTUAL_DAYS ELSE 0 END) AS M12_ACTUAL_DAYS,
+		    SUM(CASE WHEN S.MM = '12' THEN S.UNPAID_LEAVE ELSE 0 END) AS M12_UNPAID_LEAVE,
+		    SUM(CASE WHEN S.MM = '12' THEN S.WORK_COEF ELSE 0 END) AS M12_AL_DAYS,
+		    
+		    SUM(NVL(S.WORK_COEF, 0)) AS CREATE_THIS_YEAR, --Creation from This Year (2) = (M.1+…+M.12)
+        (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + 
+         (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END)) AS TOTAL_ANNUAL_CURR_YEAR, --Total Annual Leave of This Year (3)=(1)+(1.1)+(1.3)
+        NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0)  AS TOTAL_USE_CURR_YEAR, --Used Annual Leave at This Year (5)
+        '365' AS FULL_DAYS, --Full Days (6)
+        SUM(NVL(S.ACTUAL_DAYS, 0)) AS TOTAL_WORKING_DAYS,--Working Days (This Year) (7)
+        SUM(NVL(S.UNPAID_LEAVE, 0)) AS TOTAL_UNPAID_THIS_YEAR,--Unpaid Days (This Year) (8)
+        (SUM(NVL(S.WORK_COEF, 0)) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) - 
+          (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END)) AS AL_PAY_ADJUST,--Adjust (9) ==(2)-(1)+(1.2)
+        (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0)) AS AL_PAY_COUNT,--Pay =(3)+(9)-(5)
+        NVL(MAX(LATEST_RESIDUAL_LEAVE), 0) AS REMAIN_DAY,--Remain Days
+        
+        ( CASE WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 THEN lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(EM.DATE_RETIRE, 'YYYYMMDD'))
+                ELSE lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(TO_DATE(#{payMonth}, 'YYYYMM') - 1, 'YYYYMMDD')) END) AS SAL_INFO,--Sal infor (Prev. Month),
+        
+        (CASE  WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 
+               THEN SUM(CASE WHEN S.MM = SUBSTR(#{payMonth}, 5, 2) THEN S.PERFECT_DAYS ELSE 0 END)
+               ELSE MAX(PMA.PREV_PERFECT_DAYS)
+           END) AS PREV_PERFECT_DAYS, --Perfect day (Prev. Month)
+ 
+        (CASE  WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 
+               THEN ROUND((lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(EM.DATE_RETIRE, 'YYYYMMDD')) / SUM(CASE WHEN S.MM = SUBSTR(#{payMonth}, 5, 2) THEN S.PERFECT_DAYS ELSE 0 END) 
+                        * (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))), 0)
+               ELSE ROUND((lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(TO_DATE(#{payMonth}, 'YYYYMM') - 1, 'YYYYMMDD')) / NVL(MAX(PMA.PREV_PERFECT_DAYS), 0)
+                       * (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))), 0)
+                  END) AS AL_PAY_AMOUNT --AL Pay Amt
+		
+		
+		FROM emp_master EM
+		INNER JOIN TB_ATT_ANNUAL_LEAVE_N CURR 
+		    ON EM.SUBSIDIARY_CODE = CURR.SUBSIDIARY_CODE 
+		   AND EM.EMPLOYEE_NUMBER = CURR.EMPLOYEE_NO
+		
+		LEFT JOIN CTE_YEAR_CURRENT Y_CURR 
+		    ON EM.SUBSIDIARY_CODE = Y_CURR.SUBSIDIARY_CODE 
+		   AND EM.EMPLOYEE_NUMBER = Y_CURR.EMPLOYEE_NO
+		
+		LEFT JOIN CTE_YEAR_PREVIOUS Y_PREV 
+		    ON EM.SUBSIDIARY_CODE = Y_PREV.SUBSIDIARY_CODE 
+		   AND EM.EMPLOYEE_NUMBER = Y_PREV.EMPLOYEE_NO
+		
+		LEFT JOIN CTE_PREV_MONTH_ATT PMA 
+		    ON EM.SUBSIDIARY_CODE = PMA.SUBSIDIARY_CODE 
+		   AND EM.EMPLOYEE_NUMBER = PMA.EMPLOYEE_NO
+		   
+		LEFT JOIN CTE_SUMMARY S 
+		    ON EM.SUBSIDIARY_CODE = S.SUBSIDIARY_CODE 
+		   AND EM.EMPLOYEE_NUMBER = S.EMPLOYEE_NO
+		
+		WHERE CURR.TIME_AND_ATTENDANCE_YYYYMM = #{payMonth}
+		   <if test="employeeNo != null and employeeNo != ''">
+               AND EM.EMPLOYEE_NUMBER = #{employeeNo}
+	       </if>
+	       <if test="employeeName != null and employeeName != ''">
+	           AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+	       </if>
+	       <if test="calculationSetId != null and calculationSetId != ''">
+	           AND EM.EMPLOYEE_NUMBER IN (select n.EMPLOYEE_NO from tb_pay_calc_set_target_per_n n where n.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC})
+	       </if>
+		GROUP BY 
+		    EM.SUBSIDIARY_CODE,
+		    EM.EMPLOYEE_NUMBER,
+		    EM.full_name_local,
+		    EM.organization_id,
+		    EM.ORG_NAME_LOCAL,
+		    EM.DATE_HIRE_SUBSIDIARY,
+		    EM.DATE_RETIRE,
+		    CURR.TIME_AND_ATTENDANCE_YYYYMM
+		ORDER BY EM.EMPLOYEE_NUMBER
+    </select>
+
+    <!-- 행추가된 사용자 정보를 조회 -->
+    <select id="retrieveEmployeeInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00034.retrieveEmployeeInfo */
+               em.employee_number     AS employee_no
+             , em.full_name_english   AS employee_name
+             , em.grade               AS grade_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+             , em.org_name_local      AS organization_name
+             , em.grade_type          AS emp_category_name
+             , em.job_family||'.'||em.job_group||'.'||em.job_detail  AS work_type_name
+             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+             , TO_CHAR(em.date_retire, 'DD/MM/YYYY') as date_retire
+        FROM emp_master em
+        WHERE em.employee_number = #{employeeNo}
+    </select>
+
+    <!-- CSV 다운로드 -->
+    <select id="createDirectCSVDownloadData" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGVPAY00034.createDirectCSVDownloadData */
+                EMPLOYEE_NUMBER
+              , EMPLOYEE_NAME
+              , ORG_NAME_LOCAL
+              , DATE_HIRE_SUBSIDIARY
+              , TIME_AND_ATTENDANCE_YYYYMM
+              , RESIGNATION_DATE
+              , TOTAL_BASIC_CURR_YEAR
+              , TOTAL_CALIB_CURR_YEAR
+              , RESIDUAL_DEC_PREV_YEAR
+              , OCCUR_MONTHLY_DEC_PREV_YEAR
+              , AL_CREATE_CURR_YEAR
+              , M01_PERFECT_DAYS
+              , M01_ACTUAL_DAYS
+              , M01_UNPAID_LEAVE
+              , M01_AL_DAYS
+              , M02_PERFECT_DAYS
+              , M02_ACTUAL_DAYS
+              , M02_UNPAID_LEAVE
+              , M02_AL_DAYS
+              , M03_PERFECT_DAYS
+              , M03_ACTUAL_DAYS
+              , M03_UNPAID_LEAVE
+              , M03_AL_DAYS
+              , M04_PERFECT_DAYS
+              , M04_ACTUAL_DAYS
+              , M04_UNPAID_LEAVE
+              , M04_AL_DAYS
+              , M05_PERFECT_DAYS
+              , M05_ACTUAL_DAYS
+              , M05_UNPAID_LEAVE
+              , M05_AL_DAYS
+              , M06_PERFECT_DAYS
+              , M06_ACTUAL_DAYS
+              , M06_UNPAID_LEAVE
+              , M06_AL_DAYS
+              , M07_PERFECT_DAYS
+              , M07_ACTUAL_DAYS
+              , M07_UNPAID_LEAVE
+              , M07_AL_DAYS
+              , M08_PERFECT_DAYS
+              , M08_ACTUAL_DAYS
+              , M08_UNPAID_LEAVE
+              , M08_AL_DAYS
+              , M09_PERFECT_DAYS
+              , M09_ACTUAL_DAYS
+              , M09_UNPAID_LEAVE
+              , M09_AL_DAYS
+              , M10_PERFECT_DAYS
+              , M10_ACTUAL_DAYS
+              , M10_UNPAID_LEAVE
+              , M10_AL_DAYS
+              , M11_PERFECT_DAYS
+              , M11_ACTUAL_DAYS
+              , M11_UNPAID_LEAVE
+              , M11_AL_DAYS
+              , M12_PERFECT_DAYS
+              , M12_ACTUAL_DAYS
+              , M12_UNPAID_LEAVE
+              , M12_AL_DAYS
+              , CREATE_THIS_YEAR
+              , TOTAL_ANNUAL_CURR_YEAR
+              , TOTAL_USE_CURR_YEAR
+              , FULL_DAYS
+              , TOTAL_WORKING_DAYS
+              , TOTAL_UNPAID_THIS_YEAR
+              , AL_PAY_ADJUST
+              , AL_PAY_COUNT
+              , REMAIN_DAY
+              , SAL_INFO
+              , PREV_PERFECT_DAYS
+              , AL_PAY_AMOUNT
+        FROM (
+                  SELECT '1' gubun
+                    , 'Employee No' AS EMPLOYEE_NUMBER
+                    , 'Employee Name' AS EMPLOYEE_NAME
+                    , 'Organization' AS ORG_NAME_LOCAL
+                    , 'Start Date' AS DATE_HIRE_SUBSIDIARY
+                    , 'Calc. Start Date' AS TIME_AND_ATTENDANCE_YYYYMM
+                    , 'Resignation Date' AS RESIGNATION_DATE
+                    , 'AL plus every 5 years (1.1)' AS TOTAL_BASIC_CURR_YEAR
+                    , 'Other AL bonus (1.2)' AS TOTAL_CALIB_CURR_YEAR
+                    , 'AL remain last year (1.3)' AS RESIDUAL_DEC_PREV_YEAR
+                    , 'AL in advance last year (plan) (1.4)' AS OCCUR_MONTHLY_DEC_PREV_YEAR
+                    , 'AL Create in year (plan) (1)' AS AL_CREATE_CURR_YEAR
+                    , 'Perfect days' AS M01_PERFECT_DAYS
+                    , 'Actual days' AS M01_ACTUAL_DAYS
+                    , 'Unpaid days' AS M01_UNPAID_LEAVE
+                    , 'AL days of month  (M.1)' AS M01_AL_DAYS
+                    , 'Perfect days' AS M02_PERFECT_DAYS
+                    , 'Actual day' AS M02_ACTUAL_DAYS
+                    , 'Unpaid days' AS M02_UNPAID_LEAVE
+                    , 'AL days of month  (M.2)' AS M02_AL_DAYS
+                    , 'Perfect days' AS M03_PERFECT_DAYS
+                    , 'Actual day' AS M03_ACTUAL_DAYS
+                    , 'Unpaid days' AS M03_UNPAID_LEAVE
+                    , 'AL days of month  (M.3)' AS M03_AL_DAYS
+                    , 'Perfect days' AS M04_PERFECT_DAYS
+                    , 'Actual day' AS M04_ACTUAL_DAYS
+                    , 'Unpaid days' AS M04_UNPAID_LEAVE
+                    , 'AL days of month  (M.4)' AS M04_AL_DAYS
+                    , 'Perfect days' AS M05_PERFECT_DAYS
+                    , 'Actual day' AS M05_ACTUAL_DAYS
+                    , 'Unpaid days' AS M05_UNPAID_LEAVE
+                    , 'AL days of month  (M.5)' AS M05_AL_DAYS
+                    , 'Perfect days' AS M06_PERFECT_DAYS
+                    , 'Actual day' AS M06_ACTUAL_DAYS
+                    , 'Unpaid days' AS M06_UNPAID_LEAVE
+                    , 'AL days of month  (M.6)' AS M06_AL_DAYS
+                    , 'Perfect days' AS M07_PERFECT_DAYS
+                    , 'Actual day' AS M07_ACTUAL_DAYS
+                    , 'Unpaid days' AS M07_UNPAID_LEAVE
+                    , 'AL days of month  (M.7)' AS M07_AL_DAYS
+                    , 'Perfect days' AS M08_PERFECT_DAYS
+                    , 'Actual day' AS M08_ACTUAL_DAYS
+                    , 'Unpaid days' AS M08_UNPAID_LEAVE
+                    , 'AL days of month  (M.8)' AS M08_AL_DAYS
+                    , 'Perfect days' AS M09_PERFECT_DAYS
+                    , 'Actual day' AS M09_ACTUAL_DAYS
+                    , 'Unpaid days' AS M09_UNPAID_LEAVE
+                    , 'AL days of month  (M.9)' AS M09_AL_DAYS
+                    , 'Perfect days' AS M10_PERFECT_DAYS
+                    , 'Actual day' AS M10_ACTUAL_DAYS
+                    , 'Unpaid days' AS M10_UNPAID_LEAVE
+                    , 'AL days of month  (M.10)' AS M10_AL_DAYS
+                    , 'Perfect days' AS M11_PERFECT_DAYS
+                    , 'Actual day' AS M11_ACTUAL_DAYS
+                    , 'Unpaid days' AS M11_UNPAID_LEAVE
+                    , 'AL days of month  (M.11)' AS M11_AL_DAYS
+                    , 'Perfect days' AS M12_PERFECT_DAYS
+                    , 'Actual day (include US-CHB)' AS M12_ACTUAL_DAYS
+                    , 'Unpaid days' AS M12_UNPAID_LEAVE
+                    , 'AL days of month  (M.12)' AS M12_AL_DAYS
+                    , 'Creation from This Year (2) = (M.1+…+M.12)' AS CREATE_THIS_YEAR
+                    , 'Total Annual Leave of This Year (3)=(1)+(1.1)+(1.3)' AS TOTAL_ANNUAL_CURR_YEAR
+                    , 'Used Annual Leave at This Year (5)' AS TOTAL_USE_CURR_YEAR
+                    , 'Full Days (6)' AS FULL_DAYS
+                    , 'Working Days (This Year) (7)' AS TOTAL_WORKING_DAYS
+                    , 'Unpaid Days (This Year) (8)' AS TOTAL_UNPAID_THIS_YEAR
+                    , 'Adjust (9) =(2)-(1)+(1.2)' AS AL_PAY_ADJUST
+                    , 'Pay (10)=(3)-(5)+(9)' AS AL_PAY_COUNT
+                    , 'Remain Days' AS REMAIN_DAY
+                    , 'Sal infor (Prev. Month)' AS SAL_INFO
+                    , 'Perfect day (Prev. Month)' AS PREV_PERFECT_DAYS
+                    , 'AL Pay Amt' AS AL_PAY_AMOUNT
+
+                   FROM DUAL
+                  UNION ALL
+                      SELECT * FROM (WITH CTE_YEAR_CURRENT AS ( /* LGVPAY00034.retrieveAlSumaryEmpList */
+					    SELECT 
+				            SUBSIDIARY_CODE, 
+				            EMPLOYEE_NO,
+				            SUM(NVL(OCCUR_BASIC_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_BASIC_CURR,
+				            SUM(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = #{payMonth} THEN 0 
+                                     WHEN ANNUAL_CALIBRATION_DAYS > 0 THEN ANNUAL_CALIBRATION_DAYS ELSE 0 END)       AS TOTAL_CALIB_CURR,
+				            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0))         AS TOTAL_USE_CURR,
+				            SUM(NVL(OCCUR_MONTHLY_ANN_LV_DAYS, 0)) AS TOTAL_OCCUR_CURR,
+				            NVL(MAX(RESIDUAL_ANNUAL_LEAVE_DAYS) KEEP (DENSE_RANK LAST ORDER BY TIME_AND_ATTENDANCE_YYYYMM), 0) AS LATEST_RESIDUAL_LEAVE
+				        FROM TB_ATT_ANNUAL_LEAVE_N
+				        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+				    ),
+				    CTE_YEAR_PREVIOUS AS (
+				        SELECT 
+				            SUBSIDIARY_CODE, 
+				            EMPLOYEE_NO,
+				            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+				                 THEN RESIDUAL_ANNUAL_LEAVE_DAYS END), 0) AS RESIDUAL_DEC_PREV,
+				            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+				                 THEN OCCUR_MONTHLY_ANN_LV_DAYS END), 0) AS OCCUR_MONTHLY_DEC_PREV,
+				            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_USE_PREV
+				        FROM TB_ATT_ANNUAL_LEAVE_N
+				        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '%'
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+				    ),
+				    CTE_PREV_MONTH_ATT AS (
+				        SELECT 
+				            R.SUBSIDIARY_CODE,
+				            R.EMPLOYEE_NO,
+				            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PREV_PERFECT_DAYS
+				        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+				        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+				          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+				          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+				          AND R.TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(ADD_MONTHS(TO_DATE(#{payMonth}, 'YYYYMM'), -1), 'YYYYMM')
+				        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO
+				    ),
+				    <![CDATA[ 
+				    CTE_ATT AS (
+				        SELECT 
+				            R.SUBSIDIARY_CODE,
+				            R.EMPLOYEE_NO,
+				            SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+				            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PERFECT_DAYS,
+				            SUM(CASE WHEN (C.PAID_DAYS > 0 OR C.ATTENDANCE_DAYS > 0 OR R.TIME_ATTEND_DETAIL_CODE = 'US_CHB') THEN 1 END) ACTUAL_DAYS,
+				            SUM(CASE WHEN (C.UNPAID_DAYS > 0 AND R.TIME_ATTEND_DETAIL_CODE != 'US_CHB') THEN 1 ELSE 0 END) AS UNPAID_LEAVE
+				        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+				        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+				          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+				          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+				          AND R.TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+				        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO, SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+				    ),
+				    CTE_AL AS (
+				        SELECT 
+				            SUBSIDIARY_CODE,
+				            EMPLOYEE_NO,
+				            SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+				            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS ANNUAL_LEAVE_USED
+				        FROM TB_ATT_ANNUAL_LEAVE_N
+				        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+				    ),
+				    CTE_COMBINED AS (
+				        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, PERFECT_DAYS, ACTUAL_DAYS, UNPAID_LEAVE, 0 AS ANNUAL_LEAVE_USED FROM CTE_ATT
+				        UNION ALL
+				        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, 0 AS PERFECT_DAYS, 0 AS ACTUAL_DAYS, 0 AS UNPAID_LEAVE, ANNUAL_LEAVE_USED FROM CTE_AL
+				    ),
+				    CTE_SUMMARY AS (
+				        SELECT 
+				            SUBSIDIARY_CODE,
+				            EMPLOYEE_NO,
+				            MM,
+				            SUM(PERFECT_DAYS) AS PERFECT_DAYS,
+				            SUM(ACTUAL_DAYS) AS ACTUAL_DAYS,
+				            SUM(UNPAID_LEAVE) AS UNPAID_LEAVE,
+				            (CASE WHEN SUM(PERFECT_DAYS) = 0 THEN 1
+				                  WHEN SUM(ACTUAL_DAYS) = 0 THEN 0
+				                      WHEN (SUM(ACTUAL_DAYS) / SUM(PERFECT_DAYS)) < 0.5 THEN 0.5 ELSE 1  END) AS WORK_COEF,
+				            SUM(ANNUAL_LEAVE_USED) AS ANNUAL_LEAVE_USED
+				        FROM CTE_COMBINED
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, MM
+				    )
+				    ]]> 
+					SELECT '2' gubun,
+				        EM.EMPLOYEE_NUMBER, 
+				        EM.full_name_local AS EMPLOYEE_NAME, 
+				        EM.ORG_NAME_LOCAL,
+				        TO_CHAR(EM.DATE_HIRE_SUBSIDIARY, 'DD/MM/YYYY') AS DATE_HIRE_SUBSIDIARY,
+				        TO_CHAR((GREATEST(em.date_hire_subsidiary, TO_DATE(NVL(TO_CHAR(em.date_retire, 'YYYY'), '1990') || '0101', 'YYYYMMDD'))), 'DD/MM/YYYY') AS TIME_AND_ATTENDANCE_YYYYMM,
+				        TO_CHAR(EM.DATE_RETIRE, 'DD/MM/YYYY') AS RESIGNATION_DATE,
+				        
+				        TO_CHAR(NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0))  AS TOTAL_BASIC_CURR_YEAR, --AL plus every 5 years (1.1)
+				        TO_CHAR(NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0))  AS TOTAL_CALIB_CURR_YEAR, --Other AL bonus (1.2)
+				        TO_CHAR(NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0)) AS RESIDUAL_DEC_PREV_YEAR, --AL remain last year (1.3)
+				        TO_CHAR(NVL(MAX(Y_PREV.OCCUR_MONTHLY_DEC_PREV), 0)) AS OCCUR_MONTHLY_DEC_PREV_YEAR, --AL in advance last year (plan) (1.4) TOTAL_OCCUR_CURR
+				        TO_CHAR(CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+				            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+				             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END) AS AL_CREATE_CURR_YEAR, --AL Create in year (plan) (1)
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.PERFECT_DAYS ELSE 0 END)) AS M01_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M01_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M01_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.WORK_COEF ELSE 0 END)) AS M01_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.PERFECT_DAYS ELSE 0 END)) AS M02_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M02_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M02_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.WORK_COEF ELSE 0 END)) AS M02_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.PERFECT_DAYS ELSE 0 END)) AS M03_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M03_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M03_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.WORK_COEF ELSE 0 END)) AS M03_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.PERFECT_DAYS ELSE 0 END)) AS M04_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M04_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M04_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.WORK_COEF ELSE 0 END)) AS M04_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.PERFECT_DAYS ELSE 0 END)) AS M05_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M05_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M05_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.WORK_COEF ELSE 0 END)) AS M05_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.PERFECT_DAYS ELSE 0 END)) AS M06_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M06_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M06_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.WORK_COEF ELSE 0 END)) AS M06_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.PERFECT_DAYS ELSE 0 END)) AS M07_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M07_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M07_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.WORK_COEF ELSE 0 END)) AS M07_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.PERFECT_DAYS ELSE 0 END)) AS M08_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M08_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M08_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.WORK_COEF ELSE 0 END)) AS M08_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.PERFECT_DAYS ELSE 0 END)) AS M09_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M09_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M09_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.WORK_COEF ELSE 0 END)) AS M09_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.PERFECT_DAYS ELSE 0 END)) AS M10_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M10_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M10_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.WORK_COEF ELSE 0 END)) AS M10_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.PERFECT_DAYS ELSE 0 END)) AS M11_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M11_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M11_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.WORK_COEF ELSE 0 END)) AS M11_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.PERFECT_DAYS ELSE 0 END)) AS M12_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M12_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M12_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.WORK_COEF ELSE 0 END)) AS M12_AL_DAYS,
+					    
+					    TO_CHAR(SUM(NVL(S.WORK_COEF, 0))) AS CREATE_THIS_YEAR, --Creation from This Year (2) = (M.1+…+M.12)
+				        TO_CHAR((NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + 
+				         (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+				            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+				             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END))) AS TOTAL_ANNUAL_CURR_YEAR, --Total Annual Leave of This Year (3)=(1)+(1.1)+(1.3)
+				        TO_CHAR(NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))  AS TOTAL_USE_CURR_YEAR, --Used Annual Leave at This Year (5)
+				        '365' AS FULL_DAYS, --Full Days (6)
+				        TO_CHAR(SUM(NVL(S.ACTUAL_DAYS, 0))) AS TOTAL_WORKING_DAYS,--Working Days (This Year) (7)
+				        TO_CHAR(SUM(NVL(S.UNPAID_LEAVE, 0))) AS TOTAL_UNPAID_THIS_YEAR,--Unpaid Days (This Year) (8)
+				        TO_CHAR((SUM(NVL(S.WORK_COEF, 0)) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) - 
+				          (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+				            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+				             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END))) AS AL_PAY_ADJUST,--Adjust (9) ==(2)-(1)+(1.2)
+				        TO_CHAR((NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))) AS AL_PAY_COUNT,--Pay =(3)+(9)-(5)
+				        TO_CHAR(NVL(MAX(LATEST_RESIDUAL_LEAVE), 0)) AS REMAIN_DAY,--Remain Days
+				        
+				        TO_CHAR( CASE WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 THEN lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(EM.DATE_RETIRE, 'YYYYMMDD'))
+                    			 ELSE lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(TO_DATE(#{payMonth}, 'YYYYMM') - 1, 'YYYYMMDD')) END) AS SAL_INFO,--Sal infor (Prev. Month),
+				        
+				        TO_CHAR(CASE  WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 
+		                        THEN SUM(CASE WHEN S.MM = SUBSTR(#{payMonth}, 5, 2) THEN S.PERFECT_DAYS ELSE 0 END)
+		                        ELSE MAX(PMA.PREV_PERFECT_DAYS)
+		                    END) AS PREV_PERFECT_DAYS, --Perfect day (Prev. Month)
+				        
+				        TO_CHAR(CASE  WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 
+		                        THEN ROUND((lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(EM.DATE_RETIRE, 'YYYYMMDD')) / SUM(CASE WHEN S.MM = SUBSTR(#{payMonth}, 5, 2) THEN S.PERFECT_DAYS ELSE 0 END) 
+		                                 * (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))), 0)
+		                        ELSE ROUND((lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(TO_DATE(#{payMonth}, 'YYYYMM') - 1, 'YYYYMMDD')) / NVL(MAX(PMA.PREV_PERFECT_DAYS), 0)
+		                                * (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))), 0)
+		                           END) AS AL_PAY_AMOUNT --AL Pay Amt
+					
+					FROM emp_master EM
+					INNER JOIN TB_ATT_ANNUAL_LEAVE_N CURR 
+					    ON EM.SUBSIDIARY_CODE = CURR.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = CURR.EMPLOYEE_NO
+					
+					LEFT JOIN CTE_YEAR_CURRENT Y_CURR 
+					    ON EM.SUBSIDIARY_CODE = Y_CURR.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = Y_CURR.EMPLOYEE_NO
+					
+					LEFT JOIN CTE_YEAR_PREVIOUS Y_PREV 
+					    ON EM.SUBSIDIARY_CODE = Y_PREV.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = Y_PREV.EMPLOYEE_NO
+					
+					LEFT JOIN CTE_PREV_MONTH_ATT PMA 
+					    ON EM.SUBSIDIARY_CODE = PMA.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = PMA.EMPLOYEE_NO
+					   
+					LEFT JOIN CTE_SUMMARY S 
+					    ON EM.SUBSIDIARY_CODE = S.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = S.EMPLOYEE_NO
+					
+					WHERE CURR.TIME_AND_ATTENDANCE_YYYYMM = #{payMonth}
+					   <if test="employeeNo != null and employeeNo != ''">
+			               AND EM.EMPLOYEE_NUMBER = #{employeeNo}
+				       </if>
+				       <if test="employeeName != null and employeeName != ''">
+				           AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+				       </if>
+				       <if test="calculationSetId != null and calculationSetId != ''">
+				           AND EM.EMPLOYEE_NUMBER IN (select n.EMPLOYEE_NO from tb_pay_calc_set_target_per_n n where n.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC})
+				       </if>
+					GROUP BY 
+					    EM.SUBSIDIARY_CODE,
+					    EM.EMPLOYEE_NUMBER,
+					    EM.full_name_local,
+					    EM.organization_id,
+					    EM.ORG_NAME_LOCAL,
+					    EM.DATE_HIRE_SUBSIDIARY,
+					    EM.DATE_RETIRE,
+					    CURR.TIME_AND_ATTENDANCE_YYYYMM
+					ORDER BY EM.EMPLOYEE_NUMBER)
+        )
+        ORDER BY EMPLOYEE_NUMBER asc
+    </select>
+
+    <!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVPAY00034.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5, ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10,
+                                     ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15, ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20,
+                                     ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25, ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30,
+                                     ATTRIBUTE31, ATTRIBUTE32, ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35, ATTRIBUTE36, ATTRIBUTE37, ATTRIBUTE38, ATTRIBUTE39, ATTRIBUTE40,
+                                     ATTRIBUTE41, ATTRIBUTE42, ATTRIBUTE43, ATTRIBUTE44, ATTRIBUTE45, ATTRIBUTE46, ATTRIBUTE47, ATTRIBUTE48, ATTRIBUTE49, ATTRIBUTE50,
+                                     ATTRIBUTE51, ATTRIBUTE52, ATTRIBUTE53, ATTRIBUTE54, ATTRIBUTE55, ATTRIBUTE56, ATTRIBUTE57, ATTRIBUTE58, ATTRIBUTE59, ATTRIBUTE60,
+                                     ATTRIBUTE61, ATTRIBUTE62, ATTRIBUTE63, ATTRIBUTE64, ATTRIBUTE65, ATTRIBUTE66, ATTRIBUTE67, ATTRIBUTE68, ATTRIBUTE69, ATTRIBUTE70, ATTRIBUTE71)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                                        , 'Employee No' AS EMPLOYEE_NUMBER
+                    , 'Employee Name' AS EMPLOYEE_NAME
+                    , 'Organization' AS ORG_NAME_LOCAL
+                    , 'Start Date' AS DATE_HIRE_SUBSIDIARY
+                    , 'Calc. Start Date' AS TIME_AND_ATTENDANCE_YYYYMM
+                    , 'Resignation Date' AS RESIGNATION_DATE
+                    , 'AL plus every 5 years (1.1)' AS TOTAL_BASIC_CURR_YEAR
+                    , 'Other AL bonus (1.2)' AS TOTAL_CALIB_CURR_YEAR
+                    , 'AL remain last year (1.3)' AS RESIDUAL_DEC_PREV_YEAR
+                    , 'AL in advance last year (plan) (1.4)' AS OCCUR_MONTHLY_DEC_PREV_YEAR
+                    , 'AL Create in year (plan) (1)' AS AL_CREATE_CURR_YEAR
+                    , 'Perfect days' AS M01_PERFECT_DAYS
+                    , 'Actual days' AS M01_ACTUAL_DAYS
+                    , 'Unpaid days' AS M01_UNPAID_LEAVE
+                    , 'AL days of month  (M.1)' AS M01_AL_DAYS
+                    , 'Perfect days' AS M02_PERFECT_DAYS
+                    , 'Actual day' AS M02_ACTUAL_DAYS
+                    , 'Unpaid days' AS M02_UNPAID_LEAVE
+                    , 'AL days of month  (M.2)' AS M02_AL_DAYS
+                    , 'Perfect days' AS M03_PERFECT_DAYS
+                    , 'Actual day' AS M03_ACTUAL_DAYS
+                    , 'Unpaid days' AS M03_UNPAID_LEAVE
+                    , 'AL days of month  (M.3)' AS M03_AL_DAYS
+                    , 'Perfect days' AS M04_PERFECT_DAYS
+                    , 'Actual day' AS M04_ACTUAL_DAYS
+                    , 'Unpaid days' AS M04_UNPAID_LEAVE
+                    , 'AL days of month  (M.4)' AS M04_AL_DAYS
+                    , 'Perfect days' AS M05_PERFECT_DAYS
+                    , 'Actual day' AS M05_ACTUAL_DAYS
+                    , 'Unpaid days' AS M05_UNPAID_LEAVE
+                    , 'AL days of month  (M.5)' AS M05_AL_DAYS
+                    , 'Perfect days' AS M06_PERFECT_DAYS
+                    , 'Actual day' AS M06_ACTUAL_DAYS
+                    , 'Unpaid days' AS M06_UNPAID_LEAVE
+                    , 'AL days of month  (M.6)' AS M06_AL_DAYS
+                    , 'Perfect days' AS M07_PERFECT_DAYS
+                    , 'Actual day' AS M07_ACTUAL_DAYS
+                    , 'Unpaid days' AS M07_UNPAID_LEAVE
+                    , 'AL days of month  (M.7)' AS M07_AL_DAYS
+                    , 'Perfect days' AS M08_PERFECT_DAYS
+                    , 'Actual day' AS M08_ACTUAL_DAYS
+                    , 'Unpaid days' AS M08_UNPAID_LEAVE
+                    , 'AL days of month  (M.8)' AS M08_AL_DAYS
+                    , 'Perfect days' AS M09_PERFECT_DAYS
+                    , 'Actual day' AS M09_ACTUAL_DAYS
+                    , 'Unpaid days' AS M09_UNPAID_LEAVE
+                    , 'AL days of month  (M.9)' AS M09_AL_DAYS
+                    , 'Perfect days' AS M10_PERFECT_DAYS
+                    , 'Actual day' AS M10_ACTUAL_DAYS
+                    , 'Unpaid days' AS M10_UNPAID_LEAVE
+                    , 'AL days of month  (M.10)' AS M10_AL_DAYS
+                    , 'Perfect days' AS M11_PERFECT_DAYS
+                    , 'Actual day' AS M11_ACTUAL_DAYS
+                    , 'Unpaid days' AS M11_UNPAID_LEAVE
+                    , 'AL days of month  (M.11)' AS M11_AL_DAYS
+                    , 'Perfect days' AS M12_PERFECT_DAYS
+                    , 'Actual day (include US-CHB)' AS M12_ACTUAL_DAYS
+                    , 'Unpaid days' AS M12_UNPAID_LEAVE
+                    , 'AL days of month  (M.12)' AS M12_AL_DAYS
+                    , 'Creation from This Year (2) = (M.1+…+M.12)' AS CREATE_THIS_YEAR
+                    , 'Total Annual Leave of This Year (3)=(1)+(1.1)+(1.3)' AS TOTAL_ANNUAL_CURR_YEAR
+                    , 'Used Annual Leave at This Year (5)' AS TOTAL_USE_CURR_YEAR
+                    , 'Full Days (6)' AS FULL_DAYS
+                    , 'Working Days (This Year) (7)' AS TOTAL_WORKING_DAYS
+                    , 'Unpaid Days (This Year) (8)' AS TOTAL_UNPAID_THIS_YEAR
+                    , 'Adjust (9) =(2)-(1)+(1.2)' AS AL_PAY_ADJUST
+                    , 'Pay (10)=(3)-(5)+(9)' AS AL_PAY_COUNT
+                    , 'Remain Days' AS REMAIN_DAY
+                    , 'Sal infor (Prev. Month)' AS SAL_INFO
+                    , 'Perfect day (Prev. Month)' AS PREV_PERFECT_DAYS
+                    , 'AL Pay Amt' AS AL_PAY_AMOUNT
+               FROM DUAL
+               UNION ALL
+               SELECT * FROM (WITH CTE_YEAR_CURRENT AS ( /* LGVPAY00034.retrieveAlSumaryEmpList */
+					    SELECT 
+				            SUBSIDIARY_CODE, 
+				            EMPLOYEE_NO,
+				            SUM(NVL(OCCUR_BASIC_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_BASIC_CURR,
+				            SUM(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = #{payMonth} THEN 0 
+                                     WHEN ANNUAL_CALIBRATION_DAYS > 0 THEN ANNUAL_CALIBRATION_DAYS ELSE 0 END)       AS TOTAL_CALIB_CURR,
+				            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0))         AS TOTAL_USE_CURR,
+				            SUM(NVL(OCCUR_MONTHLY_ANN_LV_DAYS, 0)) AS TOTAL_OCCUR_CURR,
+				            NVL(MAX(RESIDUAL_ANNUAL_LEAVE_DAYS) KEEP (DENSE_RANK LAST ORDER BY TIME_AND_ATTENDANCE_YYYYMM), 0) AS LATEST_RESIDUAL_LEAVE
+				        FROM TB_ATT_ANNUAL_LEAVE_N
+				        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+				    ),
+				    CTE_YEAR_PREVIOUS AS (
+				        SELECT 
+				            SUBSIDIARY_CODE, 
+				            EMPLOYEE_NO,
+				            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+				                 THEN RESIDUAL_ANNUAL_LEAVE_DAYS END), 0) AS RESIDUAL_DEC_PREV,
+				            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+				                 THEN OCCUR_MONTHLY_ANN_LV_DAYS END), 0) AS OCCUR_MONTHLY_DEC_PREV,
+				            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_USE_PREV
+				        FROM TB_ATT_ANNUAL_LEAVE_N
+				        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '%'
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+				    ),
+				    CTE_PREV_MONTH_ATT AS (
+				        SELECT 
+				            R.SUBSIDIARY_CODE,
+				            R.EMPLOYEE_NO,
+				            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PREV_PERFECT_DAYS
+				        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+				        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+				          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+				          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+				          AND R.TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(ADD_MONTHS(TO_DATE(#{payMonth}, 'YYYYMM'), -1), 'YYYYMM')
+				        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO
+				    ),
+				    <![CDATA[ 
+				    CTE_ATT AS (
+				        SELECT 
+				            R.SUBSIDIARY_CODE,
+				            R.EMPLOYEE_NO,
+				            SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+				            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PERFECT_DAYS,
+				            SUM(CASE WHEN (C.PAID_DAYS > 0 OR C.ATTENDANCE_DAYS > 0 OR R.TIME_ATTEND_DETAIL_CODE = 'US_CHB') THEN 1 END) ACTUAL_DAYS,
+				            SUM(CASE WHEN (C.UNPAID_DAYS > 0 AND R.TIME_ATTEND_DETAIL_CODE != 'US_CHB') THEN 1 ELSE 0 END) AS UNPAID_LEAVE
+				        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+				        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+				          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+				          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+				          AND R.TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+				        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO, SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+				    ),
+				    CTE_AL AS (
+				        SELECT 
+				            SUBSIDIARY_CODE,
+				            EMPLOYEE_NO,
+				            SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+				            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS ANNUAL_LEAVE_USED
+				        FROM TB_ATT_ANNUAL_LEAVE_N
+				        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+				    ),
+				    CTE_COMBINED AS (
+				        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, PERFECT_DAYS, ACTUAL_DAYS, UNPAID_LEAVE, 0 AS ANNUAL_LEAVE_USED FROM CTE_ATT
+				        UNION ALL
+				        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, 0 AS PERFECT_DAYS, 0 AS ACTUAL_DAYS, 0 AS UNPAID_LEAVE, ANNUAL_LEAVE_USED FROM CTE_AL
+				    ),
+				    CTE_SUMMARY AS (
+				        SELECT 
+				            SUBSIDIARY_CODE,
+				            EMPLOYEE_NO,
+				            MM,
+				            SUM(PERFECT_DAYS) AS PERFECT_DAYS,
+				            SUM(ACTUAL_DAYS) AS ACTUAL_DAYS,
+				            SUM(UNPAID_LEAVE) AS UNPAID_LEAVE,
+				            (CASE WHEN SUM(PERFECT_DAYS) = 0 THEN 1
+				                  WHEN SUM(ACTUAL_DAYS) = 0 THEN 0
+				                      WHEN (SUM(ACTUAL_DAYS) / SUM(PERFECT_DAYS)) < 0.5 THEN 0.5 ELSE 1  END) AS WORK_COEF,
+				            SUM(ANNUAL_LEAVE_USED) AS ANNUAL_LEAVE_USED
+				        FROM CTE_COMBINED
+				        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, MM
+				    )
+				    ]]> 
+					SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601',
+				        EM.EMPLOYEE_NUMBER, 
+				        EM.full_name_local AS EMPLOYEE_NAME, 
+				        EM.ORG_NAME_LOCAL,
+				        TO_CHAR(EM.DATE_HIRE_SUBSIDIARY, 'DD/MM/YYYY') AS DATE_HIRE_SUBSIDIARY,
+				        TO_CHAR((GREATEST(em.date_hire_subsidiary, TO_DATE(NVL(TO_CHAR(em.date_retire, 'YYYY'), '1990') || '0101', 'YYYYMMDD'))), 'DD/MM/YYYY') AS TIME_AND_ATTENDANCE_YYYYMM,
+				        TO_CHAR(EM.DATE_RETIRE, 'DD/MM/YYYY') AS RESIGNATION_DATE,
+				        
+				        TO_CHAR(NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0))  AS TOTAL_BASIC_CURR_YEAR, --AL plus every 5 years (1.1)
+				        TO_CHAR(NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0))  AS TOTAL_CALIB_CURR_YEAR, --Other AL bonus (1.2)
+				        TO_CHAR(NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0)) AS RESIDUAL_DEC_PREV_YEAR, --AL remain last year (1.3)
+				        TO_CHAR(NVL(MAX(Y_PREV.OCCUR_MONTHLY_DEC_PREV), 0)) AS OCCUR_MONTHLY_DEC_PREV_YEAR, --AL in advance last year (plan) (1.4) TOTAL_OCCUR_CURR
+				        TO_CHAR(CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+				            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+				             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END) AS AL_CREATE_CURR_YEAR, --AL Create in year (plan) (1)
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.PERFECT_DAYS ELSE 0 END)) AS M01_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M01_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M01_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '01' THEN S.WORK_COEF ELSE 0 END)) AS M01_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.PERFECT_DAYS ELSE 0 END)) AS M02_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M02_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M02_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '02' THEN S.WORK_COEF ELSE 0 END)) AS M02_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.PERFECT_DAYS ELSE 0 END)) AS M03_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M03_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M03_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '03' THEN S.WORK_COEF ELSE 0 END)) AS M03_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.PERFECT_DAYS ELSE 0 END)) AS M04_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M04_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M04_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '04' THEN S.WORK_COEF ELSE 0 END)) AS M04_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.PERFECT_DAYS ELSE 0 END)) AS M05_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M05_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M05_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '05' THEN S.WORK_COEF ELSE 0 END)) AS M05_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.PERFECT_DAYS ELSE 0 END)) AS M06_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M06_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M06_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '06' THEN S.WORK_COEF ELSE 0 END)) AS M06_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.PERFECT_DAYS ELSE 0 END)) AS M07_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M07_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M07_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '07' THEN S.WORK_COEF ELSE 0 END)) AS M07_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.PERFECT_DAYS ELSE 0 END)) AS M08_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M08_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M08_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '08' THEN S.WORK_COEF ELSE 0 END)) AS M08_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.PERFECT_DAYS ELSE 0 END)) AS M09_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M09_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M09_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '09' THEN S.WORK_COEF ELSE 0 END)) AS M09_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.PERFECT_DAYS ELSE 0 END)) AS M10_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M10_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M10_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '10' THEN S.WORK_COEF ELSE 0 END)) AS M10_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.PERFECT_DAYS ELSE 0 END)) AS M11_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M11_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M11_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '11' THEN S.WORK_COEF ELSE 0 END)) AS M11_AL_DAYS,
+					    
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.PERFECT_DAYS ELSE 0 END)) AS M12_PERFECT_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.ACTUAL_DAYS ELSE 0 END)) AS M12_ACTUAL_DAYS,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.UNPAID_LEAVE ELSE 0 END)) AS M12_UNPAID_LEAVE,
+					    TO_CHAR(SUM(CASE WHEN S.MM = '12' THEN S.WORK_COEF ELSE 0 END)) AS M12_AL_DAYS,
+					    
+					    TO_CHAR(SUM(NVL(S.WORK_COEF, 0))) AS CREATE_THIS_YEAR, --Creation from This Year (2) = (M.1+…+M.12)
+				        TO_CHAR((NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + 
+				         (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+				            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+				             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END))) AS TOTAL_ANNUAL_CURR_YEAR, --Total Annual Leave of This Year (3)=(1)+(1.1)+(1.3)
+				        TO_CHAR(NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))  AS TOTAL_USE_CURR_YEAR, --Used Annual Leave at This Year (5)
+				        '365' AS FULL_DAYS, --Full Days (6)
+				        TO_CHAR(SUM(NVL(S.ACTUAL_DAYS, 0))) AS TOTAL_WORKING_DAYS,--Working Days (This Year) (7)
+				        TO_CHAR(SUM(NVL(S.UNPAID_LEAVE, 0))) AS TOTAL_UNPAID_THIS_YEAR,--Unpaid Days (This Year) (8)
+				        TO_CHAR((SUM(NVL(S.WORK_COEF, 0)) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) - 
+				          (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+				            LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+				             ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END))) AS AL_PAY_ADJUST,--Adjust (9) ==(2)-(1)+(1.2)
+				        TO_CHAR((NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))) AS AL_PAY_COUNT,--Pay =(3)+(9)-(5)
+				        TO_CHAR(NVL(MAX(LATEST_RESIDUAL_LEAVE), 0)) AS REMAIN_DAY,--Remain Days
+				        
+				        TO_CHAR( CASE WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 THEN lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(EM.DATE_RETIRE, 'YYYYMMDD'))
+                    			 ELSE lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(TO_DATE(#{payMonth}, 'YYYYMM') - 1, 'YYYYMMDD')) END) AS SAL_INFO,--Sal infor (Prev. Month),
+				        
+				        TO_CHAR(CASE  WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 
+		                        THEN SUM(CASE WHEN S.MM = SUBSTR(#{payMonth}, 5, 2) THEN S.PERFECT_DAYS ELSE 0 END)
+		                        ELSE MAX(PMA.PREV_PERFECT_DAYS)
+		                    END) AS PREV_PERFECT_DAYS, --Perfect day (Prev. Month)
+				        
+				        TO_CHAR(CASE  WHEN NVL(MAX(PMA.PREV_PERFECT_DAYS), 0) = 0 
+		                        THEN ROUND((lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(EM.DATE_RETIRE, 'YYYYMMDD')) / SUM(CASE WHEN S.MM = SUBSTR(#{payMonth}, 5, 2) THEN S.PERFECT_DAYS ELSE 0 END) 
+		                                 * (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))), 0)
+		                        ELSE ROUND((lgvpay_info_pkg.get_ordinary_wages_for_al(EM.EMPLOYEE_NUMBER, TO_CHAR(TO_DATE(#{payMonth}, 'YYYYMM') - 1, 'YYYYMMDD')) / NVL(MAX(PMA.PREV_PERFECT_DAYS), 0)
+		                                * (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0))), 0)
+		                           END) AS AL_PAY_AMOUNT --AL Pay Amt
+					
+					FROM emp_master EM
+					INNER JOIN TB_ATT_ANNUAL_LEAVE_N CURR 
+					    ON EM.SUBSIDIARY_CODE = CURR.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = CURR.EMPLOYEE_NO
+					
+					LEFT JOIN CTE_YEAR_CURRENT Y_CURR 
+					    ON EM.SUBSIDIARY_CODE = Y_CURR.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = Y_CURR.EMPLOYEE_NO
+					
+					LEFT JOIN CTE_YEAR_PREVIOUS Y_PREV 
+					    ON EM.SUBSIDIARY_CODE = Y_PREV.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = Y_PREV.EMPLOYEE_NO
+					
+					LEFT JOIN CTE_PREV_MONTH_ATT PMA 
+					    ON EM.SUBSIDIARY_CODE = PMA.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = PMA.EMPLOYEE_NO
+					   
+					LEFT JOIN CTE_SUMMARY S 
+					    ON EM.SUBSIDIARY_CODE = S.SUBSIDIARY_CODE 
+					   AND EM.EMPLOYEE_NUMBER = S.EMPLOYEE_NO
+					
+					WHERE CURR.TIME_AND_ATTENDANCE_YYYYMM = #{payMonth}
+					   <if test="employeeNo != null and employeeNo != ''">
+			               AND EM.EMPLOYEE_NUMBER = #{employeeNo}
+				       </if>
+				       <if test="employeeName != null and employeeName != ''">
+				           AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+				       </if>
+				       <if test="calculationSetId != null and calculationSetId != ''">
+				           AND EM.EMPLOYEE_NUMBER IN (select n.EMPLOYEE_NO from tb_pay_calc_set_target_per_n n where n.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC})
+				       </if>
+					GROUP BY 
+					    EM.SUBSIDIARY_CODE,
+					    EM.EMPLOYEE_NUMBER,
+					    EM.full_name_local,
+					    EM.organization_id,
+					    EM.ORG_NAME_LOCAL,
+					    EM.DATE_HIRE_SUBSIDIARY,
+					    EM.DATE_RETIRE,
+					    CURR.TIME_AND_ATTENDANCE_YYYYMM
+					ORDER BY EM.EMPLOYEE_NUMBER)
+              ) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NUMBER asc
+    </insert>
+    
+    <!-- 퇴직자 연차 재계산 -->
+    <update id="caculateAnnualLeave" parameterType="LGCOMData">
+        MERGE INTO TB_ATT_ANNUAL_LEAVE_N TGT
+			<![CDATA[
+			USING (
+			    WITH CTE_YEAR_CURRENT AS (
+			        SELECT 
+			            SUBSIDIARY_CODE, 
+			            EMPLOYEE_NO,
+			            SUM(NVL(OCCUR_BASIC_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_BASIC_CURR,
+			            SUM(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = #{payMonth} THEN 0 
+			                     WHEN ANNUAL_CALIBRATION_DAYS > 0 THEN ANNUAL_CALIBRATION_DAYS ELSE 0 END) AS TOTAL_CALIB_CURR,
+			            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_USE_CURR,
+			            SUM(NVL(OCCUR_MONTHLY_ANN_LV_DAYS, 0)) AS TOTAL_OCCUR_CURR,
+			            NVL(MAX(RESIDUAL_ANNUAL_LEAVE_DAYS) KEEP (DENSE_RANK LAST ORDER BY TIME_AND_ATTENDANCE_YYYYMM), 0) AS LATEST_RESIDUAL_LEAVE
+			        FROM TB_ATT_ANNUAL_LEAVE_N
+			        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+			        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+			    ),
+			    CTE_YEAR_PREVIOUS AS (
+			        SELECT 
+			            SUBSIDIARY_CODE, 
+			            EMPLOYEE_NO,
+			            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+			                 THEN RESIDUAL_ANNUAL_LEAVE_DAYS END), 0) AS RESIDUAL_DEC_PREV,
+			            NVL(MAX(CASE WHEN TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '12' 
+			                 THEN OCCUR_MONTHLY_ANN_LV_DAYS END), 0) AS OCCUR_MONTHLY_DEC_PREV,
+			            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS TOTAL_USE_PREV
+			        FROM TB_ATT_ANNUAL_LEAVE_N
+			        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE TO_CHAR(TO_NUMBER(SUBSTR(#{payMonth}, 1, 4)) - 1) || '%'
+			        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO
+			    ),
+			    CTE_ATT AS (
+			        SELECT 
+			            R.SUBSIDIARY_CODE,
+			            R.EMPLOYEE_NO,
+			            SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+			            SUM(DECODE(B.TIME_AND_ATTENDANCE_CODE,'NW',1,'PH',1,0)) PERFECT_DAYS,
+			            SUM(CASE WHEN (C.PAID_DAYS > 0 OR C.ATTENDANCE_DAYS > 0 OR R.TIME_ATTEND_DETAIL_CODE = 'US_CHB') THEN 1 END) ACTUAL_DAYS,
+			            SUM(CASE WHEN (C.UNPAID_DAYS > 0 AND R.TIME_ATTEND_DETAIL_CODE != 'US_CHB') THEN 1 ELSE 0 END) AS UNPAID_LEAVE
+			        FROM TB_ATT_RESULT_N R, TB_ATT_CODE_C C, TB_ATT_BASE_BAS_N B
+			        WHERE R.TIME_AND_ATTENDANCE_CODE = C.TIME_AND_ATTENDANCE_CODE
+			          AND R.SHIFT_TYPE_CODE = B.SHIFT_TYPE_CODE
+			          AND R.TIME_AND_ATTENDANCE_DATE = B.TIME_AND_ATTENDANCE_DATE
+			          AND R.TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+			        GROUP BY R.SUBSIDIARY_CODE, R.EMPLOYEE_NO, SUBSTR(R.TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+			    ),
+			    CTE_AL AS (
+			        SELECT 
+			            SUBSIDIARY_CODE,
+			            EMPLOYEE_NO,
+			            SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2) AS MM,
+			            SUM(NVL(USE_ANNUAL_LEAVE_DAYS, 0)) AS ANNUAL_LEAVE_USED
+			        FROM TB_ATT_ANNUAL_LEAVE_N
+			        WHERE TIME_AND_ATTENDANCE_YYYYMM LIKE SUBSTR(#{payMonth}, 1, 4) || '%'
+			        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, SUBSTR(TIME_AND_ATTENDANCE_YYYYMM, 5, 2)
+			    ),
+			    CTE_COMBINED AS (
+			        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, PERFECT_DAYS, ACTUAL_DAYS, UNPAID_LEAVE, 0 AS ANNUAL_LEAVE_USED FROM CTE_ATT
+			        UNION ALL
+			        SELECT SUBSIDIARY_CODE, EMPLOYEE_NO, MM, 0 AS PERFECT_DAYS, 0 AS ACTUAL_DAYS, 0 AS UNPAID_LEAVE, ANNUAL_LEAVE_USED FROM CTE_AL
+			    ),
+			    CTE_SUMMARY AS (
+			        SELECT 
+			            SUBSIDIARY_CODE,
+			            EMPLOYEE_NO,
+			            MM,
+			            SUM(PERFECT_DAYS) AS PERFECT_DAYS,
+			            SUM(ACTUAL_DAYS) AS ACTUAL_DAYS,
+			            SUM(UNPAID_LEAVE) AS UNPAID_LEAVE,
+			            (CASE WHEN SUM(PERFECT_DAYS) = 0 THEN 1
+			                  WHEN SUM(ACTUAL_DAYS) = 0 THEN 0
+			                  WHEN (SUM(ACTUAL_DAYS) / SUM(PERFECT_DAYS)) < 0.5 THEN 0.5 ELSE 1 END) AS WORK_COEF,
+			            SUM(ANNUAL_LEAVE_USED) AS ANNUAL_LEAVE_USED
+			        FROM CTE_COMBINED
+			        GROUP BY SUBSIDIARY_CODE, EMPLOYEE_NO, MM
+			    )
+			    ]]>
+			    SELECT 
+			        EM.SUBSIDIARY_CODE,
+			        EM.EMPLOYEE_NUMBER,
+			
+			        (SUM(NVL(S.WORK_COEF, 0)) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) - 
+			          (CASE WHEN NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) = 0 AND EM.DATE_RETIRE IS NOT NULL THEN 
+			              LEAST(ROUND(( (TO_DATE(SUBSTR(#{payMonth}, 1, 4) || '1231', 'YYYYMMDD') - EM.DATE_HIRE_SUBSIDIARY) / 365 ) * 12, 0), 12)
+			               ELSE NVL(MAX(Y_CURR.TOTAL_OCCUR_CURR), 0) END)) AS AL_PAY_ADJUST,
+			
+			        (NVL(MAX(Y_CURR.TOTAL_BASIC_CURR), 0) + NVL(MAX(Y_CURR.TOTAL_CALIB_CURR), 0) + NVL(MAX(Y_PREV.RESIDUAL_DEC_PREV), 0) 
+			          + SUM(NVL(S.WORK_COEF, 0)) - NVL(MAX(Y_CURR.TOTAL_USE_CURR), 0)) AS AL_PAY_COUNT
+			
+			    FROM emp_master EM
+			    INNER JOIN TB_ATT_ANNUAL_LEAVE_N CURR 
+			        ON EM.SUBSIDIARY_CODE = CURR.SUBSIDIARY_CODE 
+			       AND EM.EMPLOYEE_NUMBER = CURR.EMPLOYEE_NO
+			    LEFT JOIN CTE_YEAR_CURRENT Y_CURR 
+			        ON EM.SUBSIDIARY_CODE = Y_CURR.SUBSIDIARY_CODE 
+			       AND EM.EMPLOYEE_NUMBER = Y_CURR.EMPLOYEE_NO
+			    LEFT JOIN CTE_YEAR_PREVIOUS Y_PREV 
+			        ON EM.SUBSIDIARY_CODE = Y_PREV.SUBSIDIARY_CODE 
+			       AND EM.EMPLOYEE_NUMBER = Y_PREV.EMPLOYEE_NO
+			    LEFT JOIN CTE_SUMMARY S 
+			        ON EM.SUBSIDIARY_CODE = S.SUBSIDIARY_CODE 
+			       AND EM.EMPLOYEE_NUMBER = S.EMPLOYEE_NO
+			    WHERE CURR.TIME_AND_ATTENDANCE_YYYYMM = #{payMonth}
+			      AND EM.DATE_RETIRE IS NOT NULL
+			      AND EM.EMPLOYEE_NUMBER IN (select n.EMPLOYEE_NO from tb_pay_calc_set_target_per_n n where n.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC})
+			      <if test="employeeNo != null and employeeNo != ''">
+	                 AND EM.EMPLOYEE_NUMBER = #{employeeNo}
+		          </if>
+			    GROUP BY 
+			        EM.SUBSIDIARY_CODE,
+			        EM.EMPLOYEE_NUMBER,
+			        EM.DATE_HIRE_SUBSIDIARY,
+			        EM.DATE_RETIRE
+			) SRC
+			ON (
+			    TGT.SUBSIDIARY_CODE = SRC.SUBSIDIARY_CODE
+			    AND TGT.EMPLOYEE_NO = SRC.EMPLOYEE_NUMBER
+			    AND TGT.TIME_AND_ATTENDANCE_YYYYMM = #{payMonth}
+			)
+			WHEN MATCHED THEN UPDATE SET
+			    TGT.ANNUAL_COMPENSATION_DAYS   = SRC.AL_PAY_COUNT,
+			    TGT.ANNUAL_CALIBRATION_DAYS    = SRC.AL_PAY_ADJUST,
+			    TGT.RESIDUAL_ANNUAL_LEAVE_DAYS = 0,
+                TGT.LAST_UPDATE_USER_ID        = #{USER_SESSION.applicationUserId},
+                TGT.LAST_UPDATE_DATE           = SYSDATE
+    </update>
+
+</mapper>

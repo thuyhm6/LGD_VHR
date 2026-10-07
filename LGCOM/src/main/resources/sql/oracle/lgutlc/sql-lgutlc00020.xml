@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00020">
+
+	<!-- 디버깅 목록 조회 -->
+	<select id="retrieveDebuggingList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /*LGUTLC00020.retrieveDebuggingList*/
+			  lds.debug_log_setup_id
+      		 ,lds.debug_target_type_code AS debug_type_code
+      		 ,DECODE(lds.debug_target_type_code,'USER',TO_CHAR(lds.application_user_id),lds.program_id) AS debug_scope_id
+      		 ,DECODE(lds.debug_target_type_code,'USER',lds.full_name_local,lds.program_name) AS debug_scope_name
+      		 ,lds.use_flag use_flag
+      		 ,lds.created_by
+      		 ,lds.created_by_name
+      		 ,lds.creation_date
+		  FROM lgcom_debug_setup_m_v lds
+		 WHERE 1 = 1	 
+		<if test="debugTypeCode == 'USER' and debugScopeName != ''">
+		   AND lds.full_name_local = #{debugScopeName}
+		</if>
+		<if test="debugTypeCode == 'PROGRAM' and debugScopeName != ''">
+		   AND lds.program_name = #{debugScopeName}
+		</if>
+		<if test="debugTypeCode != null and debugTypeCode != ''">
+		   AND debug_target_type_code = #{debugTypeCode}
+		</if>
+		<if test="useFlag != null and useFlag != ''">
+		   AND use_flag = #{useFlag}
+		</if>
+	     ORDER BY 2, 4						  
+	</select>
+	
+	<!-- 디버깅 정보 등록 -->
+	<insert id="insertDebuggingList" parameterType="java.util.HashMap">
+	/*LGUTLC00020.insertDebuggingList*/
+		INSERT INTO lgcom_debug_setup_m
+    	(debug_log_setup_id
+    	,program_id
+    	,application_user_id
+    	,debug_target_type_code
+    	,use_flag
+    	,created_by
+    	,creation_date
+    	,last_updated_by
+    	,last_update_date)
+		VALUES
+    	(lgcom_debug_setup_m_seq.nextval
+    	,DECODE(#{debugTypeCode}, 'PROGRAM', #{debugScopeId}, NULL)
+    	,DECODE(#{debugTypeCode}, 'USER', to_number(#{debugScopeId}), NULL)
+     	,#{debugTypeCode}
+    	,#{useFlag}
+    	,#{sessionUserId}
+    	,SYSDATE
+    	,#{sessionUserId}
+    	,SYSDATE)	
+	</insert>
+
+	<!-- 디버깅 정보 수정 -->
+	<update id="updateDebuggingList" parameterType="java.util.HashMap">
+	/*LGUTLC00020.updateDebuggingList*/
+		UPDATE lgcom_debug_setup_m
+		   SET use_flag = #{useFlag}
+		     , last_updated_by = #{sessionUserId}
+		     , last_update_date = SYSDATE
+		 WHERE debug_log_setup_id = #{debugLogSetupId}
+	</update>
+	
+	<!-- 디버깅 중복 체크 -->
+	<select id="retrieveDebugScopeNameChk" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /*LGUTLC00020.retrieveDebugScopeNameChk*/
+		 	   COUNT(*) AS cnt
+		  FROM lgcom_debug_setup_m_v lds
+		 WHERE 1 = 1
+	]]>			 
+		<if test="debugTypeCode == 'USER' and debugScopeId != ''">
+		   AND lds.application_user_id = #{debugScopeId}
+		   AND lds.debug_target_type_code = #{debugTypeCode}
+		</if>
+		<if test="debugTypeCode == 'PROGRAM' and debugScopeId != ''">
+		   AND lds.program_id = #{debugScopeId}
+		   AND lds.debug_target_type_code = #{debugTypeCode}
+		</if>						  
+	</select>			
+		
+</mapper>

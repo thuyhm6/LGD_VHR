@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00028">
+    <select id="retrievePayrollInfoData" parameterType="LGCOMData" resultType="LGCOMData">
+    <![CDATA[
+		select /* LGVPAY00028.retrievePayrollInfoData */
+			payroll_calculation_exec_id
+			,employee_no
+			,payroll_type_name
+			,organization_name
+			,base_pay_amount
+			,tax_amount
+			,fixed_pay_total_amount
+			,variable_allowance
+			,aggregate_taxation_amount
+			,tax_free_sum_amount
+			,assessment_add_amount
+			,total_income_amount
+			,salary_total_amount
+			,deduction_total_amount
+			,probation_period_odwg_amount
+			,ordinary_wages_amount
+			,bank_transfer_amount
+			,bank_name
+			,payment_bank_account_no from tb_pay_result_s
+			where payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+			and payment_bank_account_no IS NULL 
+			union all
+			select payroll_calculation_exec_id
+			,employee_no
+			,payroll_type_name
+			,organization_name
+			,base_pay_amount
+			,tax_amount
+			,fixed_pay_total_amount
+			,variable_allowance
+			,aggregate_taxation_amount
+			,tax_free_sum_amount
+			,assessment_add_amount
+			,total_income_amount
+			,salary_total_amount
+			,deduction_total_amount
+			,probation_period_odwg_amount
+			,ordinary_wages_amount
+			,bank_transfer_amount
+			,bank_name
+			,payment_bank_account_no 
+		from tb_pay_result_s
+		where payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+		and bank_transfer_amount < 0
+			union all
+		select payroll_calculation_exec_id
+			,employee_no
+			,payroll_type_name
+			,organization_name
+			,base_pay_amount
+			,tax_amount
+			,fixed_pay_total_amount
+			,variable_allowance
+			,aggregate_taxation_amount
+			,tax_free_sum_amount
+			,assessment_add_amount
+			,total_income_amount
+			,salary_total_amount
+			,deduction_total_amount
+			,probation_period_odwg_amount
+			,ordinary_wages_amount
+			,bank_transfer_amount
+			,bank_name
+			,payment_bank_account_no 
+		from tb_pay_result_s
+		where payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+		and bank_transfer_amount like '%.%'
+			union all
+		select payroll_calculation_exec_id
+			,employee_no
+			,payroll_type_name
+			,organization_name
+			,base_pay_amount
+			,tax_amount
+			,fixed_pay_total_amount
+			,variable_allowance
+			,aggregate_taxation_amount
+			,tax_free_sum_amount
+			,assessment_add_amount
+			,total_income_amount
+			,salary_total_amount
+			,deduction_total_amount
+			,probation_period_odwg_amount
+			,ordinary_wages_amount
+			,bank_transfer_amount
+			,bank_name
+			,payment_bank_account_no 
+		from tb_pay_result_s
+		where payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+		and bank_transfer_amount like '%,%'
+			union all
+		select payroll_calculation_exec_id
+			,employee_no
+			,payroll_type_name
+			,organization_name
+			,base_pay_amount
+			,tax_amount
+			,fixed_pay_total_amount
+			,variable_allowance
+			,aggregate_taxation_amount
+			,tax_free_sum_amount
+			,assessment_add_amount
+			,total_income_amount
+			,salary_total_amount
+			,deduction_total_amount
+			,probation_period_odwg_amount
+			,ordinary_wages_amount
+			,bank_transfer_amount
+			,bank_name
+			,payment_bank_account_no 
+		from tb_pay_result_s
+		where payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+		and upper(organization_name) like '%CLOSE%'
+	]]>
+    </select>
+    
+    <select id="retrieveTotalSalaryInfoData" parameterType="LGCOMData" resultType="LGCOMData">
+		select /* LGVPAY00028.retrieveTotalSalaryInfoData */
+		count(*) as total_emp
+		,sum(BANK_TRANSFER_AMOUNT) as total_salary
+		from tb_pay_result_s
+		where PAYROLL_CALCULATION_EXEC_ID  = #{payrollCalculationExecId, jdbcType=NUMERIC}
+    </select>
+    
+    <select id="retrieveTotalBankInfoData" parameterType="LGCOMData" resultType="LGCOMData">
+		select /* LGVPAY00028.retrieveTotalBankInfoData */
+		BANK_NAME
+		,SUM(BANK_TRANSFER_AMOUNT) as total_money
+		from tb_pay_result_s
+		where PAYROLL_CALCULATION_EXEC_ID = #{payrollCalculationExecId, jdbcType=NUMERIC}
+		group by  BANK_NAME
+    </select>
+</mapper>

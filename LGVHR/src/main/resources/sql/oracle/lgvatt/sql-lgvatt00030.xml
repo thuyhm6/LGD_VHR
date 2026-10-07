@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT00030">
+<!-- HMT_20221108 Add Employee Shift Group Info Interface -->
+	<!-- Employee Work Group Info Retrieve -->
+	<select id="retrieveMonthlyEmpGroupList" parameterType="LGCOMData" resultType="LGCOMData">
+		<![CDATA[
+			SELECT TA.time_and_attendance_yyyymm            AS attendance_ym
+            ,em.organization_id                             AS employee_org
+            ,ar.employee_no                                 AS employee_no
+            ,em.full_name_local                             AS employee_name
+            ,em.grade_type                                  AS grade_type
+            ,em.grade_title                                 AS employee_grade
+            ,em.ATTRIBUTE10                                 AS actual_shift_code
+            ,TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
+            ,TO_CHAR(TA.WORKING_DAY, 'DD/MM/YYYY')          AS WORKING_DAY
+            ,TO_CHAR(TA.WEEKLY_HOLIDAY, 'DD/MM/YYYY')       AS WEEKLY_HOLIDAY
+            ,TA.WORKING_DAY_SHIFT_TYPE_CODE                 AS WORKING_DAY_SHIFT_TYPE_CODE
+            ,TA.WEEKLY_HOLIDAY_SHIFT_TYPE_CODE             AS WEEKLY_HOLIDAY_SHIFT_TYPE_CODE
+            ,AR.A_DAY_OF_THE_WEEK_CODE                      AS WEEK_CODE
+            ,(CASE WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'MON' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g1', 'A1')
+                    WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'TUE' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g2', 'A1')
+                    WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'WED' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g3', 'A1')
+                    WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'THU' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g4', 'A1')
+                    WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'FRI' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g5', 'A1')
+                    ELSE lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g1', 'A1') END)    AS SHIFT_GROUP
+  FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N TA, EMP_MASTER EM, TB_ATT_RESULT_N AR
+ WHERE TA.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER
+   AND TA.EMPLOYEE_NO = AR.EMPLOYEE_NO
+   AND TO_CHAR(TA.WEEKLY_HOLIDAY, 'YYYYMM') = #{attendanceYm}
+   AND TA.WORKING_DAY = AR.TIME_AND_ATTENDANCE_DATE
+   AND (TA.WORKING_DAY_SHIFT_TYPE_CODE LIKE '21%' OR TA.WORKING_DAY_SHIFT_TYPE_CODE LIKE '22%')
+   AND TA.PROGRESS_STATUS_CODE NOT IN ('50','60','70')
+		]]>
+		<if test="orgId != null and orgId != ''">
+			   AND EM.ORGANIZATION_ID = #{orgId}
+		</if>
+		<if test="empNo != null and empNo != ''">
+			   AND UPPER(TA.employee_no) = UPPER(#{empNo})
+		</if>
+		<if test="empName != null and empName != ''">
+			   AND UPPER(TA.employee_name) LIKE '%' || UPPER(#{empName}) || '%'
+		</if>
+		<if test="shiftGroup == 'g1'">
+			   AND AR.A_DAY_OF_THE_WEEK_CODE = 'MON'
+		</if>
+		<if test="shiftGroup == 'g2'">
+			   AND AR.A_DAY_OF_THE_WEEK_CODE = 'TUE'
+		</if>
+		<if test="shiftGroup == 'g3'">
+			   AND AR.A_DAY_OF_THE_WEEK_CODE = 'WED'
+		</if>
+		<if test="shiftGroup == 'g4'">
+			   AND AR.A_DAY_OF_THE_WEEK_CODE = 'THU'
+		</if>
+		<if test="shiftGroup == 'g5'">
+			   AND AR.A_DAY_OF_THE_WEEK_CODE = 'FRI'
+		</if>
+		<if test="shiftGroup == 'g6'">
+			   AND AR.A_DAY_OF_THE_WEEK_CODE IN ('SAT','SUN')
+		</if>
+			 ORDER BY TA.EMPLOYEE_NO, TA.WORKING_DAY ASC
+	</select>
+	
+	<!-- 엑셀 다운로드 -->
+    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
+      INSERT INTO  /* LGVATT00030.createExcelDownloadData */
+          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
+                                     , ATTRIBUTE9, ATTRIBUTE10, ATTRIBUTE11, ATTRIBUTE12)
+      SELECT AA.*
+        FROM (
+              SELECT #{sessionId}
+                    , #{USER_SESSION.applicationUserId}
+                    , SYSDATE
+                    , 1 AS ORDER_BY
+                    , 'KO16KSC5601'
+                    , 'Employee No' AS EMPLOYEE_NO
+                    , 'Employee Name' AS EMPLOYEE_NAME
+                    , 'Job Title' AS employee_grade
+                    , 'Shift code' AS actual_shift_code
+                    , 'Organization Name' AS ORGANIZATION_NAME
+                    , 'Hire Date' AS date_hire_subsidiary
+                    , 'Weekly Holiday' AS WEEKLY_HOLIDAY
+                    , 'Weekly Holiday Shift Code' AS WEEKLY_HOLIDAY_SHIFT_TYPE_CODE
+                    , 'Working Day' AS WORKING_DAY
+                    , 'Working Day Shift Code' AS WORKING_DAY_SHIFT_TYPE_CODE
+                    , 'Week Code' AS WEEK_CODE
+                    , 'Shift Code' AS SHIFT_GROUP
+               FROM DUAL
+               UNION ALL
+               SELECT #{sessionId}
+                     , #{USER_SESSION.applicationUserId}
+                     , SYSDATE
+                     , 2 AS ORDER_BY
+                     , 'KO16KSC5601'
+		            ,ar.employee_no                                 AS employee_no
+		            ,em.full_name_local                             AS employee_name
+		            ,em.grade_title                                 AS employee_grade
+		            ,em.ATTRIBUTE10                                 AS actual_shift_code
+		            ,em.org_name_local                              AS organization_name
+		            ,TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
+		            ,TO_CHAR(TA.WEEKLY_HOLIDAY, 'DD/MM/YYYY')       AS WEEKLY_HOLIDAY
+		            ,TA.WEEKLY_HOLIDAY_SHIFT_TYPE_CODE              AS WEEKLY_HOLIDAY_SHIFT_TYPE_CODE
+		            ,TO_CHAR(TA.WORKING_DAY, 'DD/MM/YYYY')          AS WORKING_DAY
+		            ,TA.WORKING_DAY_SHIFT_TYPE_CODE                 AS WORKING_DAY_SHIFT_TYPE_CODE
+		            ,AR.A_DAY_OF_THE_WEEK_CODE                      AS WEEK_CODE
+		            ,(CASE WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'MON' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g1', 'A1')
+                           WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'TUE' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g2', 'A1')
+                           WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'WED' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g3', 'A1')
+                           WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'THU' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g4', 'A1')
+                           WHEN AR.A_DAY_OF_THE_WEEK_CODE = 'FRI' THEN lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g5', 'A1')
+                           ELSE lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_GROUP', 'g1', 'A1') END)    AS SHIFT_GROUP
+				  FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N TA, EMP_MASTER EM, TB_ATT_RESULT_N AR
+				 WHERE TA.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER
+				   AND TA.EMPLOYEE_NO = AR.EMPLOYEE_NO
+				   AND TO_CHAR(TA.WEEKLY_HOLIDAY, 'YYYYMM') = #{attendanceYm}
+				   AND TA.WORKING_DAY = AR.TIME_AND_ATTENDANCE_DATE
+				   AND (TA.WORKING_DAY_SHIFT_TYPE_CODE LIKE '21%' OR TA.WORKING_DAY_SHIFT_TYPE_CODE LIKE '22%')
+				   AND TA.PROGRESS_STATUS_CODE NOT IN ('50','60','70')
+						<if test="orgId != null and orgId != ''">
+							   AND EM.ORGANIZATION_ID = #{orgId}
+						</if>
+						<if test="empNo != null and empNo != ''">
+							   AND UPPER(TA.employee_no) = UPPER(#{empNo})
+						</if>
+						<if test="empName != null and empName != ''">
+							   AND UPPER(TA.employee_name) LIKE '%' || UPPER(#{empName}) || '%'
+						</if>
+						<if test="shiftGroup == 'g1'">
+							   AND AR.A_DAY_OF_THE_WEEK_CODE = 'MON'
+						</if>
+						<if test="shiftGroup == 'g2'">
+							   AND AR.A_DAY_OF_THE_WEEK_CODE = 'TUE'
+						</if>
+						<if test="shiftGroup == 'g3'">
+							   AND AR.A_DAY_OF_THE_WEEK_CODE = 'WED'
+						</if>
+						<if test="shiftGroup == 'g4'">
+							   AND AR.A_DAY_OF_THE_WEEK_CODE = 'THU'
+						</if>
+						<if test="shiftGroup == 'g5'">
+							   AND AR.A_DAY_OF_THE_WEEK_CODE = 'FRI'
+						</if>
+						<if test="shiftGroup == 'g6'">
+							   AND AR.A_DAY_OF_THE_WEEK_CODE IN ('SAT','SUN')
+						</if>
+              ) AA
+              ORDER BY ORDER_BY, AA.EMPLOYEE_NO, AA.WORKING_DAY asc
+    </insert>
+	
+</mapper>

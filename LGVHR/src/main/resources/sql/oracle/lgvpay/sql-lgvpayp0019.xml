@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0019">
+
+    <!-- payrollCalculationExecId seq 조회 -->
+    <select id="retrievePayrollCalculationExecId" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0019.retrieveRequestMasterId */
+               sq_tb_pay_calc_exec_n.nextval     AS payroll_calculation_exec_id
+        FROM   dual
+    </select>
+
+    <!-- execution 정보 등록 -->
+    <insert id="insertRetroactivePayCalcExec" parameterType="LGCOMData">
+        INSERT  /* LGVPAYP0019.insertRetroactivePayCalcExec */
+        INTO    tb_pay_calc_exec_n (
+                payroll_calculation_exec_id
+              , payroll_type_code
+              , basis_date
+              , payroll_calculation_set_id
+              , confirm_flag
+              , retroactive_flag
+              , retroactive_pay_start_yyyymm
+              , retroactive_payroll_end_yyyymm
+              , creation_date
+              , creation_user_id
+        )
+        SELECT  #{payrollCalculationExecId, jdbcType=NUMERIC}
+              , #{payrollTypeCode}
+              , to_date(a.end_yyyymmdd ,'yyyymmdd')
+              , #{calculationSetId, jdbcType=NUMERIC} /* payroll_calculation_set_id */
+              , 'N' /* confirm_flag */
+              , 'Y' /* retroactive_flag */
+              , TO_CHAR(TO_DATE(#{retroactiveStartMonth}, 'MM/YYYY'), 'YYYYMM')
+              , TO_CHAR(TO_DATE(#{retroactiveEndMonth}, 'MM/YYYY'), 'YYYYMM')
+              , SYSDATE
+              , #{USER_SESSION.applicationUserId}
+        FROM   tb_pay_calc_period_basis_n a
+        WHERE  a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND   a.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue}, 'MM/YYYY'), 'YYYYMM')
+    </insert>
+
+    <!-- payroll run 구간리스트 조회 -->
+    <select id="retrievePayrollRunSectionList" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH gr AS (
+            SELECT /* LGVPAYP0019.retrievePayrollRunSectionList*/
+                   lgvpay_common_pkg.get_calc_var_value(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, 'PAYROLL_RUN_GROUP_COUNT', TO_CHAR(SYSDATE,'yyyymmdd')) AS cnt
+            FROM   dual
+        )
+        , pr AS (
+            SELECT ROUND(COUNT(*)/gr.cnt) AS cnt
+            FROM   tb_pay_calc_set_target_per_n a
+                 , gr
+            WHERE  a.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+        )
+        , cp AS (
+            SELECT a.payroll_calculation_period_id
+            FROM   tb_pay_calc_period_basis_n a
+            WHERE  a.subsidiary_code           = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+            AND    a.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue}, 'MM/YYYY'), 'YYYYMM')
+        )
+        , per_list AS (
+            SELECT a.employee_no
+                 , pr.cnt
+            FROM   tb_pay_calc_set_target_per_n a
+                 , pr
+            WHERE  a.payroll_calculation_set_id = #{calculationSetId, jdbcType=NUMERIC}
+            ORDER BY employee_no
+          )
+        SELECT
+               rs.start_employee_no
+             , rs.end_employee_no
+             , cp.payroll_calculation_period_id
+             , #{payrollCalculationExecId, jdbcType=NUMERIC} AS payroll_calculation_exec_id
+        FROM (
+               SELECT group_name
+                    , MIN(employee_no) AS start_employee_no
+                    , MAX(employee_no) AS end_employee_no
+               FROM  (
+                        SELECT ROWNUM row_no, a.employee_no, CEIL(ROWNUM/DECODE(NVl(a.cnt, 0), 0, 1, a.cnt)) AS group_name
+                        FROM   per_list a
+                       )
+               GROUP BY group_name
+              ) rs
+              , cp
+    </select>
+
+</mapper>

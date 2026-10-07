@@ -1,0 +1,740 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="Common">
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- i18n 다국어 메세지 처리            -->
+	<!-- ######################## -->
+	<select id="retrieveMessageList" resultType="LGCOMData">
+		SELECT /* Common.retrieveMessageList */
+			   SYSTEM_MESSAGE_ID
+			 , LANGUAGE_CODE
+			 , MESSAGE_DESC
+			 , MESSAGE_DETAIL_CONTENT
+			 , MESSAGE_TYPE_CODE
+		  FROM LGCOM_SYSTEM_MESSAGE_M
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- WAS start시 Cache Load    -->
+	<!-- ######################## -->
+	<select id="retrieveMenuList" resultType="LGCOMData" parameterType="LGCOMData" >
+		SELECT /* Common.retrieveMenuList */
+			 M.MENU_ID,
+			 M.MENU_NAME,
+			 M.MENU_M_NAME,
+			 M.SYSTEM_CODE,
+			 M.PROGRAM_MODULE_CODE AS MODULE_CODE,
+			 M.PROGRAM_ID,
+			 M.PROGRAM_TYPE_CODE,
+			 M.LINK_URL_ADDR,
+			 M.URL_ADDR,
+			 M.DISPLAY_FLAG,
+			 (SELECT COUNT(1)
+			    FROM LGCOM_PROGRAM_SERVICE_N LPS
+			   WHERE LPS.PROGRAM_ID = M.PROGRAM_ID
+			     AND LPS.CONTROL_FLAG = 'Y'
+			     AND ROWNUM = 1) AS "SERVICE_COUNT"
+			  FROM LGCOM_MENU_R_V M
+			 WHERE PROGRAM_ID IS NOT NULL
+		<if test="menuId != null and menuId != ''">
+			   AND M.MENU_ID = #{menuId}
+		</if>
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- WAS start시 Cache Load    -->
+	<!-- ######################## -->
+	<select id="retrieveDebugList" resultType="LGCOMData">
+		SELECT /* Common.retrieveDebugList */
+			   PROGRAM_ID
+			 , APPLICATION_USER_ID
+		  FROM LGCOM_DEBUG_SETUP_M
+		 WHERE USE_FLAG		= 'Y'
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- WAS start시 Cache Load    -->
+	<!-- ######################## -->
+	<select id="retrieveServiceList" resultType="LGCOMData">
+		SELECT /* Common.retrieveServiceList */
+			   PROGRAM_ID
+			 , SYSTEM_SERVICE_ID
+			 , PROGRAM_ID || '/' || SYSTEM_SERVICE_ID as "PROG_SERV_ID"
+		  FROM LGCOM_PROGRAM_SERVICE_N
+		 WHERE CONTROL_FLAG							   = 'Y'
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- WAS start시 Cache Load    -->
+	<!-- ######################## -->
+	<select id="retrieveProfileList" resultType="LGCOMData">
+		SELECT /* Common.retrieveProfileList */
+			   lp.profile_id
+		      ,lp.profile_name
+		      ,lpts.profile_apply_tg_class_code
+		      ,lpts.apply_target_value
+		      ,lpts.profile_option_value
+		FROM   lgcom_profile_m              lp
+		      ,lgcom_profile_target_setup_n lpts
+		WHERE  1 = 1
+		AND    lp.profile_id = lpts.profile_id
+		AND    lp.use_flag = 'Y'
+		AND    lpts.use_flag = 'Y'
+		ORDER by lpts.profile_apply_tg_class_code
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 요청한 서비스 실시간 권한 체크       -->
+	<!-- ######################## -->
+	<select id="retrieveUserAccessList" resultType="LGCOMData">
+			SELECT /* Common.retrieveUserAccessList */
+				   distinct lp.program_id || '/' || lp.system_service_id AS "PROG_SERV_ID"
+			FROM   lgcom_user_role_n_v    lur
+			      ,lgcom_program_access_n lp
+				  ,lgcom_program_service_n ls
+			      ,lgcom_menu_m           lm
+			WHERE  lur.role_code 						   = lp.role_code
+			AND    lp.program_id 						   = lm.program_id
+			AND    lp.program_id 						   = ls.program_id
+			AND    lp.system_service_id 				   = ls.system_service_id
+			AND    ls.control_flag 						   = 'Y'
+		<![CDATA[
+			AND    NVL(lur.apply_start_date, SYSDATE) 	  <= SYSDATE
+			AND    NVL(lur.apply_end_date, SYSDATE) 	  >= SYSDATE
+			AND    NVL(lp.apply_start_date, SYSDATE) 	  <= SYSDATE
+			AND    NVL(lp.apply_end_date, SYSDATE) 	  	  >= SYSDATE
+		]]>
+			AND    lur.application_user_id             = #{applicationUserId}
+		<if test="menuId != null and menuId != ''">
+			AND    lm.menu_id                          = #{menuId}
+		</if>
+		<if test="systemServiceId != null and systemServiceId != ''">
+			AND    lp.program_id					   = #{programId}
+			AND    lp.system_service_id				   = #{systemServiceId}
+		</if>
+			UNION ALL
+			SELECT ls.program_id || '/' || ls.system_service_id AS "PROG_SERV_ID"
+			FROM   lgcom_program_service_n ls
+			      ,lgcom_menu_m           lm
+			WHERE  ls.program_id = lm.program_id
+			AND    ls.control_flag = 'N'
+		<if test="menuId != null and menuId != ''">
+			AND    lm.menu_id                          = #{menuId}
+		</if>
+		<if test="systemServiceId != null and systemServiceId != ''">
+			AND    ls.program_id					   = #{programId}
+			AND    ls.system_service_id				   = #{systemServiceId}
+		</if>
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 화면요청 Logging            -->
+	<!-- ######################## -->
+	<insert id="createAccessLog">
+		<![CDATA[
+			INSERT /* Common.createAccessLog */
+			INTO LGCOM_SYSTEM_ACCESS_LOGGING_N
+			     ( EXECUTION_YYYYMM
+				 , LOGIN_SERIAL_NO
+				 , APPLICATION_USER_ID
+				 , MENU_ID
+				 , ACCESS_DATE
+				 , LOGIN_IP_ADDR
+				 , CREATED_BY
+				 , CREATION_DATE
+				 , LAST_UPDATED_BY
+				 , LAST_UPDATE_DATE )
+			VALUES
+				(  TO_CHAR(SYSDATE,'YYYYMM')
+				 , LGCOM_SYSTEM_ACC_LOGGING_N_SEQ.NEXTVAL
+				 , #{applicationUserId}
+				 , #{menuId}
+				 , #{accessDate}
+				 , #{loginIpAddr}
+				 , #{createdBy}
+				 , SYSDATE
+				 , #{lastUpdatedBy}
+				 , SYSDATE )
+		]]>
+	</insert>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 서비스요청  Logging          -->
+	<!-- ######################## -->
+	<insert id="createServiceTimeLog">
+		<![CDATA[
+			INSERT /* Common.createServiceTimeLog */
+			INTO LGCOM_SYSTEM_SERVICE_LOGGING_N
+			     ( EXECUTION_YYYYMM
+				 , LOG_SEQ_NO
+				 , APPLICATION_USER_ID
+				 , MENU_ID
+				 , PROGRAM_ID
+				 , SYSTEM_SERVICE_DESC
+				 , ACTUAL_START_TIMESTAMP
+				 , ACTUAL_END_TIMESTAMP
+				 , CREATED_BY
+				 , CREATION_DATE
+				 , LAST_UPDATED_BY
+				 , LAST_UPDATE_DATE )
+			VALUES
+				(  TO_CHAR(SYSDATE,'YYYYMM')
+				 , LGCOM_SYSTEM_SVC_LOGGING_N_SEQ.NEXTVAL
+				 , NVL( #{applicationUserId}, -1 )
+				 , NVL(#{menuId}, 'Main')
+				 , NVL( #{programId}, 'XXXX' )
+				 , NVL( #{systemServiceDesc}, 'XXXX' )
+				 , #{actualStartTimestamp}
+				 , #{actualEndTimestamp}
+				 , #{createdBy}
+				 , SYSDATE
+				 , #{lastUpdatedBy}
+				 , SYSDATE )
+		]]>
+	</insert>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 공통코드 조회            -->
+	<!-- ######################## -->
+	<select id="retrieveCommonCodeList" parameterType="LGCOMData" resultType="LGCOMData">
+		  SELECT /* Common.retrieveCommonCodeList */
+		         code_type_code
+		       , common_code AS code
+		       , common_code_name AS name
+		       , parent_common_code AS p_code
+		       , language_code AS language_code
+		    FROM (
+		          SELECT lct.code_type_code
+		               , lcc.common_code
+		               , lccm.language_code
+		               , lccm.common_code_name
+		               , lcc.parent_common_code
+		               , ROW_NUMBER() OVER (ORDER BY lct.code_type_code, lcc.sort_order_no, lcc.common_code) AS row_num
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+		             AND lcc.inventory_organization_id = lccm.inventory_organization_id
+		             AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lccm.language_code = #{USER_SESSION.languageCode}
+		             AND lcc.code_type_code = #{codeTypeCode}
+		             AND NVL(lcc.apply_start_date, SYSDATE) &lt;= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) &gt;= SYSDATE
+		<if test="parentCommonCode != null and parentCommonCode != ''">
+		             AND lcc.parent_code_type_code = #{parentCodeTypeCode}
+		             AND lcc.parent_common_code = #{parentCommonCode}
+		</if>
+		<if test="commonCode != null and commonCode != ''">
+		             AND lcc.common_code = #{commonCode}
+		</if>
+		<choose>
+			<when test="useAll != null and useAll != ''">
+		          UNION
+		          SELECT #{codeTypeCode} AS code_type_code
+		               , '' AS common_code
+		               , 'ALL' AS common_code_name
+		               , '' AS parent_common_code
+		               , -2 AS row_num
+		            FROM DUAL
+			</when>
+			<when test="useEmpty != null and useEmpty != ''">
+		          UNION
+		          SELECT #{codeTypeCode} AS code_type_code
+		               , '' AS common_code
+		               , ' ' AS common_code_name
+		               , '' AS parent_common_code
+		               , -1 AS row_num
+		            FROM DUAL
+			</when>
+		</choose>
+		         )
+		ORDER BY row_num, common_code
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 공통코드 조회(항목별로 Filter)  -->
+	<!-- ######################## -->
+	<select id="retrieveFilteredCommonCodeList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* Common.retrieveFilteredCommonCodeList */
+		         code_type_code
+		       , common_code AS code
+		       , common_code_name AS name
+		       , parent_common_code AS p_code
+		       , language_code AS language_code
+		    FROM (
+		          SELECT lct.code_type_code
+		               , lcc.common_code
+		               , lccm.language_code
+		               , lccm.common_code_name
+		               , lcc.parent_common_code
+		               , ROW_NUMBER() OVER (ORDER BY lct.code_type_code, lcc.sort_order_no, lcc.common_code) AS row_num
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+		             AND lcc.inventory_organization_id = lccm.inventory_organization_id
+		             AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lccm.language_code = #{USER_SESSION.languageCode}
+		             AND lcc.code_type_code = #{codeTypeCode}
+		             AND NVL(lcc.apply_start_date, SYSDATE) &lt;= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) &gt;= SYSDATE
+		<if test="parentCommonCode != null and parentCommonCode != ''">
+		             AND lcc.parent_code_type_code = #{parentCodeTypeCode}
+		             AND lcc.parent_common_code = #{parentCommonCode}
+		</if>
+		<if test="commonCode != null and commonCode != ''">
+		             AND lcc.common_code = #{commonCode}
+		</if>
+		<if test="filterColumn != null and filterColumn != ''">
+		             AND lcc.${filterColumn} = #{filterVallue}
+		</if>
+		         )
+		ORDER BY row_num, common_code
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 공통 코드 조회 : 캐시 메모리용             -->
+	<!-- ######################## -->
+	<select id="retrieveCommonCodeListForCache" resultType="LGCOMData">
+		<![CDATA[
+		  SELECT /* Common.retrieveCommonCodeListForCache */
+		  		 code_type_code
+		       , common_code AS code
+		       , common_code_name AS name
+		       , parent_common_code AS p_code
+               , language_code AS language_code
+		    FROM (
+		          SELECT lct.code_type_code
+		               , lcc.common_code
+		               , lccm.common_code_name
+                       , lccm.language_code
+		               , lcc.parent_common_code
+		               , ROW_NUMBER() OVER (ORDER BY lct.code_type_code, lcc.sort_order_no, lcc.common_code) AS row_num
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+                 	 AND lcc.inventory_organization_id = lccm.inventory_organization_id
+                 	 AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND NVL(lcc.apply_start_date, SYSDATE) <= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) >= SYSDATE
+             )
+    ORDER BY row_num, common_code
+    ]]>
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- 공통 코드 조회 ( codeTypeCode 단건 ): 캐시 메모리용             -->
+	<!-- ######################## -->
+	<select id="retrieveCommonCodeForCache" resultType="LGCOMData">
+		<![CDATA[
+		  SELECT /* Common.retrieveCommonCodeForCache */
+		  		 code_type_code
+		       , common_code AS code
+		       , common_code_name AS name
+		       , parent_common_code AS p_code
+               , language_code AS language_code
+		    FROM (
+		          SELECT lct.code_type_code
+		               , lcc.common_code
+		               , lccm.common_code_name
+                       , lccm.language_code
+		               , lcc.parent_common_code
+		               , ROW_NUMBER() OVER (ORDER BY lct.code_type_code, lcc.sort_order_no, lcc.common_code) AS row_num
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+                 	 AND lcc.inventory_organization_id = lccm.inventory_organization_id
+                 	 AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lcc.code_type_code = #{codeTypeCode}
+		             AND NVL(lcc.apply_start_date, SYSDATE) <= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) >= SYSDATE
+             )
+    ORDER BY row_num, common_code
+    ]]>
+	</select>
+
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Value Set 조회                  -->
+	<!-- ######################## -->
+	<select id="retrieveValueSetList" resultType="LGCOMData">
+			SELECT /* Common.retrieveValueSetList */
+				   inquiry_terms_creation_sql_id 	as "SQL_ID"
+				 , inquiry_terms_crt_sql_name 		as "SQL_NAME"
+				 , system_code
+				 , module_code
+				 , source_column_name				as "CHANGE_COLUMN"
+				 , meaning_column_name				as "ALIAS_COLUMN"
+      			 , sql_text							as "SELECT"
+      			 , from_sql_text					as "FROM"
+      			 , where_sql_text					as "WHERE"
+      			 , rule_sql_text					as "GROUP_BY"
+      			 , dynamic_sql_text					as "ORDER_BY"
+			  FROM lgcom_inquiry_terms_crt_sql_m
+		<![CDATA[
+			 WHERE NVL(apply_start_date, SYSDATE)         <= SYSDATE
+			 AND   NVL(apply_end_date, SYSDATE)           >= SYSDATE
+		]]>
+			 AND   inquiry_terms_creation_sql_id           = #{valueSetId}
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- File Download            -->
+	<!-- ######################## -->
+	<select id="retrieveAttachFileInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+	     SELECT /* Common.retrieveAttachFileInfo */
+	          laf.file_id
+	         ,laf.file_group_id
+	         ,laf.system_code
+	         ,laf.module_code
+	         ,laf.file_name
+	         ,laf.file_desc
+	         ,laf.file_size
+	         ,laf.file_location_info
+	         ,laf.expiration_date
+	         ,laf.archive_date
+	         ,laf.archive_flag
+	     FROM   lgcom_attach_file_info laf
+	     WHERE  laf.file_id = #{fileId}
+	</select>
+	
+	<select id="retrieveAttachFileInfoByGroup" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Common.retrieveAttachFileInfoByGroup */
+		      laf.file_id
+	         ,laf.file_group_id
+	         ,laf.system_code
+	         ,laf.module_code
+	         ,laf.file_name
+	         ,laf.file_desc
+	         ,laf.file_size
+	         ,laf.file_location_info
+	         ,laf.expiration_date
+	         ,laf.archive_date
+	         ,laf.archive_flag
+	     FROM   lgcom_attach_file_info laf
+		 WHERE  file_group_id = #{fileGroupId}
+	</select>
+
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Excel Export             -->
+	<!-- ######################## -->
+    <select id="retrieveExportHeaderInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* Common.retrieveExportHeaderInfo */
+            <foreach collection="dummyList"  index="index" separator=" , ">
+              ATTRIBUTE${index + 1}
+            </foreach>
+          FROM xxlge_export_info
+         WHERE session_id = #{sessionId}
+           AND ROWNUM = 1
+           AND seq_no = 1
+    </select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Excel Export             -->
+	<!-- ######################## -->
+	<select id="retrieveExportInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Common.retrieveExportInfo */
+			   *
+		  FROM xxlge_export_info
+		 WHERE session_id = #{sessionId}
+		 ORDER BY seq_no
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Excel Export             -->
+	<!-- ######################## -->
+    <select id="retrieveExportInfoCSV" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* Common.retrieveExportInfoCSV */
+	        <foreach collection="headerList"  index="index" separator=" , ">
+	          ATTRIBUTE${index + 1}
+	        </foreach>
+          FROM xxlge_export_info
+         WHERE session_id = #{sessionId}
+         ORDER BY seq_no
+    </select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- File Upload              -->
+	<!-- ######################## -->
+    <select id="retrieveNewAttachFileGroupId" resultType="String">
+        SELECT /* Common.retrieveNewAttachFileReqNumber */
+               lgcom_attach_file_group_seq.nextval AS FILE_GROUP_ID
+          FROM DUAL
+    </select>
+
+    <select id="retrieveNewAttachFileId" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* Common.retrieveNewAttachFileId */
+               lgcom_attach_file_seq.nextval AS FILE_ID
+          FROM DUAL
+    </select>
+
+
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+    <!-- File Upload, 첨부파일 등록     -->
+	<!-- ######################## -->
+    <insert id="insertAttachFileInfo" parameterType="java.util.HashMap">
+              INSERT /* Common.insertAttachFileInfo */
+          INTO lgcom_attach_file_info
+          (  file_id
+            ,file_group_id
+            ,system_code
+            ,module_code
+            ,file_name
+            ,file_desc
+            ,file_size
+            ,file_location_info
+            ,expiration_date
+            ,archive_date
+            ,archive_flag
+            ,last_update_date
+            ,last_updated_by
+            ,creation_date
+            ,created_by
+        ) VALUES
+        (   #{fileId}
+           ,#{fileGroupId}
+           ,#{systemCode}
+           ,#{moduleCode}
+           ,#{fileName}
+           ,#{fileDesc}           
+           ,#{fileSize}
+           ,#{fileLocationInfo}
+           ,sysdate + (365*10)
+           ,null
+           ,'N'
+           ,SYSDATE
+           ,#{USER_SESSION.applicationUserId}
+           ,SYSDATE
+           ,#{USER_SESSION.applicationUserId}
+        )
+    </insert>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Excel Upload             -->
+	<!-- ######################## -->
+    <insert id="insertExcelUploadData" parameterType="java.util.HashMap">
+      INSERT /* Common.insertExcelUploadData */
+       INTO LGCOM_IMPORT_INFO
+       (  SESSION_ID,
+          SEQ_NO,
+          CREATED_BY,
+        <foreach collection="valueList" item="item" index="index" separator=" , ">
+          ATTRIBUTE${index + 1}
+        </foreach>
+          , ATTRIBUTE198
+          , CREATION_DATE  )
+       VALUES
+       ( #{sessionId},
+         #{seqNo},
+         #{USER_SESSION.applicationUserId},
+        <foreach collection="valueList" item="item" index="index" separator=" , ">
+         #{item}
+        </foreach>
+         ,#{programId}
+         , SYSDATE )
+    </insert>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Excel Upload for LGCOM   -->
+	<!-- ######################## -->
+	<insert id="insertExcelUploadLgcomTempData" parameterType="java.util.HashMap">
+		INSERT INTO /* Common.insertExcelUploadLgcomTempData */
+		            LGCOM_IMPORT_INFO_T (
+		    session_id,
+		    seq_no,
+		    created_by,
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		    attribute${index + 1}
+		</foreach>
+		    , attribute198
+		    , creation_date
+		) VALUES (
+		    #{sessionId},
+		    #{seqNo},
+		    #{USER_SESSION.applicationUserId},
+		<foreach collection="valueList" item="item" index="index" separator=" , ">
+		    #{item}
+		</foreach>
+		    , #{programId}
+		    , SYSDATE )
+	</insert>
+
+	<select id="retrieveImportDataFromLgcomTemp" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Common.retrieveImportDataFromLgcomTemp */
+		       COUNT(*) AS cnt
+		  FROM LGCOM_IMPORT_INFO_T
+		 WHERE session_id = #{sessionId}
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- Excel Upload for LGCOM   -->
+	<!-- ######################## -->
+	<insert id="insertLgcomImportFromLgcomTemp" parameterType="java.util.HashMap">
+		INSERT INTO /* Common.insertExcelUploadLgcomTempData */
+		            LGCOM_IMPORT_N
+		     SELECT *
+		       FROM LGCOM_IMPORT_INFO_T
+	</insert>
+
+	<!-- ######################## -->
+	<!-- userProfile, LGSYSC00050 -->
+	<!-- 로그인 사용자 Accessable 시스템 목록 조회 -->
+	<!-- ######################## -->
+	<select id="retrieveUserOwnSystemList" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT /* Common.retrieveUserOwnSystemList */
+		  		 a.system_code AS code
+		       , b.system_name AS name
+		    FROM (
+		          SELECT DISTINCT system_code
+		            FROM LGCOM_USER_ROLE_N urn
+		               , LGCOM_ROLE_M      rm
+		           WHERE urn.application_user_id = #{USER_SESSION.applicationUserId}
+		             AND urn.role_code = rm.role_code
+		             AND NVL(urn.apply_start_date, SYSDATE) < SYSDATE + 1
+		             AND NVL(urn.apply_end_date, SYSDATE) >= SYSDATE
+		             AND NVL(rm.apply_start_date, SYSDATE) < SYSDATE + 1
+		             AND NVL(rm.apply_end_date, SYSDATE) >= SYSDATE
+		         ) a
+		       , (
+		          SELECT lcc.common_code AS system_code
+		               , lccm.common_code_name AS system_name
+		               , lcc.sort_order_no
+		            FROM LGCOM_CODE_TYPE_CODE_C         lct
+		               , LGCOM_COMMON_CODE_C            lcc
+		               , LGCOM_COMMON_CODE_MULTI_LANG_C lccm
+		           WHERE lct.code_type_code = lcc.code_type_code
+		             AND lct.code_type_code = lccm.code_type_code
+		             AND lcc.common_code    = lccm.common_code
+		             AND lcc.company_id     = lccm.company_id
+                 	 AND lcc.inventory_organization_id = lccm.inventory_organization_id
+                 	 AND lcc.code_type_code = lccm.code_type_code
+		             AND lcc.use_flag       = 'Y'
+		             AND lccm.language_code = #{USER_SESSION.languageCode}
+		             AND lcc.code_type_code = 'LGCOM_SYSTEM_CODE'
+		             AND NVL(lcc.apply_start_date, SYSDATE) <= SYSDATE
+		             AND NVL(lcc.apply_end_date, SYSDATE) >= SYSDATE
+		         ) b
+		   WHERE a.system_code = b.system_code(+)
+		ORDER BY b.sort_order_no
+	]]>
+	</select>
+
+	<!-- ######################## -->
+	<!-- userProfile, LGSYSC00050 -->
+	<!-- 로그인 사용자의 Org 목록을 조회한다. -->
+	<!-- ######################## -->
+	<select id="retrieveUserOrganizationList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT /* Common.retrieveUserOrganizationList */
+		  		 code, name, short_code
+		    FROM (
+		          (SELECT um.default_org_id AS code
+		                , hou.name          AS name
+		                , hou.short_code
+		             FROM LGCOM_USER_M       um
+		                , LGCOM_COMPANY_V hou
+		           WHERE um.application_user_id = #{USER_SESSION.applicationUserId}
+		             AND um.default_org_id = hou.organization_id(+)
+		         )
+		         UNION
+		         (
+		             SELECT ou.organization_id AS code
+		                  , ou.name            AS name
+		                  , MAX(ou.short_code) AS short_code
+		               FROM LGCOM_COMPANY_V ou
+		              WHERE (ou.date_to IS NULL OR ou.date_to >= TRUNC(SYSDATE))
+		                AND EXISTS (SELECT 1
+		                              FROM LGCOM_ROLE_BIZ_ORG_N lrb
+		                                 , LGCOM_USER_ROLE_N    lur
+		                                 , LGCOM_ROLE_M         lr
+		                             WHERE lrb.role_code = lur.role_code
+		                               AND lur.role_code = lr.role_code
+		                               AND (lur.apply_start_date IS NULL OR lur.apply_start_date <= TRUNC(SYSDATE))
+		                               AND (lur.apply_end_date IS NULL OR lur.apply_end_date >= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59', 'YYYY-MM-DD HH24:MI:SS'))
+		                               AND (lr.apply_start_date IS NULL OR lr.apply_start_date <= TRUNC(SYSDATE))
+		                               AND (lr.apply_end_date IS NULL OR lr.apply_end_date >= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59', 'YYYY-MM-DD HH24:MI:SS'))
+		                               AND lur.application_user_id = #{USER_SESSION.applicationUserId}
+		                               AND lrb.organization_type_code = 'C'
+		                               AND lrb.company_id = ou.organization_id)
+		           GROUP BY ou.organization_id, ou.name
+		          )
+		         )
+		ORDER BY code
+	]]>
+	</select>
+
+	<!-- ######################## -->
+	<!-- LGUTLC00080, LGUTLC00090 -->
+	<!-- Dynamic Query 에서 Access Group 목록 조회 -->
+	<!-- ######################## -->
+	<select id="retrieveDynamicAccessGroupList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* Common.retrieveDynamicAccessGroupList */
+		         code, name
+		    FROM (
+		          SELECT   lcc.common_code      AS CODE
+					      ,lcc.common_code_desc AS NAME
+					FROM   lgcom_common_code_c lcc
+					WHERE  lcc.code_type_code = 'LGCOM_DQ_ACCESS_GROUP'
+					AND    lcc.use_flag = 'Y' 
+		         )
+		   WHERE 1 = 1
+		<if test="accessGroup != null and accessGroup != ''">
+			AND code IN ('ALL',#{accessGroup})
+		</if>
+		ORDER BY code
+	</select>
+
+
+	<!-- ################################################## -->
+	<!-- Application Module Setting 2017.04.12  sskeun 추가  -->
+	<!-- ################################################## -->
+	<select id="setApplicationProgram" parameterType="java.util.HashMap" statementType="CALLABLE">
+		{ call /* Common.setApplicationProgram */
+		       dbms_application_info.set_module( #{module, mode=IN, jdbcType=VARCHAR}, #{action, mode=IN, jdbcType=VARCHAR} ) }
+	</select>
+</mapper>

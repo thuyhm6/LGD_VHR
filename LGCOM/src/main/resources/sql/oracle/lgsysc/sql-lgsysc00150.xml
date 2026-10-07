@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00150">
+	<!-- Program Service 목록 조회 -->
+	<select id="retrieveProgramServiceList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT a.program_id
+		       , b.program_name
+		       , a.system_service_id
+		       , a.system_service_desc
+		       , NVL(a.control_flag,'Y') AS use_flag
+		    FROM LGCOM_PROGRAM_SERVICE_N a
+		       , LGCOM_PROGRAM_M         b
+		   WHERE a.program_id = b.program_id
+		<if test="programId != null and programId != ''">
+			AND a.program_id = #{programId}
+		</if>
+		<if test="programName != null and programName != ''">
+			AND b.program_name LIKE #{programName} || '%'
+		</if>
+		<if test="useFlag != null and useFlag != ''">
+			AND a.control_flag = #{useFlag}
+		</if>
+		ORDER BY a.program_id, a.system_service_id
+	</select>
+
+	<!-- Program Service ID 중복 체크 -->
+	<select id="retrieveCheckDuplicateProgramServiceId" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT COUNT(program_id) AS cnt
+		  FROM LGCOM_PROGRAM_SERVICE_N
+		 WHERE program_id        = #{programId}
+		   AND system_service_id = #{systemServiceId}
+	</select>
+
+	<!-- Program Service 신규 추가 -->
+	<insert id="insertProgramServiceList" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_PROGRAM_SERVICE_N (
+		    program_id,system_service_id,system_service_desc,control_flag,
+		    created_by,creation_date,last_updated_by,last_update_date
+		) VALUES (
+		    #{programId},#{systemServiceId},#{systemServiceDesc},'Y',
+		    #{sessionUserId},SYSDATE,#{sessionUserId},SYSDATE
+		)
+	</insert>
+
+	<!-- Program Service 수정 -->
+	<update id="updateProgramServiceList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_PROGRAM_SERVICE_N
+		   SET system_service_desc = #{systemServiceDesc}
+		     , control_flag        = NVL(#{useFlag},'Y')
+		     , last_updated_by     = #{sessionUserId}
+		     , last_update_date    = SYSDATE
+		 WHERE program_id          = #{programId}
+		   AND system_service_id   = #{systemServiceId}
+	</update>
+
+	<!-- Program Service 삭제 -->
+	<update id="deleteProgramServiceList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_PROGRAM_SERVICE_N
+		   SET control_flag      = 'N'
+		     , last_updated_by   = #{sessionUserId}
+		     , last_update_date  = SYSDATE
+		 WHERE program_id        = #{programId}
+		   AND system_service_id = #{systemServiceId}
+	</update>
+
+	<!-- Program Service Role 목록 조회 -->
+	<select id="retrieveProgramServiceRoleList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT a.program_id
+		       , a.system_service_id
+		       , a.role_code
+		       , c.role_name
+		    FROM LGCOM_PROGRAM_ACCESS_N a
+		       , LGCOM_PROGRAM_M        b
+		       , LGCOM_ROLE_M           c
+		   WHERE a.program_id        = #{programId}
+		     AND a.system_service_id = #{systemServiceId}
+		     AND a.program_id        = b.program_id
+		     AND a.role_code         = c.role_code(+)
+		ORDER BY a.program_id, a.system_service_id, c.role_name
+	</select>
+
+	<!-- Program Service Role 신규 추가 -->
+	<insert id="insertProgramServiceRoleList" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_PROGRAM_ACCESS_N (
+		    program_id,system_service_id,role_code,apply_start_date,apply_end_date,
+		    created_by,creation_date,last_updated_by,last_update_date
+		) VALUES (
+		    #{programId},#{systemServiceId},#{roleCode},TO_DATE('2000-01-01','YYYY-MM-DD'),TO_DATE('2999-12-31','YYYY-MM-DD'),
+		    #{sessionUserId},SYSDATE,#{sessionUserId},SYSDATE
+		)
+	</insert>
+
+	<!-- Program Service Role 수정 -->
+	<delete id="deleteProgramServiceRoleList" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_PROGRAM_ACCESS_N
+		      WHERE program_id        = #{programId}
+		        AND system_service_id = #{systemServiceId}
+		        AND role_code         = #{roleCode}
+	</delete>
+</mapper>
+

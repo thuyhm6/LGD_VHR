@@ -1,0 +1,512 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00310">
+
+	<select id="retrieveRequestRList" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT /* LGUTLC00310.retrieveRequestRList */
+				 larn.request_no AS submission_no
+				,larn.request_master_id AS request_master_id
+				,larn.request_code AS request_code
+				,larn.organization_id AS org_id
+				,lcv.short_code AS ou_short_name
+				,lc_approval.code_data2_value AS req_type
+				,lc_sys.code_data1_value AS system_code
+				,lc_mod.common_code_desc AS module_code
+				,larn.request_title AS title
+				,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+				,larn.requestor_id AS requestor_id
+				,lumv.user_name AS approver_emp_no
+				,lumv.full_name_local|| '/' ||NVL(lumv.position_name,lumv.title_name) || '/' || lumv.organization_name_eng AS approver_emp_name
+				,lumv.english_full_name AS approver_name_eng
+				,larn.status_code AS status_code
+				,lccc.common_code_desc AS status_name
+				FROM   lgcom_approval_request_n larn
+				      ,lgcom_approval_status_n  lasn
+				      ,lgcom_company_v                lcv
+				      ,lgcom_user_m_v                 lumv
+				      ,lgcom_common_code_c            lccc
+				      ,lgcom_common_code_c            lc_sys
+				      ,lgcom_common_code_c            lc_mod
+				      ,lgcom_common_code_c            lc_approval
+				WHERE  1 = 1
+				AND    larn.system_code = lc_sys.common_code
+				AND    lc_sys.code_type_code = 'LGCOM_SYSTEM_CODE'
+				AND    larn.module_code = lc_mod.common_code
+				AND    larn.system_code = lc_mod.parent_common_code
+				AND    lc_mod.code_type_code = 'LGCOM_MODULE_CODE'
+				AND    larn.organization_id = lcv.organization_id
+				AND    larn.request_master_id = lasn.request_master_id
+				AND    larn.organization_id = lasn.organization_id
+				AND    larn.request_code = lasn.request_code
+				AND    lc_approval.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+				AND    lc_approval.common_code = lasn.approval_action_code
+				AND    larn.status_code IN ('20', '30')
+				AND    lasn.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL', 'PARAGREE_OR')
+				AND    larn.request_date BETWEEN TO_DATE(#{dateFrom}, 'YYYY-MM-DD') AND TO_DATE(#{dateTo}, 'YYYY-MM-DD') + 1
+				AND    lasn.sign_user_no IS NULL
+				AND    lasn.approval_date IS NULL
+				AND    lasn.approval_status_code = '2'
+				AND    lasn.user_no = lumv.user_name
+				AND    lccc.code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+				AND    larn.status_code = lccc.common_code
+				AND    larn.requestor_id = #{USER_SESSION.applicationUserId}
+
+
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND LASN.USER_NO = #{approverEmpNo}
+        </if>
+
+        <if test="title != null and title != ''">
+            AND LARN.REQUEST_TITLE LIKE #{title} || '%'
+        </if>
+
+        ORDER BY LARN.REQUEST_DATE DESC, LARN.LAST_UPDATE_DATE DESC
+    </select>
+
+    <select id="retrieveRequestCList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00310.retrieveRequestCList */
+				 ROWNUM AS seq_no
+				,larn.request_no AS submission_no
+				,larn.request_master_id AS request_master_id
+				,larn.request_code AS request_code
+				,larn.organization_id AS org_id
+				,lcv.short_code AS ou_short_name
+				,lc_approval.code_data2_value AS req_type
+				,lc_sys.code_data1_value AS system_code
+				,lc_mod.common_code_desc AS module_code
+				,larn.request_title AS title
+				,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+				,larn.requestor_id AS requestor_id
+				,lumv.user_name AS approver_emp_no
+				,lumv.full_name_local|| '/' ||NVL(lumv.position_name,lumv.title_name) || '/' || lumv.organization_name_eng AS approver_emp_name
+				,lumv.english_full_name AS approver_name_eng
+				,larn.status_code AS status_code
+				,lccc.common_code_desc AS status_name
+		FROM   lgcom_approval_request_n larn
+		      ,lgcom_approval_status_n  lasn
+		      ,lgcom_company_v                lcv
+		      ,lgcom_user_m_v                 lumv
+		      ,lgcom_common_code_c            lccc
+		      ,lgcom_common_code_c            lc_sys
+		      ,lgcom_common_code_c            lc_mod
+		      ,lgcom_common_code_c            lc_approval
+		WHERE  1 = 1
+		AND    larn.system_code = lc_sys.common_code
+		AND    lc_sys.code_type_code = 'LGCOM_SYSTEM_CODE'
+		AND    larn.module_code = lc_mod.common_code
+		AND    larn.system_code = lc_mod.parent_common_code
+		AND    lc_mod.code_type_code = 'LGCOM_MODULE_CODE'
+		AND    larn.organization_id = lcv.organization_id
+		AND    larn.request_master_id = lasn.request_master_id
+		AND    larn.organization_id = lasn.organization_id
+		AND    larn.request_code = lasn.request_code
+		AND    lc_approval.code_type_code = 'LGCOM_APPROVAL_ACTION_CODE'
+		AND    lc_approval.common_code = lasn.approval_action_code
+		AND    larn.status_code IN ('40', '50')
+		AND    lasn.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL', 'PARAGREE_OR')
+		AND    larn.request_date BETWEEN TO_DATE(#{dateFrom}, 'yyyy-mm-dd') AND TO_DATE(#{dateTo}, 'yyyy-mm-dd') + 1
+		AND    lasn.sign_user_no IS NOT NULL
+		AND    lasn.approval_date IS NOT NULL
+		AND    lasn.approval_status_code IN ('3', '4')
+		AND    larn.process_status_code = RTRIM(LTRIM(TO_CHAR(lasn.process_seq_no)))
+		AND    lasn.sign_user_no = lumv.user_name
+		AND    lccc.code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+		AND    larn.status_code = lccc.common_code
+		AND    larn.requestor_id = #{USER_SESSION.applicationUserId}
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn.sign_user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+    <select id="retrieveReferenceRList" parameterType="java.util.HashMap" resultType="LGCOMData">
+        /* LGUTLC00310.retrieveReferenceRList */
+        SELECT  ROWNUM                                   AS seq_no
+               ,larn.request_no                          AS submission_no
+		       ,larn.request_master_id                   AS request_master_id
+		       ,larn.request_code
+		       ,larn.organization_id                     AS org_id
+		       ,lcv.short_code                           AS ou_short_name
+               ,lc_approval.code_data2_value             as req_type
+		       ,lc_sys.code_data1_value                  AS system_code
+		       ,lc_mod.common_code_desc                  AS module_code
+		       ,larn.request_title                       AS title
+		       ,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+		       ,larn.requestor_id                        AS requestor_id
+		       ,lumv.user_name                           AS approver_emp_no
+		       ,lumv.full_name_local                     AS approver_emp_name
+               ,lumv.english_full_name                   AS approver_name_eng
+		       ,larn.status_code                         AS status_code
+		       ,lccc.common_code_desc                    AS status_name
+		FROM    lgcom_approval_request_n     larn
+               ,lgcom_approval_status_n      lasn
+               ,lgcom_company_v                    lcv
+               ,lgcom_user_m_v                     lumv
+               ,lgcom_common_code_c                lccc
+               ,lgcom_approval_status_n      lasn_appr
+               ,lgcom_common_code_c                lc_sys
+               ,lgcom_common_code_c                lc_mod
+               ,lgcom_common_code_c                lc_approval
+		WHERE   1 = 1
+		AND     larn.system_code               = lc_sys.common_code
+        AND     lc_sys.code_type_code          = 'LGCOM_SYSTEM_CODE'
+        AND     larn.module_code               = lc_mod.common_code
+        AND     larn.system_code               = lc_mod.parent_common_code
+        AND     lc_mod.code_type_code          = 'LGCOM_MODULE_CODE'
+		AND     larn.organization_id           = lcv.organization_id
+		AND     larn.request_master_id         = lasn.request_master_id
+		AND     larn.organization_id           = lasn.organization_id
+		AND     larn.request_code              = lasn.request_code
+		AND     larn.request_code              = lasn_appr.request_code
+		AND     lasn.approval_action_code      = 'REFERENCE'
+        and     lc_approval.code_type_code     = 'LGCOM_APPROVAL_ACTION_CODE'
+        and     lc_approval.common_code        = lasn.approval_action_code
+		AND     larn.status_code               IN ('20','30')
+		AND     larn.request_date              BETWEEN to_date(#{dateFrom},'yyyy-mm-dd') AND to_date(#{dateTo},'yyyy-mm-dd') + 1
+		AND     lasn.user_no                   = #{USER_SESSION.userName}
+		AND     larn.request_master_id         = lasn_appr.request_master_id
+        AND     larn.organization_id           = lasn_appr.organization_id
+		AND     lasn_appr.sign_user_no         IS NULL
+        AND     lasn_appr.approval_date        IS NULL
+		AND     lasn_appr.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL' , 'PARAGREE_OR')
+        AND     lasn_appr.approval_status_code = '2'
+		AND     lasn_appr.user_no              = lumv.user_name
+		AND     lccc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND     larn.status_code               = lccc.common_code
+
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn_appr.user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+    <select id="retrieveReferenceCList" parameterType="java.util.HashMap" resultType="LGCOMData">
+        
+        SELECT  /* LGUTLC00310.retrieveReferenceCList */
+                ROWNUM                                   AS seq_no        
+               ,larn.request_no                          AS submission_no
+		       ,larn.request_master_id                   AS request_master_id
+		       ,larn.request_code
+		       ,larn.organization_id                     AS org_id
+		       ,lcv.short_code                           AS ou_short_name
+               ,lc_approval.code_data2_value             as req_type
+		       ,lc_sys.code_data1_value                  AS system_code
+		       ,lc_mod.common_code_desc                  AS module_code
+		       ,larn.request_title                       AS title
+		       ,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+		       ,larn.requestor_id                        AS requestor_id
+		       ,lumv.user_name                           AS approver_emp_no
+		       ,lumv.full_name_local                     AS approver_emp_name
+               ,lumv.english_full_name                   AS approver_name_eng
+		       ,larn.status_code                         AS status_code
+		       ,lccc.common_code_desc                    AS status_name
+		FROM    lgcom_approval_request_n            larn
+               ,lgcom_approval_status_n             lasn
+               ,lgcom_company_v                     lcv
+               ,lgcom_user_m_v                      lumv
+               ,lgcom_common_code_c                 lccc
+               ,lgcom_approval_status_n             lasn_appr
+               ,lgcom_common_code_c                 lc_sys
+               ,lgcom_common_code_c                 lc_mod
+               ,lgcom_common_code_c                 lc_approval
+		WHERE   1 = 1
+		AND     larn.system_code               = lc_sys.common_code
+        AND     lc_sys.code_type_code          = 'LGCOM_SYSTEM_CODE'
+        AND     larn.module_code               = lc_mod.common_code
+        AND     larn.system_code               = lc_mod.parent_common_code
+        AND     lc_mod.code_type_code          = 'LGCOM_MODULE_CODE'
+		AND     larn.organization_id           = lcv.organization_id
+		AND     larn.request_master_id         = lasn.request_master_id
+		AND     larn.organization_id           = lasn.organization_id
+		AND     larn.request_code              = lasn.request_code
+		AND     larn.request_code              = lasn_appr.request_code
+		AND     lasn.approval_action_code      = 'REFERENCE'
+        AND     lc_approval.code_type_code     = 'LGCOM_APPROVAL_ACTION_CODE'
+        AND     lc_approval.common_code        = LASN.APPROVAL_ACTION_CODE
+		AND     larn.status_code               IN ('40','50')
+        AND     larn.request_date              BETWEEN to_date(#{dateFrom},'yyyy-mm-dd') AND to_date(#{dateTo},'yyyy-mm-dd') + 1
+        AND     larn.request_master_id         = lasn_appr.request_master_id
+        AND     larn.organization_id           = lasn_appr.organization_id
+		AND     lasn_appr.sign_user_no         IS NOT NULL
+        AND     lasn_appr.approval_date        IS NOT NULL
+		AND     lasn_appr.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL' , 'PARAGREE_OR')
+		AND     lasn_appr.approval_status_code IN ('3','4')
+		AND     larn.process_status_code       = rtrim(ltrim(to_char(lasn_appr.process_seq_no)))
+		AND     lasn_appr.sign_user_no         = lumv.user_name
+		AND     lccc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND     larn.status_code               = lccc.common_code
+		AND     lasn.user_no                   = #{USER_SESSION.userName}
+
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn_appr.sign_user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+    <select id="retrieveInspectionRList" parameterType="java.util.HashMap" resultType="LGCOMData">        
+        SELECT  /* LGUTLC00310.retrieveInspectionRList */
+                ROWNUM                                   AS seq_no        
+               ,larn.request_no                          AS submission_no
+		       ,larn.request_master_id                   AS request_master_id
+               ,larn.request_code                        AS request_code
+		       ,larn.organization_id                     AS org_id
+		       ,lcv.short_code                           AS ou_short_name
+               ,lc_approval.code_data2_value             as req_type
+		       ,lc_sys.code_data1_value                  AS system_code
+		       ,lc_mod.common_code_desc                  AS module_code
+		       ,larn.request_title                       AS title
+		       ,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+		       ,larn.requestor_id                        AS requestor_id
+		       ,lumv.user_name                           AS approver_emp_no
+		       ,lumv.full_name_local                     AS approver_emp_name
+               ,lumv.english_full_name                   AS approver_name_eng
+		       ,larn.status_code                         AS status_code
+		       ,lccc.common_code_desc                    AS status_name
+		FROM    lgcom_approval_request_n      larn
+               ,lgcom_approval_status_n       lasn
+               ,lgcom_company_v                     lcv
+               ,lgcom_user_m_v                      lumv
+               ,lgcom_common_code_c                 lccc
+               ,lgcom_approval_status_n       lasn_appr
+               ,lgcom_common_code_c                 lc_sys
+               ,lgcom_common_code_c                 lc_mod
+               ,lgcom_common_code_c                 lc_approval
+		WHERE   1 = 1
+		AND     larn.system_code               = lc_sys.common_code
+        AND     lc_sys.code_type_code          = 'LGCOM_SYSTEM_CODE'
+        AND     larn.module_code               = lc_mod.common_code
+        AND     larn.system_code               = lc_mod.parent_common_code
+        AND     lc_mod.code_type_code          = 'LGCOM_MODULE_CODE'
+		AND     larn.organization_id           = lcv.organization_id
+		AND     larn.request_master_id         = lasn.request_master_id
+		AND     larn.organization_id           = lasn.organization_id
+		AND     larn.request_code              = lasn.request_code
+		AND     larn.request_code              = lasn_appr.request_code
+		AND     lasn.approval_action_code      = 'INSPECTION'
+        AND     lc_approval.code_type_code     = 'LGCOM_APPROVAL_ACTION_CODE'
+        AND     lc_approval.common_code        = lasn.approval_action_code
+		AND     larn.status_code               IN ('20','30')
+        AND     larn.request_date              BETWEEN to_date(#{dateFrom},'yyyy-mm-dd') AND to_date(#{dateTo},'yyyy-mm-dd') + 1
+        AND     larn.request_master_id         = lasn_appr.request_master_id
+        AND     larn.organization_id           = lasn_appr.organization_id
+		AND     lasn_appr.sign_user_no         IS NULL
+        AND     lasn_appr.approval_date        IS NULL
+		AND     lasn_appr.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL' , 'PARAGREE_OR')
+		AND     lasn_appr.approval_status_code ='2'
+		AND     lasn_appr.user_no              = lumv.user_name
+		AND     lccc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND     larn.status_code               = lccc.common_code
+		AND     lasn.user_no                   = #{USER_SESSION.userName}
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn_appr.user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+    <select id="retrieveInspectionCList" parameterType="java.util.HashMap" resultType="LGCOMData">
+        
+        SELECT  /* LGUTLC00310.retrieveInspectionCList */
+                ROWNUM                                   AS seq_no
+               ,larn.request_no                          AS submission_no
+		       ,larn.request_master_id                   AS request_master_id
+               ,larn.request_code                        AS request_code
+		       ,larn.organization_id                     AS org_id
+		       ,lcv.short_code                           AS ou_short_name
+               ,lc_approval.code_data2_value             as req_type
+		       ,lc_sys.code_data1_value                  AS system_code
+		       ,lc_mod.common_code_desc                  AS module_code
+		       ,larn.request_title                       AS title
+		       ,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+		       ,larn.requestor_id                        AS requestor_id
+		       ,lumv.user_name                           AS approver_emp_no
+		       ,lumv.full_name_local                     AS approver_emp_name
+               ,lumv.english_full_name                   AS approver_name_eng
+		       ,larn.status_code                         AS status_code
+		       ,lccc.common_code_desc                    AS status_name
+		FROM    lgcom_approval_request_n            larn
+               ,lgcom_approval_status_n             lasn
+               ,lgcom_company_v                     lcv
+               ,lgcom_user_m_v                      lumv
+               ,lgcom_common_code_c                 lccc
+               ,lgcom_approval_status_n       lasn_appr
+               ,lgcom_common_code_c                lc_sys
+               ,lgcom_common_code_c                lc_mod
+               ,lgcom_common_code_c                lc_approval
+		WHERE   1 = 1
+		AND     larn.system_code               = lc_sys.common_code
+        AND     lc_sys.code_type_code          = 'LGCOM_SYSTEM_CODE'
+        AND     larn.module_code               = lc_mod.common_code
+        AND     larn.system_code               = lc_mod.parent_common_code
+        AND     lc_mod.code_type_code          = 'LGCOM_MODULE_CODE'
+		AND     larn.organization_id           = lcv.organization_id
+		AND     larn.request_master_id         = lasn.request_master_id
+		AND     larn.organization_id           = lasn.organization_id
+		AND     larn.request_code              = lasn.request_code
+		AND     larn.request_code              = lasn_appr.request_code
+		AND     lasn.approval_action_code      = 'INSPECTION'
+        AND     lc_approval.code_type_code     = 'LGCOM_APPROVAL_ACTION_CODE'
+        AND     lc_approval.common_code        = lasn.approval_action_code
+		AND     larn.status_code               IN ('40','50')
+        AND     larn.request_date              BETWEEN to_date(#{dateFrom},'yyyy-mm-dd') AND to_date(#{dateTo},'yyyy-mm-dd') + 1
+        AND     larn.request_master_id         = lasn_appr.request_master_id
+        AND     larn.organization_id           = lasn_appr.organization_id
+		AND     lasn_appr.sign_user_no         IS NOT NULL
+        AND     lasn_appr.approval_date        IS NOT NULL
+		AND     lasn_appr.approval_action_code IN ('APPROVAL', 'AGREEMENT', 'PARAGREE_ALL' , 'PARAGREE_OR')
+		AND     lasn_appr.approval_status_code IN ('3','4')
+		AND     larn.process_status_code       = rtrim(ltrim(to_char(lasn_appr.process_seq_no)))
+		AND     lasn_appr.sign_user_no         = lumv.user_name
+		AND     lccc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND     larn.status_code               = lccc.common_code
+		AND     lasn.user_no                   = #{USER_SESSION.userName}
+
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn_appr.sign_user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+    <select id="retrievePreviewRList" parameterType="java.util.HashMap" resultType="LGCOMData">        
+        SELECT  /* LGUTLC00310.retrievePreviewRList */
+                ROWNUM                                   AS seq_no
+               ,larn.request_no                          AS submission_no
+		       ,larn.request_master_id                   AS request_master_id
+               ,larn.request_code                        AS request_code
+		       ,larn.organization_id                     AS org_id
+		       ,lcv.short_code                           AS ou_short_name
+               ,lc_approval.code_data2_value             as req_type
+		       ,lc_sys.code_data1_value                  AS system_code
+		       ,lc_mod.common_code_desc                  AS module_code
+		       ,larn.request_title                       AS title
+		       ,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+		       ,larn.requestor_id                        AS requestor_id
+		       ,lumv.user_name                           AS approver_emp_no
+		       ,lumv.full_name_local                     AS approver_emp_name
+               ,lumv.english_full_name                   AS approver_name_eng
+		       ,larn.status_code                         AS status_code
+		       ,lccc.common_code_desc                    AS status_name
+		FROM    lgcom_approval_request_n      larn
+               ,lgcom_approval_status_n       lasn
+               ,lgcom_company_v                     lcv
+               ,lgcom_user_m_v                      lumv
+               ,lgcom_common_code_c                 lccc
+               ,lgcom_approval_status_n       lasn_appr
+               ,lgcom_common_code_c                 lc_sys
+               ,lgcom_common_code_c                 lc_mod
+               ,lgcom_common_code_c                 lc_approval
+		WHERE   1 = 1
+		AND     larn.system_code               = lc_sys.common_code
+        AND     lc_sys.code_type_code          = 'LGCOM_SYSTEM_CODE'
+        AND     larn.module_code               = lc_mod.common_code
+        AND     larn.system_code               = lc_mod.parent_common_code
+        AND     lc_mod.code_type_code          = 'LGCOM_MODULE_CODE'
+		AND     larn.organization_id           = lcv.organization_id
+		AND     larn.request_master_id         = lasn.request_master_id
+		AND     larn.organization_id           = lasn.organization_id
+		AND     larn.request_code              = lasn.request_code
+		AND     larn.request_code              = lasn_appr.request_code
+		AND     lasn.approval_action_code      = 'PREVIEW'
+        AND     lc_approval.code_type_code     = 'LGCOM_APPROVAL_ACTION_CODE'
+        AND     lc_approval.common_code        = lasn.approval_action_code
+		AND     larn.status_code               IN ('20','30')
+        AND     larn.request_date              BETWEEN to_date(#{dateFrom},'yyyy-mm-dd') AND to_date(#{dateTo},'yyyy-mm-dd') + 1
+        AND     larn.request_master_id         = lasn_appr.request_master_id
+        AND     larn.organization_id           = lasn_appr.organization_id
+		AND     lasn_appr.sign_user_no         IS NULL
+        AND     lasn_appr.approval_date        IS NULL
+		AND     lasn_appr.approval_action_code = 'PREVIEW'
+		AND     lasn_appr.approval_status_code ='2'  		
+		AND     lasn_appr.user_no              = lumv.user_name
+		AND     lccc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND     larn.status_code               = lccc.common_code
+		AND     lasn.user_no                   = #{USER_SESSION.userName}
+
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn_appr.user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+    <select id="retrievePreviewCList" parameterType="java.util.HashMap" resultType="LGCOMData">        
+        SELECT  /* LGUTLC00310.retrievePreviewCList */
+                ROWNUM                                   AS seq_no        
+               ,larn.request_no                          AS submission_no
+		       ,larn.request_master_id                   AS request_master_id
+               ,larn.request_code                        AS request_code
+		       ,larn.organization_id                     AS org_id
+		       ,lcv.short_code                           AS ou_short_name
+               ,lc_approval.code_data2_value             AS req_type
+		       ,lc_sys.code_data1_value                  AS system_code
+		       ,lc_mod.common_code_desc                  AS module_code
+		       ,larn.request_title                       AS title
+		       ,TO_CHAR(larn.request_date, 'yyyy-mm-dd hh24:mi') AS request_date
+		       ,larn.requestor_id                        AS requestor_id
+		       ,lumv.user_name                           AS approver_emp_no
+		       ,lumv.full_name_local                     AS approver_emp_name
+               ,lumv.english_full_name                   AS approver_name_eng
+		       ,larn.status_code                         AS status_code
+		       ,lccc.common_code_desc                    AS status_name
+		FROM    lgcom_approval_request_n      larn
+               ,lgcom_approval_status_n       lasn
+               ,lgcom_company_v                     lcv
+               ,lgcom_user_m_v                      lumv
+               ,lgcom_common_code_c                 lccc
+               ,lgcom_approval_status_n       lasn_appr
+               ,lgcom_common_code_c                 lc_sys
+               ,lgcom_common_code_c                 lc_mod
+               ,lgcom_common_code_c                 lc_approval
+		WHERE   1 = 1
+		AND     larn.system_code               = lc_sys.common_code
+        AND     lc_sys.code_type_code          = 'LGCOM_SYSTEM_CODE'
+        AND     larn.module_code               = lc_mod.common_code
+        AND     larn.system_code               = lc_mod.parent_common_code
+        AND     lc_mod.code_type_code          = 'LGCOM_MODULE_CODE'
+		AND     larn.organization_id           = lcv.organization_id
+		AND     larn.request_master_id         = lasn.request_master_id
+		AND     larn.organization_id           = lasn.organization_id
+		AND     larn.request_code              = lasn.request_code
+		AND     larn.request_code              = lasn_appr.request_code
+		AND     lasn.approval_action_code      = 'PREVIEW'
+        AND     lc_approval.code_type_code     = 'LGCOM_APPROVAL_ACTION_CODE'
+        AND     lc_approval.common_code        = lasn.approval_action_code
+		AND     larn.status_code               IN ('40','50')
+        AND     larn.request_date              BETWEEN to_date(#{dateFrom},'yyyy-mm-dd') AND to_date(#{dateTo},'yyyy-mm-dd') + 1
+        AND     larn.request_master_id         = lasn_appr.request_master_id
+        AND     larn.organization_id           = lasn_appr.organization_id
+		AND     lasn_appr.sign_user_no         IS NOT NULL
+        AND     lasn_appr.approval_date        IS NOT NULL
+		AND     lasn_appr.approval_action_code = 'PREVIEW'
+		AND     lasn_appr.approval_status_code IN ('3','4')
+		AND     larn.process_status_code       = rtrim(ltrim(to_char(lasn_appr.process_seq_no)))
+		AND     lasn_appr.sign_user_no         = lumv.user_name
+		AND     lccc.code_type_code            = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+        AND     larn.status_code               = lccc.common_code
+		AND     lasn.user_no                   = #{USER_SESSION.userName}
+        <if test="approverEmpNo != null and approverEmpNo != ''">
+            AND lasn_appr.sign_user_no = #{approverEmpNo}
+        </if>
+	    <if test="title != null and title != ''">
+            AND larn.request_title like #{title} || '%'
+        </if>
+        ORDER BY larn.request_date DESC, larn.last_update_date desc
+    </select>
+
+</mapper>

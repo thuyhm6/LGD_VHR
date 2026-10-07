@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="Batch">
+	<!-- Batch 기본 정보 조회  -->
+	<select id="retrieveBatchInfo" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT PROGRAM_ID,
+		       PROGRAM_NAME,
+		       SYSTEM_CODE,
+		       MODULE_CODE
+		  FROM LGCOM_PROGRAM_M
+		 WHERE PROGRAM_TYPE_CODE = 'BATCH'
+		   AND PROGRAM_ID = #{programId}
+	</select>
+	
+	<select id="retrieveRequestId"  resultType="String" >
+		SELECT LGCOM_BATCH_LOG_SEQ.NEXTVAL AS REQUEST_ID FROM DUAL
+	</select>
+	
+	
+	<!-- 배치 로그 저장  -->
+	<insert id="insertBatchLog" parameterType="LGCOMData">
+        INSERT INTO LGCOM_BATCH_LOG ( request_id,    
+                                      program_id,
+                                      batch_id,
+                                      schedule_flag,
+                                      request_user_id,
+                                      actual_start_date,
+                                      argument_text,
+                                      status_code,
+                                      pop_up_alarm_flag,
+                                      user_check_flag,
+                                      created_by,
+                                      creation_date,
+                                      last_updated_by,
+                                      last_update_date )
+                             VALUES ( #{requestId},    
+                                      #{programId},
+                                      #{batchId},
+                                      NVL( #{scheduleFlag}, 'N'),
+                                      #{requestUserId},
+                                      SYSDATE,
+                                      substrb(#{argumentText}, 1, 1999),
+                                      'R',
+                                      'N',
+                                      'N',
+                                      #{requestUserId},
+                                      SYSDATE,
+                                      #{requestUserId},
+                                      SYSDATE )
+	</insert>
+
+	<!-- 배치 로그 저장  -->
+	<update id="updateBatchLog" parameterType="LGCOMData">
+        UPDATE LGCOM_BATCH_LOG
+           SET actual_end_date = SYSDATE,
+               status_code = #{statusCode},
+               error_flag = #{errorFlag},
+               error_content = #{errorContent},
+               last_updated_by = #{requestUserId},
+               last_update_date = SYSDATE
+         WHERE request_id = #{requestId}
+	</update>
+
+
+	<select id="retrieveBatchScheduleInfo" resultType="LGCOMData">
+	<![CDATA[
+		SELECT batch_id,
+		       system_code,
+		       module_code,
+		       program_id,
+		       batch_name,
+		       argument_text,
+		       request_start_date,
+		       submit_interval,
+		       submit_interval_unit_code,
+		       submit_interval_type_code,
+		       'N' as job_working_flag,
+		       run_alone_flag,
+		       hold_flag,
+		       created_by as request_user_id ,
+		       target_count,
+		       NVL( case when submit_interval_type_code = 'START' then
+		                case when target_count <= start_count then 0 else start_count end
+		            else 
+		                case when target_count <= end_count then 0 else end_count end
+		            end , 0 ) as running_count
+		  from( SELECT lbm.batch_id,
+		               lbm.system_code,
+		               lbm.module_code,
+		               lbm.program_id,
+		               argument_text,
+		               to_char(request_start_date, 'yyyy-mm-dd hh24:mi:ss' ) as request_start_date,
+		               batch_name,
+		               submit_interval,
+		               submit_interval_unit_code,
+		               submit_interval_type_code,
+		               'N' as job_working_flag,
+		               run_alone_flag,
+		               hold_flag,
+		               0 as running_count,
+		               created_by,
+		               decode(SUBMIT_INTERVAL_UNIT_CODE, 'MINUTE', 60, 'HOUR', 3600, 'DAY', 86400) * submit_interval / 30 as target_count,
+		               mod(floor( (sysdate - lbm.request_start_date ) * 3600 * 24 / 30 ), 
+                           decode(SUBMIT_INTERVAL_UNIT_CODE, 'MINUTE', 60, 'HOUR', 3600, 'DAY', 86400) * submit_interval / 30) as start_count,
+                       mod(floor( (sysdate - lbm.request_start_date ) * 3600 * 24  / 30 ),
+                           decode(SUBMIT_INTERVAL_UNIT_CODE, 'MINUTE', 60, 'HOUR', 3600, 'DAY', 86400) * submit_interval / 30) as end_count
+                  FROM lgcom_batch_m lbm
+	             WHERE lbm.request_start_date <= sysdate
+	               and nvl(lbm.request_end_date, sysdate) >= sysdate
+	               and nvl(lbm.hold_flag,'N') = 'N' ) schedule
+	]]>
+	</select>
+</mapper>

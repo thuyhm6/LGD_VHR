@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xsi:schemaLocation="http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<!-- <jdbc:embedded-database id="dataSource" /> -->
+    <bean id="jndiDataSource" class="org.springframework.jndi.JndiObjectFactoryBean">
+        <property name="jndiName" value="DEV5"/>
+        <property name="resourceRef" value="true"/>
+    </bean>
+
+    <!-- Log4jdbc 를 이용하기 위한 Spy -->
+    <bean id="dataSource" class="net.sf.log4jdbc.Log4jdbcProxyDataSource">
+        <constructor-arg ref="jndiDataSource" />
+        <property name="logFormatter">
+			<bean class="com.lgd.lgcom.framework.log.LGCOMLog4jdbcFormatter">
+				<property name="loggingType" value="MULTI_LINE" />
+				<property name="sqlPrefix" value="Query : " />
+				<!--
+					쿼리 작성시 유의 사항:
+					  1. 쿼리 구문에 반드시 /* Domain.queryId */ 로 주석을 처리한다.
+					  2. 쿼리구문 로깅을 제외하고 싶은 쿼리는 아래 list의 value 항목에 쿼리의 주석 부분을 추가한다.
+					  3. 주석처리가 누락된 쿼리는 모두 log4jdbc에 의해 쿼리구문이 로깅된다.
+				-->
+				<property name="excludeSql">
+					<list>
+						<value>concurrent.retrieveNotificationCandidates</value>
+						<value>concurrent.updateNotificationCandidates</value>
+						<value>concurrent.retrieveUnReadNotificationCandidates</value>
+						<value>concurrent.concurrentconcurrentconcurrent</value>
+						<value>Common.createAccessLog</value>
+						<value>Common.createServiceTimeLog</value>
+						<value>Common.executeMoGlobal</value>
+						<value>Common.setApplicationProgram</value>
+					</list>
+				</property>
+			</bean>
+        </property>
+    </bean>
+
+	<bean id="dataSourceInitializer" class="org.springframework.jdbc.datasource.init.DataSourceInitializer">
+	    <property name="dataSource" ref="dataSource"/>
+	    <property name="databasePopulator" ref="databasePopulator" />
+	</bean>
+	<bean id="databasePopulator" class="org.springframework.jdbc.datasource.init.ResourceDatabasePopulator">
+		<property name="sqlScriptEncoding" value="UTF-8" />
+		<property name="scripts">
+			<list>
+				<value>classpath:oracle/*.sql</value>
+			</list>
+		</property>
+	</bean>
+
+	<bean id="dynamicDao" class="com.lgd.lgcom.framework.dao.DynamicDao">
+	    <property name="dataSource" ref="dataSource"/>
+	</bean>
+
+</beans>

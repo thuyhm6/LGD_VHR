@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTO0010">
+    <!-- 포틀릿 ATT Summary 정보 조회 -->
+    <select id="retrievePortletATTSummary" parameterType="LGCOMData" resultType="LGCOMData">
+	    SELECT /* LGVATTO0010.retrievePortletATTSummary */
+	           ar.time_and_attendance_yyyymm,
+	           TO_CHAR(ar.normal_working_days ) AS normal_working_days,
+	           TO_CHAR(ar.normal_working_hours) AS normal_working_hours,
+	           TO_CHAR(ar.ot_weekday_hours    ) AS ot_weekday_hours,
+	           TO_CHAR(ar.ot_holiday_hours    ) AS ot_holiday_hours,
+	           TO_CHAR(ar.ot_public_hours     ) AS ot_public_hours,
+	           TO_CHAR(ar.lateness_hours      ) AS lateness_hours,
+	           TO_CHAR(ar.leaving_early_hours ) AS leaving_early_hours,
+	           TO_CHAR(ar.going_out_hours     ) AS going_out_hours,
+	           TO_CHAR(aa.total_annual_days   ) AS total_annual_days,
+	           TO_CHAR(aa.total_used_days     ) AS total_used_days,
+	           TO_CHAR(aa.total_unused_days   ) AS total_unused_days,
+	           TO_CHAR(aa.total_used_rate     ) AS total_used_rate
+	    FROM   (
+	            SELECT MAX(ar.time_and_attendance_yyyymm)                                    AS time_and_attendance_yyyymm,
+	                   NVL(SUM(NVL(ac.attendance_days, 0)
+	                          +NVL(ac.paid_days, 0)
+	                          ), 0)                                                          AS normal_working_days,
+	                   NVL(SUM(NVL(ac.attendance_days, 0)
+	                          +NVL(ac.paid_days, 0)
+	                          ), 0) * 8                                                      AS normal_working_hours,
+	                   NVL(SUM(CASE WHEN ar.time_and_attendance_code NOT IN ( 'WH', 'PH' )
+	                                THEN ar.overtime_sum_hours
+	                                ELSE 0
+	                           END
+	                          ), 0)                                                          AS ot_weekday_hours,
+	                   NVL(SUM(CASE WHEN ar.time_and_attendance_code IN ( 'WH' )
+	                                THEN ar.overtime_sum_hours
+	                                ELSE 0
+	                           END
+	                          ), 0)                                                          AS ot_holiday_hours,
+	                   NVL(SUM(CASE WHEN ar.time_and_attendance_code IN ( 'PH' )
+	                                THEN ar.overtime_sum_hours
+	                                ELSE 0
+	                           END
+	                          ), 0)                                                          AS ot_public_hours,
+	                   NVL(SUM(ar.tardy_hours), 0)                                           AS lateness_hours,
+	                   NVL(SUM(ar.early_leave_hours), 0)                                     AS leaving_early_hours,
+	                   NVL(SUM(ar.going_out_hours), 0)                                       AS going_out_hours
+	            FROM   tb_att_result_n ar,
+	                   tb_att_code_c   ac
+	            WHERE  ar.subsidiary_code            = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	            AND    ar.employee_no                = #{LGVHR_PROJECT_SESSION.employeeNo}
+	            AND    ar.time_and_attendance_yyyymm = lgvatt_common_pkg.get_curr_att_yyyymm(#{LGVHR_PROJECT_SESSION.subsidiaryCode})
+	            AND    ar.time_and_attendance_code   = ac.time_and_attendance_code
+	            AND    ar.subsidiary_code            = ac.subsidiary_code
+	           ) ar,
+	           (
+				SELECT total_annual_days,
+				       total_used_days,
+				       NVL(total_annual_days - total_used_days, 0) AS total_unused_days,
+				       NVL(ROUND(DECODE(total_annual_days, 0, 0, total_used_days / total_annual_days * 100), 1), 0) AS total_used_rate
+				FROM   (
+				        SELECT NVL(aa.total_annual_days, 0) + NVL(pa.residual_annual_leave_days, 0) AS total_annual_days,
+				               NVL(aa.total_used_days, 0) AS total_used_days
+				        FROM   (
+				                SELECT aa.employee_no,
+				                       NVL(SUM(NVL(aa.occur_basic_annual_leave_days, 0) + NVL(aa.occur_monthly_ann_lv_days, 0)), 0) AS total_annual_days,
+				                       NVL(SUM(aa.use_annual_leave_days), 0) AS total_used_days
+				                FROM   tb_att_annual_leave_n aa
+				                WHERE  aa.subsidiary_code               = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+				                AND    aa.employee_no                   = #{LGVHR_PROJECT_SESSION.employeeNo}
+				                AND    aa.time_and_attendance_yyyymm LIKE SUBSTR(lgvatt_common_pkg.get_curr_att_yyyymm(#{LGVHR_PROJECT_SESSION.subsidiaryCode}), 1, 4) || '%'
+				                GROUP BY aa.employee_no
+				               ) aa,
+				               (
+				                SELECT pa.employee_no,
+				                       NVL(pa.residual_annual_leave_days, 0) AS residual_annual_leave_days
+				                FROM   tb_att_annual_leave_n pa
+				                WHERE  pa.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+				                AND    pa.employee_no     = #{LGVHR_PROJECT_SESSION.employeeNo} 
+				                AND    pa.time_and_attendance_yyyymm = TO_CHAR(ADD_MONTHS(TO_DATE(SUBSTR(lgvatt_common_pkg.get_curr_att_yyyymm(#{LGVHR_PROJECT_SESSION.subsidiaryCode}), 1, 4) || '12', 'YYYYMM'), -12), 'YYYYMM')  /* 전년12월 */
+				               ) pa
+				       WHERE   aa.employee_no = pa.employee_no(+)
+				      )
+	           ) aa
+	    WHERE  1 = 1
+    </select>
+</mapper>

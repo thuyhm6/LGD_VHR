@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="uicommon">
+
+    <select id="retrieveGridConfig" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT SCREEN_LAYOUT_XML_TEXT AS CONTENT
+          FROM LGCOM_USER_SCREEN_LAYOUT_N
+         WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+           AND PROGRAM_ID = #{programId}
+           AND SCREEN_GRID_NAME = #{componentId}
+    </select>
+
+    <select id="retrieveGridConfigCount" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT COUNT(PROGRAM_ID) AS CONFIG_COUNT
+          FROM LGCOM_USER_SCREEN_LAYOUT_N
+         WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+           AND PROGRAM_ID = #{programId}
+           AND SCREEN_GRID_NAME = #{componentId}
+    </select>
+
+    <insert id="insertGridConfig" parameterType="java.util.HashMap">
+        INSERT INTO LGCOM_USER_SCREEN_LAYOUT_N
+          ( APPLICATION_USER_ID,
+            PROGRAM_ID,
+            SCREEN_GRID_NAME,
+            SCREEN_LAYOUT_XML_TEXT,
+            CREATED_BY,
+            CREATION_DATE,
+            LAST_UPDATED_BY,
+            LAST_UPDATE_DATE )
+          VALUES
+          ( #{USER_SESSION.applicationUserId},
+            #{programId},
+            #{componentId},
+            #{screenLayout},
+            #{USER_SESSION.applicationUserId},
+            SYSDATE,
+            #{USER_SESSION.applicationUserId},
+            SYSDATE  )
+    </insert>
+
+    <update id="updateGridConfig" parameterType="java.util.HashMap">
+        UPDATE LGCOM_USER_SCREEN_LAYOUT_N
+           SET SCREEN_LAYOUT_XML_TEXT = #{screenLayout}
+         WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+           AND PROGRAM_ID = #{programId}
+           AND SCREEN_GRID_NAME = #{componentId}
+    </update>
+
+    <delete id="deleteGridConfig" parameterType="java.util.HashMap">
+        DELETE FROM LGCOM_USER_SCREEN_LAYOUT_N
+         WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+           AND PROGRAM_ID = #{programId}
+           AND SCREEN_GRID_NAME = #{componentId}
+    </delete>
+
+    <!-- Keyword 기능  -->
+    <select id="retrieveKeywordList" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[
+        SELECT COLUMN_CONTENT AS CONTENT
+          FROM LGCOM_USER_INPUT_VALUE_LOG_N
+         WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+           AND INQUIRY_CONDITION_VALUE = #{keyword}
+           AND EFFECTIVE_TO_DATE > SYSDATE
+      ORDER BY LOG_SEQ_NO
+    ]]>
+    </select>
+
+    <delete id="deleteKeywordList" parameterType="java.util.HashMap">
+        DELETE FROM LGCOM_USER_INPUT_VALUE_LOG_N
+         WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+           AND INQUIRY_CONDITION_VALUE = #{keyword}
+    </delete>
+
+    <insert id="insertKeywordList" parameterType="java.util.HashMap">
+        INSERT INTO LGCOM_USER_INPUT_VALUE_LOG_N
+         (   APPLICATION_USER_ID
+			,LOG_SEQ_NO
+			,INQUIRY_CONDITION_VALUE
+			,COLUMN_CONTENT
+			,EFFECTIVE_TO_DATE
+			,CREATED_BY
+			,CREATION_DATE
+			,LAST_UPDATED_BY
+			,LAST_UPDATE_DATE  )
+
+         VALUES
+         (
+             #{USER_SESSION.applicationUserId}
+            ,#{logSeqNo}
+            ,#{keyword}
+            ,#{content}
+            ,SYSDATE + 7
+            ,#{USER_SESSION.applicationUserId}
+            ,SYSDATE
+            ,#{USER_SESSION.applicationUserId}
+            ,SYSDATE
+         )
+    </insert>
+
+
+    <!-- 조회 조건 저장기능  -->
+        <!-- 조회 조건의 인출  -->
+    <select id="retrieveSearchCondition" parameterType="java.util.HashMap" resultType="LGCOMData">
+        SELECT HTML_INQ_CONDITION_OBJECT_ID AS ELEMENT_NAME,
+               HTML_INQ_COND_OBJECT_TYPE_CODE AS TAG_NAME,
+               INITIAL_VALUE1_TEXT AS VALUE
+          FROM LGCOM_USER_INQUIRY_CONDITION_N
+         WHERE APPLICATION_USER_ID =  #{USER_SESSION.applicationUserId}
+           AND PROGRAM_ID =  #{programId}
+    </select>
+
+
+    <!-- 조회조건의 일괄 삭제  -->
+    <delete id="deleteSearchCondition" parameterType="java.util.HashMap">
+        /*uicommon.deleteSearchCondition*/
+        DELETE FROM LGCOM_USER_INQUIRY_CONDITION_N
+        WHERE APPLICATION_USER_ID =  #{USER_SESSION.applicationUserId}
+          AND PROGRAM_ID =  #{programId}
+    </delete>
+
+    <!-- 조회 조건의 저장  -->
+    <insert id="insertSearchCondition" parameterType="java.util.HashMap">
+        /*uicommon.insertSearchCondition*/
+        INSERT INTO LGCOM_USER_INQUIRY_CONDITION_N
+           ( APPLICATION_USER_ID
+            ,PROGRAM_ID
+            ,HTML_INQ_CONDITION_OBJECT_ID
+            ,HTML_INQ_COND_OBJECT_TYPE_CODE
+            ,INITIAL_VALUE1_TEXT
+            ,CREATED_BY
+            ,CREATION_DATE
+            ,LAST_UPDATED_BY
+            ,LAST_UPDATE_DATE )
+        VALUES
+           ( #{USER_SESSION.applicationUserId}
+            ,#{programId}
+            ,#{elementName}
+            ,#{tagName}
+            ,#{value}
+            ,#{USER_SESSION.applicationUserId}
+            ,SYSDATE
+            ,#{USER_SESSION.applicationUserId}
+            ,SYSDATE )
+    </insert>
+
+	<!-- Intro Popup 공지사항 목록 조회 -->
+	<select id="retrievePopupNoticeList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT bn.bulletin_board_no
+		       , bn.bulletin_board_id
+		       , bn.bulletin_board_title
+		       , bn.bb_body_content
+		       , TO_CHAR(bn.creation_date,'YYYY-MM-DD HH24:MI') AS creation_date
+		    FROM LGCOM_BOARD_N bn
+		   WHERE bn.bulletin_board_id IN (SELECT bulletin_board_id
+		                                 FROM LGCOM_BOARD_MASTER_M
+		                                WHERE system_code              = UPPER(#{USER_SESSION.systemCode})
+		                                  AND bulletin_board_type_code = 'NB'
+		                                  AND bb_use_flag              = 'Y')
+		     AND bn.system_code       = UPPER(#{USER_SESSION.systemCode})
+		     AND bn.delete_flag       = 'N'
+		     AND bn.pop_up_alarm_flag = 'Y'
+		     AND (bn.period_from_date IS NULL OR bn.period_from_date &lt;= TRUNC(SYSDATE))
+		     AND (bn.period_to_date IS NULL OR bn.period_to_date &gt;= TRUNC(SYSDATE))
+		     AND NOT EXISTS (SELECT 1
+		                       FROM LGCOM_USER_BB_READ_LOG_N
+		                      WHERE application_user_id = #{USER_SESSION.applicationUserId}
+		                        AND bulletin_board_no = bn.bulletin_board_no)
+		ORDER BY bn.bulletin_board_id, bn.bulletin_board_no DESC
+	</select>
+
+	
+
+	<!-- 요청서 안내탭 내용을 메뉴얼 정보에서 조회한다. -->
+	<select id="retrieveRequestFormInfomationFromManual" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* uicommon.retrieveRequestFormInfomationFromManual */
+		       article_write_content AS manual_content
+		     , etc_attach_file_id AS attach_file_id
+		  FROM LGCOM_PROGRAM_USE_HELP_N a
+		 WHERE program_id    = #{programId}
+		   AND language_code = DECODE((SELECT COUNT(1)
+		                                 FROM LGCOM_PROGRAM_USE_HELP_N
+		                                WHERE program_id    = a.program_id
+		                                  AND language_code = #{USER_SESSION.languageCode}),1,#{USER_SESSION.languageCode},(SELECT language_code
+		                                                                                                                      FROM LGCOM_PROGRAM_USE_HELP_N
+		                                                                                                                     WHERE program_id = a.program_id
+		                                                                                                                       AND ROWNUM = 1))
+	</select>
+</mapper>

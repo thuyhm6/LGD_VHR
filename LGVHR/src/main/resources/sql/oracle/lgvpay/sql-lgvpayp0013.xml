@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0013">
+
+    <!-- Contract 조회 -->
+    <select id="retrieveContractList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0013.retrieveContractList */
+               a.employee_no
+             , to_char(a.contract_period_start_date, 'DD/MM/YYYY') AS contract_period_start_date
+             , to_char(a.contract_period_end_date, 'DD/MM/YYYY') AS contract_period_end_date
+             , c.common_code_name AS contract_info
+        FROM   tb_pay_emp_contract_n a
+             , lgcom_common_code_c b
+             , lgcom_common_code_multi_lang_c c
+        WHERE  b.common_code = a.contract_type_code
+        AND    b.code_type_code = 'IF_CONTRACT_TYPE'
+        AND    c.code_type_code = b.code_type_code
+        AND    c.common_code = b.common_code
+        AND    c.language_code = #{USER_SESSION.languageCode}
+        AND    a.employee_no = #{employeeNo}
+        ORDER BY a.contract_period_start_date DESC
+    </select>
+
+</mapper>

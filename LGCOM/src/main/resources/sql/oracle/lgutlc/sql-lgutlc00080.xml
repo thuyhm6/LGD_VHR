@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00080">
+	<!-- 레이블 목록 조회 -->
+	<select id="retrieveDynamicQueryPopList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00080.retrieveDynamicQueryPopList */
+		         query_id
+		       , query_name
+		       , description AS query_desc
+		       , access_level
+		       , access_group
+		    FROM XXLGE_QUERY
+		   WHERE access_group = #{accessGroup}
+		<if test="keyword != null and keyword != ''">
+		     AND UPPER(query_name) LIKE UPPER(#{keyword}) || '%'
+		</if>
+		ORDER BY access_group, query_name
+	</select>
+
+	<!-- Dynamic Query 목록 조회 -->
+	<select id="retrieveDynamicQueryColumnList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* LGUTLC00080.retrieveDynamicQueryColumnList */
+		         query_id
+		       , seq AS column_seq
+		       , prompt AS column_prompt
+		       , field AS column_field
+		       , data_type
+		       , length AS column_length
+		       , CASE WHEN (CASE WHEN width &gt; 3 THEN 3 ELSE width END) &lt;= 3 THEN ROUND((CASE WHEN width &gt; 3 THEN 3 ELSE width END) * 96,-1) ELSE width END AS column_width
+		       , format_mask
+		    FROM XXLGE_QUERY_COLUMNS
+		   WHERE query_id = #{queryId}
+		ORDER BY seq
+	</select>
+
+	<!-- Dynamic Query 신규 Session ID 채번 -->
+	<select id="retrieveNewDynamicQuerySessionId" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00080.retrieveNewDynamicQuerySessionId */
+		       TO_CHAR(TRUNC(DBMS_RANDOM.VALUE(90000000000000000001,99999999999999999999))) AS new_session_id
+		  FROM DUAL
+	</select>
+
+	<!-- Dynamic Query 결과 조회 -->
+	<select id="retrieveDynamicQueryResultList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGUTLC00080.retrieveDynamicQueryResultList */
+		       f01, f02, f03, f04, f05, f06, f07, f08, f09, f10
+		     , f11, f12, f13, f14, f15, f16, f17, f18, f19, f20
+		     , f21, f22, f23, f24, f25, f26, f27, f28, f29, f30
+		     , f31, f32, f33, f34, f35, f36, f37, f38, f39, f40
+		     , f41, f42, f43, f44, f45, f46, f47, f48, f49, f50
+		     , f51, f52, f53, f54, f55, f56, f57, f58, f59, f60
+		     , f61, f62, f63, f64, f65, f66, f67, f68, f69, f70
+		     , TO_CHAR(session_id) AS session_id, TO_CHAR(query_id) AS query_id		      
+		  FROM XXLGE_QUERY_RESULTS
+		 WHERE session_id = #{sessionId}
+		   AND query_id   = #{queryId}
+		<if test="orderByClause != null and orderByClause != ''">
+			${orderByClause}
+		</if>
+	</select>
+
+	<!-- Dynamic Query 사용 이력 적재 -->
+	<insert id="insertDynamicQueryExecHistory" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00080.insertDynamicQueryExecHistory */
+		            XXLGE_QUERY_EXEC_INSTR_RSLT_N (
+		    application_user_id,upload_session_id,query_id,org_id,sql_content,parent_program_id,sql_text, concurrent_request_id,
+		    sql_execution_result_row_count,sql_error_content,created_by,creation_date,last_updated_by,last_update_date,last_update_login
+		) VALUES (
+		    #{applicationUserId},#{sessionId},#{queryId},#{defaultOrgId},#{generatedQuery,jdbcType=CLOB},#{programId},#{sqlText}, #{batchRequestId},
+		    #{resultCount},#{statusCode},#{applicationUserId},SYSDATE,#{applicationUserId},SYSDATE,#{applicationUserId}
+		)
+	</insert>
+
+	<!-- Dynamic Query 사용 이력 적재 -->
+	<insert id="insertDynamicQueryExecHistory2" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00080.insertDynamicQueryExecHistory2 */
+		            XXLGE_QUERY_EXEC_INSTR_RSLT_N (
+		    application_user_id,upload_session_id,query_id,org_id,sql_content,parent_program_id,
+		    sql_text,sql_execution_result_row_count,concurrent_request_id,batch_job_start_date,batch_job_end_date,
+		    sql_error_content,result_content,created_by,creation_date,last_updated_by,
+		    last_update_date,last_update_login
+		) VALUES (
+		    #{applicationUserId},#{sessionId},#{queryId},#{defaultOrgId},#{generatedQuery,jdbcType=CLOB},#{programId},
+		    #{sqlText},#{resultCount},#{concurrentRequestId},TO_DATE(#{startDate},'YYYY-MM-DD HH24:MI:SS'),TO_DATE(#{endDate},'YYYY-MM-DD HH24:MI:SS'),
+		    #{statusCode},NULL,#{applicationUserId},SYSDATE,#{applicationUserId},
+		    SYSDATE,#{applicationUserId}
+		)
+	</insert>
+
+	<!-- Dynamic Query 사용 이력 결과 수정 -->
+	<update id="updateDynamicQueryExecHistory" parameterType="java.util.HashMap">
+		UPDATE /* LGUTLC00080.updateDynamicQueryExecHistory */
+		       XXLGE_QUERY_EXEC_INSTR_RSLT_N
+		   SET sql_execution_result_row_count = #{sqlExecutionResultRowCount}
+		     , batch_job_start_date           = DECODE(#{batchJobStartDate},'SYSDATE',SYSDATE)
+		     , batch_job_end_date             = DECODE(#{batchJobEndDate},'SYSDATE',SYSDATE)
+		     , sql_error_content               = #{rsltStatusCode}
+		     , result_content                 = #{resultContent}
+		     , last_updated_by                = #{userId}
+		     , last_update_date               = SYSDATE
+		     , last_update_login              = #{userId}
+		 WHERE application_user_id            = #{applicationUserId}
+		   AND upload_session_id              = #{sessionId}
+		   AND query_id                       = #{queryId}
+		   AND org_id                         = #{defaultOrgId}
+	</update>
+
+	<!-- Dynamic Query 사용 이력 적재 -->
+	<select id="processDynamicQueryResult" statementType="CALLABLE" parameterType="java.util.HashMap">
+		{call /* LGUTLC00080.processDynamicQueryResult */
+		      lgcom_dq_batch_pkg.make_dq_proc(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},
+		                                     #{errorMsg, mode=OUT, jdbcType=VARCHAR, javaType=string},
+		                                     #{applicationUserId, mode=IN, jdbcType=NUMERIC, javaType=double},
+		                                     #{sessionId, mode=IN, jdbcType=VARCHAR, javaType=string},		                                     		                                     
+		                                     #{queryId, mode=IN, jdbcType=VARCHAR, javaType=string},
+		                                     #{batchRequestId, mode=IN, jdbcType=VARCHAR, javaType=string}
+		                                     )}
+	</select>
+
+	<!-- Dynamic Query 사용 Log 적재 -->
+	<insert id="insertDynamicQueryUseLog" parameterType="java.util.HashMap">
+		INSERT INTO /* LGUTLC00080.insertDynamicQueryUseLog */
+		            XXLGE_DQ_USE_T (
+		    organization_id,user_id,form_id,query_id,access_group,query_name,
+		    end_date,creation_date,created_by,last_update_date,last_updated_by,last_update_login
+		) VALUES (
+		    #{defaultOrgId},#{applicationUserId},#{formId},#{queryId},(SELECT access_group FROM XXLGE_QUERY WHERE query_id = #{queryId}),(SELECT query_name FROM XXLGE_QUERY WHERE query_id = #{queryId}),
+		    SYSDATE,SYSDATE,#{applicationUserId},SYSDATE,#{applicationUserId},#{applicationUserId}
+		)
+	</insert>
+
+	<!-- Dynamic Query 당일 수행 이력 목록 조회 -->
+	<select id="retrieveDynamicQueryTodayList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT /* LGUTLC00080.retrieveDynamicQueryTodayList */
+		         b.access_group
+		       , a.org_id
+		       , a.application_user_id
+		       , TO_CHAR(a.upload_session_id) AS session_id
+		       , TO_CHAR(a.query_id) AS query_id
+		       , b.query_name
+		       , b.description AS query_desc
+		       , a.sql_text AS query_args
+		       , a.parent_program_id AS program_id
+		       , a.sql_execution_result_row_count AS result_row_count
+		       , a.concurrent_request_id AS request_id
+		       , TO_CHAR(a.batch_job_start_date,'HH24:MI:SS') AS start_date
+		       , TO_CHAR(a.batch_job_end_date,'HH24:MI:SS') AS end_date
+		       , a.sql_error_content AS status_code
+		       , a.result_content
+		       , TO_CHAR(a.creation_date,'HH24:MI:SS') AS creation_date
+		       , CASE WHEN a.sql_error_content = 'S' AND a.sql_execution_result_row_count > 0 THEN #{imagePath} END AS status_button
+		    FROM XXLGE_QUERY_EXEC_INSTR_RSLT_N a
+		       , XXLGE_QUERY                   b
+		   WHERE a.query_id          = b.query_id
+		     AND a.application_user_id = #{USER_SESSION.applicationUserId}
+		     AND a.creation_date      >= TRUNC(SYSDATE)
+		     AND a.creation_date      <= TO_DATE(TO_CHAR(SYSDATE,'YYYYMMDD') || ' 235959','YYYYMMDD HH24MISS')
+		ORDER BY a.creation_date DESC
+	]]>
+	</select>
+</mapper>

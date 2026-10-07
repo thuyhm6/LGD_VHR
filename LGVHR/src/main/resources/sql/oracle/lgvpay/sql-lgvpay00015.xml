@@ -1,0 +1,509 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00015">
+
+    <!-- 합계(누계) 리스트 조회 -->
+    <select id="retrieveAggregateList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00015.retrieveAggregateList */
+                pia.payroll_item_aggregate_id
+              , pia.payroll_item_aggregate_name /*"Aggregate Name"*/
+              , pia.detail_desc                 /*"Description"*/
+              , pia.payroll_aggregate_type_code
+              , cccm.common_code_name  AS payroll_aggregate_type_name         /*"Aggregate Type"*/
+              , nvl(max(DECODE(piac.aggregate_cycle_type_code, 'RUN'  , 'Y',NULL)),'N') AS run_flag   /*"Run"*/
+              , nvl(max(DECODE(piac.aggregate_cycle_type_code, 'MONTH', 'Y',NULL)),'N') AS month_flag /*"Month"*/
+              , nvl(max(DECODE(piac.aggregate_cycle_type_code, 'YEAR' , 'Y',NULL)),'N') AS year_flag  /*"Year"*/
+              , NVL(( SELECT 'Y'
+                      FROM   dual
+                      WHERE  EXISTS ( SELECT 1 FROM tb_pay_calc_aggr_result_n pcar WHERE pcar.payroll_item_aggregate_id=pia.payroll_item_aggregate_id) ), 'N') AS used_flag /*"used_flag"*/
+        FROM    tb_pay_item_aggr_n pia
+              , lgcom_common_code_multi_lang_c cccm
+              , tb_pay_item_aggr_cycle_n piac
+        WHERE   pia.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        <choose>
+            <when test="srchPayrollItemAggregateId != null and srchPayrollItemAggregateId != ''">
+        AND     pia.payroll_item_aggregate_id = #{srchPayrollItemAggregateId, jdbcType=NUMERIC}
+            </when>
+            <otherwise>
+        AND     pia.payroll_item_aggregate_name LIKE '%'||#{payrollItemAggregateName}||'%'
+            </otherwise>
+        </choose>
+        AND     cccm.code_type_code            = 'LGDVHR_PAY_AGGR_TYPE_CODE'
+        AND     cccm.common_code               = pia.payroll_aggregate_type_code
+        AND     cccm.language_code             = #{USER_SESSION.languageCode}
+        AND     piac.payroll_item_aggregate_id = pia.payroll_item_aggregate_id
+        GROUP BY pia.payroll_item_aggregate_id
+                , pia.payroll_item_aggregate_name
+                , pia.detail_desc
+                , pia.payroll_aggregate_type_code
+                , cccm.common_code_name
+        ORDER BY pia.payroll_item_aggregate_name
+    </select>
+
+    <!-- Aggregate 저장 전 유효성 체크 -->
+    <select id="retireveValidateAggregateData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00015.retireveValidateAggregateData */
+                   payroll_item_aggregate_id
+                 , payroll_item_aggregate_name
+                 , payroll_aggregate_type_code
+            FROM   tb_pay_item_aggr_n
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            WHERE  payroll_item_aggregate_id NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                #{deleted[${idx}].payrollItemAggregateId, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS payroll_item_aggregate_id
+                     , #{created[${idx}].payrollItemAggregateName} AS payroll_item_aggregate_name
+                     , #{created[${idx}].payrollAggregateTypeCode} AS payroll_aggregate_type_code
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.payroll_item_aggregate_id
+                      , NVL(update_list.payroll_item_aggregate_name, detail_list.payroll_item_aggregate_name) AS payroll_item_aggregate_name
+                      , NVL(update_list.payroll_aggregate_type_code, detail_list.payroll_aggregate_type_code) AS payroll_aggregate_type_code
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{updated[${idx}].payrollItemAggregateId, jdbcType=NUMERIC} AS payroll_item_aggregate_id
+                                 , #{updated[${idx}].payrollItemAggregateName} AS payroll_item_aggregate_name
+                                 , #{updated[${idx}].payrollAggregateTypeCode} AS payroll_aggregate_type_code
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_item_aggregate_id = update_list.payroll_item_aggregate_id(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_item_aggregate_id
+                      , detail_list.payroll_item_aggregate_name
+                      , detail_list.payroll_aggregate_type_code
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.payroll_item_aggregate_name, ',') WITHIN GROUP (ORDER BY rs.payroll_item_aggregate_name) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.payroll_item_aggregate_name
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 Aggregate 항목명 */
+
+             <![CDATA[
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.aggregateName' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- 합계(누계) 시퀀스 값 조회 -->
+    <select id="retrieveAggregateId" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00015.retrieveAggregateId */
+               sq_tb_pay_item_aggr_n.nextval     AS payroll_item_aggregate_id
+        FROM   dual
+    </select>
+
+    <!-- Aggregate 등록 -->
+    <insert id="insertAggregate" parameterType="LGCOMData">
+        INSERT /* LGVPAY00015.insertAggregate */
+        INTO   tb_pay_item_aggr_n(
+               payroll_item_aggregate_id                         /* 급여항목집계아이디 */
+             , payroll_item_aggregate_name                       /* 급여항목집계명 */
+             , detail_desc                                       /* 상세설명 */
+             , payroll_aggregate_type_code                       /* 급여집계유형코드 */
+             , subsidiary_code                                   /* 해외법인코드 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               #{payrollItemAggregateId, jdbcType=NUMERIC}      /* payroll_item_aggregate_id => 급여항목집계아이디 */
+             , #{payrollItemAggregateName}                      /* payroll_item_aggregate_name => 급여항목집계명 */
+             , #{detailDesc}                                    /* detail_desc => 상세설명 */
+             , #{payrollAggregateTypeCode}                      /* payroll_aggregate_type_code => 급여집계유형코드 */
+             , #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* subsidiary_code => 해외법인코드 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- Aggregate 수정 -->
+    <update id="updateAggregate" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00015.updateAggregate */
+               tb_pay_item_aggr_n
+        SET    payroll_item_aggregate_name            = #{payrollItemAggregateName}                       /* 급여항목집계명 */
+             , detail_desc                            = #{detailDesc}                                     /* 상세설명 */
+             , payroll_aggregate_type_code            = #{payrollAggregateTypeCode}                       /* 급여집계유형코드 */
+        WHERE  payroll_item_aggregate_id              = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+    </update>
+
+    <!-- Aggregate 삭제 -->
+    <delete id="deleteAggregate" parameterType="LGCOMData">
+        DELETE /* LGVPAY00015.deleteAggregate */
+        FROM   tb_pay_item_aggr_n
+        WHERE  payroll_item_aggregate_id              = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+    </delete>
+
+    <!-- 합계(누계) Cycle 등록(RUN, METHOD, YEAR 값을 row 로 저장). Y인건 등록. -->
+    <insert id="insertAggregateCycle" parameterType="LGCOMData">
+        INSERT /* LGVPAY00015.insertAggregateCycle */
+        INTO   tb_pay_item_aggr_cycle_n(
+               payroll_item_aggregate_id                         /* 급여항목집계아이디 */
+             , aggregate_cycle_type_code                         /* 집계주기구분코드 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        )
+        SELECT   rs.payroll_item_aggregate_id      /* payroll_item_aggregate_id => 급여항목집계아이디 */
+               , rs.aggregate_cycle_type_code      /* aggregate_cycle_type_code => 집계주기구분코드 */
+               , SYSDATE                           /* creation_date => 생성일자 */
+               , #{USER_SESSION.applicationUserId} /* creation_user_id => 생성사용자아이디 */
+        FROM   (
+                SELECT
+                       #{payrollItemAggregateId, jdbcType=NUMERIC} AS payroll_item_aggregate_id /* payroll_item_aggregate_id => 급여항목집계아이디 */
+                     , 'RUN'                                       AS aggregate_cycle_type_code /* aggregate_cycle_type_code => 집계주기구분코드 */
+                FROM   dual
+                WHERE  NVL(#{runFlag}, 'N') = 'Y' /* run_flag = Y인 경우 등록, N인 경우 삭제 */
+                UNION ALL
+                SELECT
+                       #{payrollItemAggregateId, jdbcType=NUMERIC}      /* payroll_item_aggregate_id => 급여항목집계아이디 */
+                     , 'MONTH'                                          /* aggregate_cycle_type_code => 집계주기구분코드 */
+                FROM   dual
+                WHERE  NVL(#{monthFlag}, 'N') = 'Y' /* month_flag = Y인 경우 등록, N인 경우 삭제 */
+                UNION ALL
+                SELECT
+                       #{payrollItemAggregateId, jdbcType=NUMERIC}      /* payroll_item_aggregate_id => 급여항목집계아이디 */
+                     , 'YEAR'                                           /* aggregate_cycle_type_code => 집계주기구분코드 */
+                FROM   dual
+                WHERE  NVL(#{yearFlag}, 'N') = 'Y' /* year_flag = Y인 경우 등록, N인 경우 삭제 */
+               ) rs
+        /* 기 등록건 제외 */
+        WHERE  NOT EXISTS (SELECT 'x'
+                           FROM   tb_pay_item_aggr_cycle_n piac
+                           WHERE  piac.payroll_item_aggregate_id = rs.payroll_item_aggregate_id
+                           AND    piac.aggregate_cycle_type_code = rs.aggregate_cycle_type_code
+                          )
+    </insert>
+
+    <!-- 합계(누계) Cycle 삭제. N인건 삭제. -->
+    <delete id="deleteAggregateCycle" parameterType="LGCOMData">
+        DELETE /* LGVPAY00015.deleteAggregateCycle */
+        FROM   tb_pay_item_aggr_cycle_n
+        WHERE  payroll_item_aggregate_id = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+        AND    aggregate_cycle_type_code IN (
+                                                SELECT 'RUN'   /* aggregate_cycle_type_code => 집계주기구분코드 */
+                                                FROM   dual
+                                                WHERE  NVL(#{runFlag}, 'N') = 'N' /* run_flag = Y인 경우 등록, N인 경우 삭제 */
+                                                UNION ALL
+                                                SELECT 'MONTH'                                          /* aggregate_cycle_type_code => 집계주기구분코드 */
+                                                FROM   dual
+                                                WHERE  NVL(#{monthFlag}, 'N') = 'N' /* month_flag = Y인 경우 등록, N인 경우 삭제 */
+                                                UNION ALL
+                                                SELECT 'YEAR'                                           /* aggregate_cycle_type_code => 집계주기구분코드 */
+                                                FROM   dual
+                                                WHERE  NVL(#{yearFlag}, 'N') = 'N' /* year_flag = Y인 경우 등록, N인 경우 삭제 */
+                                            )
+    </delete>
+
+    <!-- 합계(누계) Cycle 전체 삭제. -->
+    <delete id="deleteAggregateCycleAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00015.deleteAggregateCycleAll */
+        FROM   tb_pay_item_aggr_cycle_n
+        WHERE  payroll_item_aggregate_id              = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+    </delete>
+
+    <!-- Aggregate Detail 리스트 조회 -->
+    <select id="retrieveAggregateDetailList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00015.retrieveAggregateDetailList */
+                piad.payroll_item_aggregate_id
+              , pia.payroll_aggregate_type_code
+              , piad.payroll_item_id
+              , piad.payroll_item_detail_detail_id AS ori_payroll_item_detail_id
+              , piad.payroll_item_detail_detail_id
+              , piad.pay_item_classification_code
+              , cccm.common_code_name              AS aggregate_detail_name
+              , ''                                 AS aggregate_detail_value
+              , to_char(to_date(piad.effective_start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS ori_effective_start_yyyymmdd
+              , to_char(to_date(piad.effective_start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS effective_start_yyyymmdd
+              , to_char(to_date(piad.effective_end_yyyymmdd  ,'yyyymmdd'),'dd/mm/yyyy') AS effective_end_yyyymmdd
+        FROM    tb_pay_item_aggr_n pia
+              , tb_pay_item_aggr_detail_n piad
+              , lgcom_common_code_multi_lang_c cccm
+        WHERE   pia.payroll_item_aggregate_id   = #{payrollItemAggregateId, jdbcType=NUMERIC}
+        AND     pia.payroll_aggregate_type_code = 'CLASS'
+        AND     piad.payroll_item_aggregate_id  = pia.payroll_item_aggregate_id
+        AND     cccm.code_type_code             = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+        AND     cccm.common_code                = piad.pay_item_classification_code
+        AND     cccm.language_code              = #{USER_SESSION.languageCode}
+        UNION ALL
+        SELECT  piad.payroll_item_aggregate_id
+              , pia.payroll_aggregate_type_code
+              , piad.payroll_item_id
+              , piad.payroll_item_detail_detail_id AS ori_payroll_item_detail_id
+              , piad.payroll_item_detail_detail_id
+              , piad.pay_item_classification_code
+              , cccm.common_code_name             AS aggregate_detail_name
+              , ''                                AS aggregate_detail_value
+              , to_char(to_date(piad.effective_start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS ori_effective_start_yyyymmdd
+              , to_char(to_date(piad.effective_start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS effective_start_yyyymmdd
+              , to_char(to_date(piad.effective_end_yyyymmdd  ,'yyyymmdd'),'dd/mm/yyyy') AS effective_end_yyyymmdd
+        FROM    tb_pay_item_aggr_n pia
+              , tb_pay_item_aggr_detail_n piad
+              , lgcom_common_code_multi_lang_c cccm
+        WHERE   pia.payroll_item_aggregate_id   = #{payrollItemAggregateId, jdbcType=NUMERIC}
+        AND     pia.payroll_aggregate_type_code = 'METHOD'
+        AND     piad.payroll_item_aggregate_id  = pia.payroll_item_aggregate_id
+        AND     cccm.code_type_code             = 'LGDVH_PAY_ITEM_METHOD_CODE'
+        AND     cccm.common_code                = piad.pay_item_classification_code
+        AND     cccm.language_code              = #{USER_SESSION.languageCode}
+        UNION ALL
+        SELECT  piad.payroll_item_aggregate_id
+              , pia.payroll_aggregate_type_code
+              , piad.payroll_item_id
+              , piad.payroll_item_detail_detail_id AS ori_payroll_item_detail_id
+              , piad.payroll_item_detail_detail_id
+              , ppi.payroll_item_name              AS pay_item_classification_code
+              , ppi.inquiry_name                   AS aggregate_detail_name
+              , pid.additional_input_value         AS aggregate_detail_value
+              , to_char(to_date(piad.effective_start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS ori_effective_start_yyyymmdd
+              , to_char(to_date(piad.effective_start_yyyymmdd,'yyyymmdd'),'dd/mm/yyyy') AS effective_start_yyyymmdd
+              , to_char(to_date(piad.effective_end_yyyymmdd  ,'yyyymmdd'),'dd/mm/yyyy') AS effective_end_yyyymmdd
+        FROM    tb_pay_item_aggr_n pia
+              , tb_pay_item_aggr_detail_n piad
+              , tb_pay_item_detail_n    pid
+              , tb_pay_payroll_item_m   ppi
+        WHERE   pia.payroll_item_aggregate_id     = #{payrollItemAggregateId, jdbcType=NUMERIC}
+        AND     pia.payroll_aggregate_type_code   = 'ITEM'
+        AND     piad.payroll_item_aggregate_id    = pia.payroll_item_aggregate_id
+        AND     pid.payroll_item_detail_detail_id = piad.payroll_item_detail_detail_id
+        AND     ppi.payroll_item_id               = pid.payroll_item_id
+    </select>
+
+    <!-- Aggregate Detail 저장 전 유효성 체크 -->
+    <select id="retireveValidateAggregateDetailData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00015.retireveValidateAggregateDetailData */
+                   payroll_item_aggregate_id
+                 , payroll_item_detail_detail_id
+                 , payroll_item_id
+                 , pay_item_classification_code
+                 , effective_start_yyyymmdd
+                 , effective_end_yyyymmdd
+            FROM   tb_pay_item_aggr_detail_n
+            WHERE  payroll_item_aggregate_id = #{parameter.payrollItemAggregateId, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND   (payroll_item_detail_detail_id, effective_start_yyyymmdd) NOT IN
+            <foreach collection="deleted" item="deleteItem" open="(" close=")" separator="UNION ALL">
+                SELECT #{deleteItem.oriPayrollItemDetailId, jdbcType=NUMERIC} AS payroll_item_detail_detail_id
+                     , TO_CHAR(TO_DATE(#{deleteItem.oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                FROM dual
+
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="createItem" open="(" close=")" separator="UNION ALL">
+               SELECT  TO_NUMBER(null) AS payroll_item_aggregate_id
+                     , TO_NUMBER(#{createItem.payrollItemDetailDetailId}) AS payroll_item_detail_detail_id
+                     , TO_NUMBER(#{createItem.payrollItemId})             AS payroll_item_id
+                     , #{createItem.payItemClassificationCode}            AS pay_item_classification_code
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.payroll_item_aggregate_id
+                      , NVL(update_list.payroll_item_detail_detail_id, detail_list.payroll_item_detail_detail_id) AS payroll_item_detail_detail_id
+                      , NVL(update_list.payroll_item_id              , detail_list.payroll_item_id              ) AS payroll_item_id
+                      , NVL(update_list.pay_item_classification_code , detail_list.pay_item_classification_code ) AS pay_item_classification_code
+                      , NVL(update_list.effective_start_yyyymmdd     , detail_list.effective_start_yyyymmdd     ) AS effective_start_yyyymmdd
+                      , NVL(update_list.effective_end_yyyymmdd       , detail_list.effective_end_yyyymmdd       ) AS effective_end_yyyymmdd
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  TO_NUMBER(#{parameter.payrollItemAggregateId, jdbcType=NUMERIC}) AS payroll_item_aggregate_id
+                                 , TO_NUMBER(#{updated[${idx}].oriPayrollItemDetailId})             AS ori_payroll_item_detail_id
+                                 , TO_NUMBER(#{updated[${idx}].payrollItemDetailDetailId})          AS payroll_item_detail_detail_id
+                                 , TO_NUMBER(#{updated[${idx}].payrollItemId})                      AS payroll_item_id
+                                 , #{updated[${idx}].payItemClassificationCode}                     AS pay_item_classification_code
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS ori_effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveStartYyyymmdd}   , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveEndYyyymmdd}     , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_item_aggregate_id     = update_list.payroll_item_aggregate_id(+)
+                AND     detail_list.payroll_item_detail_detail_id = update_list.ori_payroll_item_detail_id(+)
+                AND     detail_list.effective_start_yyyymmdd      = update_list.ori_effective_start_yyyymmdd(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_item_aggregate_id
+                      , detail_list.payroll_item_detail_detail_id
+                      , detail_list.payroll_item_id
+                      , detail_list.pay_item_classification_code
+                      , detail_list.effective_start_yyyymmdd
+                      , detail_list.effective_end_yyyymmdd
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        , detail_name_list AS (
+          SELECT  rs.payroll_item_aggregate_id
+                , rs.payroll_item_detail_detail_id
+                , rs.payroll_item_id
+                , rs.pay_item_classification_code
+                , rs.effective_start_yyyymmdd
+                , rs.effective_end_yyyymmdd
+                , CASE WHEN #{payrollAggregateTypeCode} = 'CLASS' THEN
+                           (SELECT ccm.common_code_name
+                            FROM   lgcom_common_code_multi_lang_c ccm
+                            WHERE  ccm.code_type_code = 'LGDVHR_PAY_CLASS_TYPE_CODE'
+                            AND    ccm.language_code  = #{USER_SESSION.languageCode}
+                            AND    ccm.common_code    = rs.pay_item_classification_code)
+
+                       WHEN #{payrollAggregateTypeCode} = 'METHOD' THEN
+                           (SELECT ccm.common_code_name
+                            FROM   lgcom_common_code_multi_lang_c ccm
+                            WHERE  ccm.code_type_code = 'LGDVH_PAY_ITEM_METHOD_CODE'
+                            AND    ccm.language_code  = #{USER_SESSION.languageCode}
+                            AND    ccm.common_code    = rs.pay_item_classification_code)
+
+                       WHEN #{payrollAggregateTypeCode} = 'ITEM' THEN
+                           (SELECT ppi.inquiry_name || '(' || pid.additional_input_value || ')'
+                            FROM   tb_pay_item_detail_n pid
+                                 , tb_pay_payroll_item_m ppi
+                            WHERE  pid.payroll_item_detail_detail_id = NVL(rs.payroll_item_detail_detail_id, 0)
+                            AND    pid.payroll_item_id               = NVL(rs.payroll_item_id, 0)
+                            AND    ppi.payroll_item_id               = pid.payroll_item_id)
+                       ELSE ''
+                  END AS detail_name
+          FROM   rs
+        )
+        SELECT CASE WHEN #{payrollAggregateTypeCode} IN ('CLASS', 'METHOD') THEN /* combo에서 선택하는 경우 */
+                          (SELECT DISTINCT
+                                  listagg(dnl.detail_name, ', ') WITHIN GROUP (ORDER BY dnl.detail_name) OVER (PARTITION BY 1)
+                           FROM   detail_name_list dnl
+                           WHERE  EXISTS (SELECT 'x'
+                                          FROM   rs rs0
+                                          WHERE  rs0.pay_item_classification_code = dnl.pay_item_classification_code
+                                          /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                                          AND   (rs0.effective_start_yyyymmdd BETWEEN dnl.effective_start_yyyymmdd AND dnl.effective_end_yyyymmdd
+                                          OR     rs0.effective_end_yyyymmdd   BETWEEN dnl.effective_start_yyyymmdd AND dnl.effective_end_yyyymmdd)
+                                          GROUP BY rs0.pay_item_classification_code
+                                          HAVING COUNT(1) > 1
+                                         )
+                           GROUP BY dnl.pay_item_classification_code, dnl.detail_name)
+                    WHEN #{payrollAggregateTypeCode} = 'ITEM' THEN /* 급여항목 검색 팝업에서 선택한 경우 */
+                          (SELECT DISTINCT
+             <![CDATA[
+                                  listagg(dnl.detail_name, '<br/> ') WITHIN GROUP (ORDER BY dnl.detail_name) OVER (PARTITION BY 1)
+             ]]>
+                           FROM   detail_name_list dnl
+                           WHERE  EXISTS (SELECT 'x'
+                                          FROM   rs rs0
+                                          WHERE  NVl(rs0.payroll_item_detail_detail_id, 0) = NVL(dnl.payroll_item_detail_detail_id, 0)
+                                          /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                                          AND   (rs0.effective_start_yyyymmdd BETWEEN dnl.effective_start_yyyymmdd AND dnl.effective_end_yyyymmdd
+                                          OR     rs0.effective_end_yyyymmdd   BETWEEN dnl.effective_start_yyyymmdd AND dnl.effective_end_yyyymmdd)
+                                          GROUP BY rs0.payroll_item_detail_detail_id
+                                          HAVING COUNT(1) > 1
+                                         )
+                           GROUP BY NVL(dnl.payroll_item_detail_detail_id, 0), dnl.detail_name)
+                     ELSE ''
+               END AS dup_aggr_detail_names /* 중복된 항목명 */
+
+             <![CDATA[
+             , CASE WHEN #{payrollAggregateTypeCode} IN ('CLASS', 'METHOD') THEN /* combo에서 선택하는 경우 */
+                         (SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.aggregateDetailName' AND lslm.language_code = #{USER_SESSION.languageCode})
+                    WHEN #{payrollAggregateTypeCode} = 'ITEM' THEN /* 급여항목 검색 팝업에서 선택한 경우 */
+                         (SELECT '<br/>'||
+                                 lslm.label_name||
+                                 '('||
+                                 (SELECT lslm1.label_name FROM lgcom_screen_label_m lslm1 WHERE lslm1.label_id = 'label.pay.aggregateDetailValue' AND lslm1.language_code = #{USER_SESSION.languageCode})||
+                                 ')'||
+                                 '<br/>'
+                          FROM   lgcom_screen_label_m lslm
+                          WHERE  lslm.label_id = 'label.pay.aggregateDetailName'
+                          AND lslm.language_code = #{USER_SESSION.languageCode}
+                         )
+                    ELSE ''
+               END AS dup_aggr_detail_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- Aggregate Detail 등록 -->
+    <insert id="insertAggregateDetail" parameterType="LGCOMData">
+        INSERT /* LGVPAY00015.insertAggregateDetail */
+        INTO   tb_pay_item_aggr_detail_n(
+               payroll_item_aggregate_id                         /* 급여항목집계아이디 */
+             , payroll_item_detail_detail_id                     /* 급여항목상세내역아이디 */
+             , effective_start_yyyymmdd                          /* 유효시작년월일 */
+             , payroll_item_id                                   /* 급여항목아이디 */
+             , pay_item_classification_code                      /* 급여항목분류코드 */
+             , effective_end_yyyymmdd                            /* 유효종료년월일 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               #{payrollItemAggregateId, jdbcType=NUMERIC}      /* payroll_item_aggregate_id => 급여항목집계아이디 */
+             , CASE WHEN #{payrollAggregateTypeCode} = 'ITEM' THEN #{payrollItemDetailDetailId, jdbcType=NUMERIC} /* ITEM인 경우 화면에서 전달된 값으로 입력 */
+                    ELSE /* CLASS 또는 METHOD 인 경우 중복 안되는 마이너스 시퀀스 값 입력 */
+                         NVL((
+                              SELECT  MIN(piad.payroll_item_detail_detail_id) /* 마이너스 값이므로 MIN으로 조회 */
+                              FROM    tb_pay_item_aggr_detail_n piad
+                              WHERE   piad.payroll_item_aggregate_id = #{payrollItemAggregateId, jdbcType=NUMERIC}
+                             ), 0) -1
+               END /* payroll_item_detail_detail_id => 급여항목상세내역아이디 */
+             , TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_start_yyyymmdd => 유효시작년월일 */
+             , #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , #{payItemClassificationCode}                     /* pay_item_classification_code => 급여항목분류코드 */
+             , TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_end_yyyymmdd => 유효종료년월일 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- Aggregate Detail 수정 -->
+    <update id="updateAggregateDetail" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00015.updateAggregateDetail */
+               tb_pay_item_aggr_detail_n
+        SET    payroll_item_detail_detail_id          = #{payrollItemDetailDetailId, jdbcType=NUMERIC}    /* 급여항목상세내역아이디 */
+             , payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+             , pay_item_classification_code           = #{payItemClassificationCode}                      /* 급여항목분류코드 */
+             , effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효시작년월일 */
+             , effective_end_yyyymmdd                 = TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효종료년월일 */
+        WHERE  payroll_item_aggregate_id              = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+        AND    payroll_item_detail_detail_id          = #{oriPayrollItemDetailId, jdbcType=NUMERIC}    /* 급여항목상세내역아이디 */
+        AND    effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효시작년월일 */
+    </update>
+
+    <!-- Aggregate Detail 삭제 -->
+    <delete id="deleteAggregateDetail" parameterType="LGCOMData">
+        DELETE /* LGVPAY00015.deleteAggregateDetail */
+        FROM   tb_pay_item_aggr_detail_n
+        WHERE  payroll_item_aggregate_id              = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+        AND    payroll_item_detail_detail_id          = #{oriPayrollItemDetailId, jdbcType=NUMERIC}    /* 급여항목상세내역아이디 */
+        AND    effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효시작년월일 */
+    </delete>
+
+    <!-- Aggregate Detail 전체 삭제 -->
+    <delete id="deleteAggregateDetailAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00015.deleteAggregateDetailAll */
+        FROM   tb_pay_item_aggr_detail_n
+        WHERE  payroll_item_aggregate_id              = #{payrollItemAggregateId, jdbcType=NUMERIC}       /* 급여항목집계아이디 */
+    </delete>
+
+</mapper>

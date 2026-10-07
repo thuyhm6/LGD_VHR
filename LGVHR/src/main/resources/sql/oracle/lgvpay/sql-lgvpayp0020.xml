@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0020">
+
+    <!-- payroll summary 조회 -->
+    <select id="retrievePayrollSummary" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAYP0020.retrievePayrollSummary */
+		       t.category                    AS CATEGORY
+		      ,t.head_count                  AS num_of_people
+		      ,TRIM(TO_CHAR(t.salary_bef_tax + t.pit_adjustment + t.trade_union_amount + t.insurance_amount - t.ot_amount, '999,999,999,999,999'))               AS salary
+              ,TRIM(TO_CHAR(t.ot_amount, '999,999,999,999,999'))                   		 AS ot
+              ,TRIM(TO_CHAR(t.insurance_amount, '999,999,999,999,999'))            		 AS insurance
+              ,TRIM(TO_CHAR(t.trade_union_amount, '999,999,999,999,999'))          		 AS trade_union
+              ,TRIM(TO_CHAR(t.salary_bef_tax + t.pit_adjustment, '999,999,999,999,999')) AS salary_bef_tax
+              ,TRIM(TO_CHAR(t.tax_amount, '999,999,999,999,999'))                  		 AS pit_full
+              ,TRIM(TO_CHAR(t.pit_adjustment, '999,999,999,999,999'))                    AS pit_adjustment_full
+              ,TRIM(TO_CHAR(t.net_pay_amount, '999,999,999,999,999'))                    AS net_pay
+		FROM (
+		      SELECT GROUPING_ID(ce.payroll_calculation_exec_id, r.employment_category_code) grouping_id
+		            ,CASE WHEN GROUPING_ID(ce.payroll_calculation_exec_id, r.employment_category_code) = 0 THEN r.employment_category_code ELSE 'TOTAL' END AS CATEGORY
+		            ,TRIM(TO_CHAR(COUNT(*), '999,999,999,999,999')) head_count
+                    ,SUM(NVL((SELECT SUM(cr.result_value)
+                              FROM   tb_pay_calc_result_n cr
+                                    ,tb_pay_payroll_item_m pi
+                              WHERE  cr.payroll_item_id = pi.payroll_item_id
+                              AND    cr.payroll_calculation_exec_id = r.payroll_calculation_exec_id
+                              AND    cr.employee_no = r.employee_no
+                              AND    pi.payroll_item_calc_prrt_value = '300'), 0))  ot_amount
+                    ,SUM(NVL((SELECT SUM(cr.result_value)
+                              FROM   tb_pay_calc_result_n cr
+                                    ,tb_pay_payroll_item_m pi
+                              WHERE  cr.payroll_item_id = pi.payroll_item_id
+                              AND    cr.payroll_calculation_exec_id = r.payroll_calculation_exec_id
+                              AND    cr.employee_no = r.employee_no
+                              AND    pi.payroll_item_calc_prrt_value = '2100'), 0))  insurance_amount
+                    ,SUM(NVL((SELECT SUM(cr.result_value)
+                              FROM   tb_pay_calc_result_n cr
+                                    ,tb_pay_payroll_item_m pi
+                              WHERE  cr.payroll_item_id = pi.payroll_item_id
+                              AND    cr.payroll_calculation_exec_id = r.payroll_calculation_exec_id
+                              AND    cr.employee_no = r.employee_no
+                              AND    pi.payroll_item_calc_prrt_value = CASE WHEN EXTRACT(YEAR FROM ce.basis_date) >= 2019
+		                                                                    THEN '2300'
+		                                                                    ELSE '2400'
+		                                                                    END), 0))  trade_union_amount
+                    ,SUM(NVL((SELECT SUM(cr.result_value)
+                              FROM   tb_pay_calc_result_n cr
+                                    ,tb_pay_payroll_item_m pi
+                              WHERE  cr.payroll_item_id = pi.payroll_item_id
+                              AND    cr.payroll_calculation_exec_id = r.payroll_calculation_exec_id
+                              AND    cr.employee_no = r.employee_no
+                              AND    pi.payroll_item_calc_prrt_value = '99998'), 0))  pit_adjustment
+                    ,SUM(NVL(r.tax_amount, 0))+SUM(NVL(r.bank_transfer_amount, 0)) salary_bef_tax
+                    ,SUM(NVL(r.tax_amount, 0)) tax_amount
+                    ,SUM(NVL(r.bank_transfer_amount, 0)) net_pay_amount
+		      FROM   tb_pay_calc_exec_n     ce
+		            ,tb_pay_calc_emp_exec_n cee
+		            ,tb_pay_result_s        r
+		      WHERE  ce.payroll_calculation_exec_id = cee.payroll_calculation_exec_id
+		      AND    ce.payroll_calculation_exec_id = r.payroll_calculation_exec_id
+		      AND    cee.employee_no = r.employee_no
+		      AND    ce.payroll_calculation_exec_id = #{calculationExecId} -- 조회조건
+		      --AND    ce.confirm_flag = 'Y'
+		      GROUP BY ROLLUP( ce.payroll_calculation_exec_id
+		                      ,r.employment_category_code )
+		) t
+		WHERE  1 = 1
+		AND    t.grouping_id IN ('0', '3')
+		ORDER BY DECODE(t.category, 'LGD_LW', 2, 'LGD_OW', '1', '0')
+    </select>
+    
+    <!-- 결재할 급여산출실행아이디 조회 -->
+    <select id="retrieveCalcExecId" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAYP0020.retrieveCalcExecId */
+		       payroll_calculation_exec_id AS calculation_exec_id
+		      ,payroll_type_code AS payroll_type_code
+		      ,payroll_calculation_set_id AS calculation_set_id
+		FROM   tb_pay_calc_exec_n
+		WHERE  1 = 1
+		AND    request_master_id = #{requestMasterId}
+		AND    request_code = #{requestCode}
+    </select>
+    
+    <!-- Payroll Confirm Approval Line 조회 -->
+    <select id="getApproverList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAYP0020.getApproverList */
+		       ROWNUM                   AS approval_seqs
+		      ,t.employee_no            AS employee_no
+		      ,t.position_name          AS position_name
+		      ,t.men_dator_aemployee_no AS men_dator_aemployee_no
+		FROM   (
+		        SELECT '1' AS sort_order_no
+		              ,om.org_manager_number AS employee_no
+		              ,lum.position_name AS position_name
+		              ,lcc_m.code_data1_value AS men_dator_aemployee_no
+		        FROM   lgcom_common_code_c lcc_a
+		              ,lgcom_common_code_c lcc_m
+		              ,org_master          om
+		              ,lgcom_user_m        lum
+		        WHERE  1 = 1
+		        AND    lcc_a.common_code = lcc_m.common_code
+		        AND    lcc_a.code_data1_value = om.organization_id
+		        AND    lum.user_name = om.org_manager_number
+		        AND    lcc_a.code_type_code = 'LGVHR_PAY_APPROVAL_LINE'
+		        AND    lcc_m.code_type_code = 'LGVHR_PAY_MANDATOR_LINE'
+		        AND    lcc_a.common_code = 'PAYROLL_CONFIRM'
+		        AND    lum.resignation_flag = 'C'
+		        AND    TRUNC(SYSDATE) BETWEEN TRUNC(NVL(lum.apply_start_date, SYSDATE)) AND TRUNC(NVL(lum.apply_end_date, SYSDATE))
+		        UNION ALL
+		        SELECT '2' AS sort_order_no
+		              ,om.org_manager_number AS employee_no
+		              ,lum.position_name AS position_name
+		              ,lcc_m.code_data2_value AS men_dator_aemployee_no
+		        FROM   lgcom_common_code_c lcc_a
+		              ,lgcom_common_code_c lcc_m
+		              ,org_master          om
+		              ,lgcom_user_m        lum
+		        WHERE  1 = 1
+		        AND    lcc_a.common_code = lcc_m.common_code
+		        AND    lcc_a.code_data2_value = om.organization_id
+		        AND    lum.user_name = om.org_manager_number
+		        AND    lcc_a.code_type_code = 'LGVHR_PAY_APPROVAL_LINE'
+		        AND    lcc_m.code_type_code = 'LGVHR_PAY_MANDATOR_LINE'
+		        AND    lcc_a.common_code = 'PAYROLL_CONFIRM'
+		        AND    lum.resignation_flag = 'C'
+		        AND    TRUNC(SYSDATE) BETWEEN TRUNC(NVL(lum.apply_start_date, SYSDATE)) AND TRUNC(NVL(lum.apply_end_date, SYSDATE))
+		        UNION ALL
+		        SELECT '3' AS sort_order_no
+		              ,om.org_manager_number AS employee_no
+		              ,lum.position_name AS position_name
+		              ,lcc_m.code_data3_value AS men_dator_aemployee_no
+		        FROM   lgcom_common_code_c lcc_a
+		              ,lgcom_common_code_c lcc_m
+		              ,org_master          om
+		              ,lgcom_user_m        lum
+		        WHERE  1 = 1
+		        AND    lcc_a.common_code = lcc_m.common_code
+		        AND    lcc_a.code_data3_value = om.organization_id
+		        AND    lum.user_name = om.org_manager_number
+		        AND    lcc_a.code_type_code = 'LGVHR_PAY_APPROVAL_LINE'
+		        AND    lcc_m.code_type_code = 'LGVHR_PAY_MANDATOR_LINE'
+		        AND    lcc_a.common_code = 'PAYROLL_CONFIRM'
+		        AND    lum.resignation_flag = 'C'
+		        AND    TRUNC(SYSDATE) BETWEEN TRUNC(NVL(lum.apply_start_date, SYSDATE)) AND TRUNC(NVL(lum.apply_end_date, SYSDATE))
+		        UNION ALL
+		        SELECT '4' AS sort_order_no
+		              ,om.org_manager_number AS employee_no
+		              ,lum.position_name AS position_name
+		              ,lcc_m.code_data4_value AS men_dator_aemployee_no
+		        FROM   lgcom_common_code_c lcc_a
+		              ,lgcom_common_code_c lcc_m
+		              ,org_master          om
+		              ,lgcom_user_m        lum
+		        WHERE  1 = 1
+		        AND    lcc_a.common_code = lcc_m.common_code
+		        AND    lcc_a.code_data4_value = om.organization_id
+		        AND    lum.user_name = om.org_manager_number
+		        AND    lcc_a.code_type_code = 'LGVHR_PAY_APPROVAL_LINE'
+		        AND    lcc_m.code_type_code = 'LGVHR_PAY_MANDATOR_LINE'
+		        AND    lcc_a.common_code = 'PAYROLL_CONFIRM'
+		        AND    lum.resignation_flag = 'C'
+		        AND    TRUNC(SYSDATE) BETWEEN TRUNC(NVL(lum.apply_start_date, SYSDATE)) AND TRUNC(NVL(lum.apply_end_date, SYSDATE))
+		        UNION ALL
+		        SELECT '5' AS sort_order_no
+		              ,om.org_manager_number AS employee_no
+		              ,lum.position_name AS position_name
+		              ,lcc_m.code_data5_value AS men_dator_aemployee_no
+		        FROM   lgcom_common_code_c lcc_a
+		              ,lgcom_common_code_c lcc_m
+		              ,org_master          om
+		              ,lgcom_user_m        lum
+		        WHERE  1 = 1
+		        AND    lcc_a.common_code = lcc_m.common_code
+		        AND    lcc_a.code_data5_value = om.organization_id
+		        AND    lum.user_name = om.org_manager_number
+		        AND    lcc_a.code_type_code = 'LGVHR_PAY_APPROVAL_LINE'
+		        AND    lcc_m.code_type_code = 'LGVHR_PAY_MANDATOR_LINE'
+		        AND    lcc_a.common_code = 'PAYROLL_CONFIRM'
+		        AND    lum.resignation_flag = 'C'
+		        AND    TRUNC(SYSDATE) BETWEEN TRUNC(NVL(lum.apply_start_date, SYSDATE)) AND TRUNC(NVL(lum.apply_end_date, SYSDATE))
+		       ) t
+		ORDER BY t.sort_order_no
+    </select>
+	
+	<!-- execution 정보 등록 -->
+    <update id="updateRequestInfoPayCalcExec" parameterType="LGCOMData">
+		/* LGVPAYP0020.updateRequestInfoPayCalcExec */
+		UPDATE tb_pay_calc_exec_n
+		SET    request_master_id = #{requestMasterId}
+		      ,request_code = #{requestCode}
+		WHERE  payroll_calculation_exec_id = #{screenParam.calculationExecId}
+		AND    confirm_flag = 'Y'
+    </update>
+    
+</mapper>

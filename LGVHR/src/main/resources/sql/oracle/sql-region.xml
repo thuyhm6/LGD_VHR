@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="Region">
+	<!-- 초기 사용자 기본 정보 조회  -->
+	<select id="retrieveInitUserData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Region.retrieveInitUserData */
+		#{ssoId}                                AS sso_id
+		,src.application_user_id
+		,src.request_region_code
+		,rgn.region_name                  AS request_region_name
+		,src.request_region_code_use_flag
+		,src.default_org_id
+		,dou.default_org_code
+		,dou.default_org_name
+		,src.default_org_id_use_flag
+		,src.server_time_difference_seqs
+		FROM   (SELECT a.application_user_id
+		              ,a.request_region_code
+		              ,NVL(a.request_region_code_use_flag, 'N') AS request_region_code_use_flag
+		              ,a.default_org_id
+		              ,NVL(a.default_org_id_use_flag, 'N') AS default_org_id_use_flag
+		              ,a.server_time_difference_seqs
+		        FROM   lgcom_user_m a
+		        WHERE  a.request_region_code IS NOT NULL
+		        AND    a.application_user_id = (SELECT slv2.user_id
+		                                        FROM   lgcom_sso_login_v slv2
+		                                        WHERE  SUBSTR(slv2.email_id, 1, INSTR(slv2.email_id, '@') - 1) = #{ssoId}
+		                                        AND    ROWNUM = 1)
+		        UNION ALL
+		        SELECT a.application_user_id
+		              ,(SELECT lcc.code_data1_value
+		                FROM   lgcom_user_m        lum
+		                      ,lgcom_common_code_c lcc
+		                WHERE  lum.user_name = a.user_name
+		                AND    lcc.code_type_code = 'LGCOM_SUBSIDIARY_TYPE_CODE'
+		                AND    lum.subsidiary_id = lcc.common_code) request_region_code
+		              ,NVL(a.request_region_code_use_flag, 'N') AS request_region_code_use_flag
+		              ,a.default_org_id
+		              ,NVL(a.default_org_id_use_flag, 'N') AS default_org_id_use_flag
+		              ,a.server_time_difference_seqs
+		        FROM   lgcom_user_m a
+		        WHERE  a.request_region_code IS NULL
+		        AND    a.application_user_id = (SELECT slv2.user_id
+		                                        FROM   lgcom_sso_login_v slv2
+		                                        WHERE  SUBSTR(slv2.email_id, 1, INSTR(slv2.email_id, '@') - 1) = #{ssoId}
+		                                        AND    ROWNUM = 1)) src
+		      ,(SELECT lcc.common_code      AS region_code
+		              ,lcc.common_code_desc AS region_name
+		        FROM   lgcom_common_code_c lcc
+		        WHERE  lcc.code_type_code = 'LGCOM_TIMEZONE_DEFAULT_COMPANY'
+		        AND    lcc.use_flag = 'Y') rgn
+		      ,(SELECT lc1.common_code      AS default_org_id
+		              ,lc1.code_data1_value AS default_org_code
+		              ,lc1.common_code_desc AS default_org_name
+		        FROM   lgcom_common_code_c lc1
+		        WHERE  lc1.code_type_code = 'LGCOM_OU_INFO'
+		        AND    lc1.use_flag = 'Y') dou
+		WHERE  src.request_region_code = rgn.region_code(+)
+		AND    src.default_org_id = dou.default_org_id(+)
+	</select>
+
+	<!-- SSO ID에 따른 사용자 Region 목록 조회 -->
+	<select id="retrieveUserRegionList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* Region.retrieveUserRegionList */
+		       application_user_id
+		     , request_region_code
+		     , request_region_name
+		     , request_region_code_use_flag
+		     , default_org_id
+		     , default_org_code
+		     , default_org_name
+		     , user_org_id
+		     , user_org_code
+		     , user_org_name
+		     , user_org_use_flag
+		     , server_time_difference_seqs
+		     , ou_use_flag
+		  FROM TABLE(LGCOM_REGION_PKG.GET_REGIN_INFO(#{ssoId}))
+	</select>
+
+	<!-- SSO ID에 따른 사용자 Organization 목록 조회 -->
+	<select id="retrieveUserOrganizationUnitList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* Region.retrieveUserOrganizationUnitList */
+		         a.application_user_id
+		       , a.company_id AS organization_id
+		       , b.short_code AS organization_code
+		       , b.name AS organization_name
+		    FROM (
+		            SELECT lur.application_user_id
+		                 , lrb.company_id
+		              FROM LGCOM_ROLE_BIZ_ORG_N lrb
+		                 , LGCOM_USER_ROLE_N    lur
+		                 , LGCOM_ROLE_M         lr
+		             WHERE lrb.role_code = lur.role_code
+		               AND lur.role_code = lr.role_code
+		               AND (lur.apply_start_date IS NULL OR lur.apply_start_date &lt;= TRUNC(SYSDATE))
+		               AND (lur.apply_end_date IS NULL OR lur.apply_end_date &gt;= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59','YYYY-MM-DD HH24:MI:SS'))
+		               AND (lr.apply_start_date IS NULL OR lr.apply_start_date &lt;= TRUNC(SYSDATE))
+		               AND (lr.apply_end_date IS NULL OR lr.apply_end_date &gt;= TO_DATE(TO_CHAR(SYSDATE,'YYYY-MM-DD') || ' 23:59:59','YYYY-MM-DD HH24:MI:SS'))
+		               AND lrb.organization_type_code = 'C'
+		               AND lur.application_user_id IN (SELECT user_id
+		                                                 FROM LGCOM_SSO_LOGIN_V
+		                                                WHERE SUBSTR(email_id,1,INSTR(email_id,'@')-1) = #{ssoId} )
+		          GROUP BY lur.application_user_id,lrb.company_id
+		         ) a
+		       , lgcom_company_v b
+		   WHERE a.company_id = b.organization_id
+		ORDER BY a.company_id, b.name
+	</select>
+
+	<!-- Region 정보 저장 -->
+	<update id="updateSelectedRegionData" parameterType="java.util.HashMap">
+		UPDATE LGCOM_USER_M
+		   SET request_region_code          = #{requestRegionCode}
+		     , request_region_code_use_flag = #{requestRegionCodeUseFlag}
+		     , server_time_difference_seqs  = #{serverTimeDifferenceSeqs}
+		     , last_update_date             = SYSDATE
+		 WHERE application_user_id IN (SELECT user_id
+		                                 FROM LGCOM_SSO_LOGIN_V
+		                                WHERE SUBSTR(email_id,1,INSTR(email_id,'@')-1) = #{ssoId} )
+	</update>
+
+	<!-- Operation Unit 정보 저장 -->
+	<update id="updateSelectedOrgUnitData" parameterType="java.util.HashMap">
+		UPDATE LGCOM_USER_M
+		   SET default_org_id          = to_number( #{defaultOrgId} )
+		     , default_org_id_use_flag = #{defaultOrgIdUseFlag}
+		     , last_update_date        = SYSDATE
+		 WHERE application_user_id     = #{applicationUserId}
+	</update>
+</mapper>

@@ -1,0 +1,706 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.lgd</groupId>
+  <artifactId>lgvhr</artifactId>
+  <packaging>war</packaging>
+  <version>0.0.1-SNAPSHOT</version>
+
+  <name>Maven Build LGVHR(PROD)</name>
+
+  <profiles>
+		<profile>
+			<id>prod</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<properties>
+				<svn.connectionUrl>scm:svn:svn://lgdvhrd.lgdisplay.com:3690/svn/branches/LGVHR_PROD</svn.connectionUrl>
+				<svn.checkout.directory>D://engn001/jussvc01/ciserv/hudson/jobs/prod_LGVHR/svn</svn.checkout.directory>
+				<was.remotedir>D://sorc001/jussvc01/deploy/LGVHR/war/</was.remotedir>
+				<web.remotedir>D://sorc001/jussvc01/deploy/htdocs/lgvhr/</web.remotedir>
+				<resource.pattern>*_prod</resource.pattern>
+			</properties>
+		</profile>
+	</profiles>
+  <repositories>
+		<repository>
+			<id>central</id>
+			<name>repository for LGHVR</name>
+			<layout>default</layout>
+			<url>http://172.19.79.162:6065/nexus/content/groups/public</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</repository>
+	</repositories>
+
+	<pluginRepositories>
+		<pluginRepository>
+			<id>central</id>
+			<name>repository for LGHVR</name>
+			<layout>default</layout>
+			<url>http://172.19.79.162:6065/nexus/content/groups/public</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+		</pluginRepository>
+	</pluginRepositories>
+
+  <properties>
+
+		<!-- Generic properties -->
+		<java.version>1.7</java.version>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+		<maven.test.skip>false</maven.test.skip>
+		<maven.javadoc.skip>false</maven.javadoc.skip>
+
+		<!-- Spring -->
+		<wcfw.framework.version>1.1.1.15.RELEASE</wcfw.framework.version>
+		<org.springframework.version>4.0.9.RELEASE</org.springframework.version>
+		<devonframe.version>1.6.0</devonframe.version>
+
+		<!-- ojdbc -->
+		<ojdbc6.version>11.1.0.7.0</ojdbc6.version>
+		<!-- Mybatis -->
+		<mybatis.version>3.2.7</mybatis.version>
+		<mybatis.spring.version>1.2.2</mybatis.spring.version>
+
+		<!-- poi -->
+		<poi.version>3.15</poi.version>
+		<xmlbeans.version>2.6.0</xmlbeans.version>
+		<curves.version>1.03</curves.version>
+		<opencsv.version>3.8</opencsv.version>
+
+		<!-- Message Converter -->
+		<jackson.version>1.9.13</jackson.version>
+
+		<!-- Quartz - Scheduler -->
+		<quartz.version>2.2.3</quartz.version>
+
+		<!-- EhCache -->
+		<ehcache.version>2.10.2</ehcache.version>
+
+		<!-- Prevent XSS -->
+		<sanitizer.version>20160413.1</sanitizer.version>
+
+		<!-- Logging -->
+		<logback.version>1.1.7</logback.version>
+		<slf4j.version>1.7.16</slf4j.version>
+
+		<!-- commons -->
+		<commons.collections.version>3.2.2</commons.collections.version>
+		<commons.dbcp.version>1.4</commons.dbcp.version>
+		<commons.fileupload.version>1.3.1</commons.fileupload.version>
+		<commons.io.version>2.2</commons.io.version>
+		<commons.lang.version>2.6</commons.lang.version>
+		<commons.compress.version>1.11</commons.compress.version>
+		<commons.csv.version>1.4</commons.csv.version>
+		<commons.codec.version>1.10</commons.codec.version>
+
+		<!-- Gson -->
+		<gson.version>2.7</gson.version>
+
+		<!-- Http Client -->
+		<httpclient.version>4.5.2</httpclient.version>
+
+		<!-- Web -->
+		<jsp.api.version>2.1</jsp.api.version>
+		<jstl.version>1.2</jstl.version>
+		<servlet.api.version>3.1.0</servlet.api.version>
+		<taglibs.version>1.1.2</taglibs.version>
+		<websocket-api>1.1</websocket-api>
+
+		<jsr250.api.version>1.0</jsr250.api.version>
+		<hsqldb.version>2.2.6</hsqldb.version>
+
+		<!-- Test -->
+		<junit.version>4.11</junit.version>
+
+	</properties>
+
+	<dependencies>
+
+		<!-- LGD Bizweb Common -->
+		<dependency>
+		  	<groupId>com.lgd</groupId>
+		  	<artifactId>wcfw-framework</artifactId>
+		  	<version>${wcfw.framework.version}</version>
+		</dependency>
+
+		<!-- devonframe -->
+		<dependency>
+			<groupId>devonframe</groupId>
+			<artifactId>devon-core</artifactId>
+			<version>${devonframe.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>devonframe</groupId>
+			<artifactId>devon-web</artifactId>
+			<version>${devonframe.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>devonframe</groupId>
+			<artifactId>devon-dataaccess</artifactId>
+			<version>${devonframe.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>net.sf.ehcache</groupId>
+					<artifactId>ehcache</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>devonframe</groupId>
+			<artifactId>devon-fileupload</artifactId>
+			<version>${devonframe.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>devonframe</groupId>
+			<artifactId>devon-transaction</artifactId>
+			<version>${devonframe.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>devonframe</groupId>
+			<artifactId>devon-mail</artifactId>
+			<version>${devonframe.version}</version>
+		</dependency>
+
+		<!-- Spring -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context</artifactId>
+			<version>${org.springframework.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>commons-logging</groupId>
+					<artifactId>commons-logging</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-jdbc</artifactId>
+			<version>${org.springframework.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-webmvc</artifactId>
+			<version>${org.springframework.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context-support</artifactId>
+			<version>${org.springframework.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-tx</artifactId>
+			<version>${org.springframework.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-websocket</artifactId>
+			<version>${org.springframework.version}</version>
+		</dependency>
+
+		<dependency>
+	        <groupId>com.fasterxml.jackson.core</groupId>
+	        <artifactId>jackson-databind</artifactId>
+	        <version>2.5.3</version>
+	        <scope>runtime</scope>
+	    </dependency>
+
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-data-redis</artifactId>
+			<version>1.2.2.RELEASE</version>
+		</dependency>
+		
+		<!-- JDBC Client -->
+		<dependency>
+			<groupId>com.oracle</groupId>
+			<artifactId>ojdbc6</artifactId>
+			<version>${ojdbc6.version}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- MyBatis -->
+		<dependency>
+		    <groupId>org.mybatis</groupId>
+		    <artifactId>mybatis</artifactId>
+		    <version>${mybatis.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.mybatis</groupId>
+		    <artifactId>mybatis-spring</artifactId>
+		    <version>${mybatis.spring.version}</version>
+		</dependency>
+
+
+		<!-- Message Converter -->
+		<dependency>
+			<groupId>org.codehaus.jackson</groupId>
+			<artifactId>jackson-mapper-asl</artifactId>
+			<version>${jackson.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.aspectj</groupId>
+			<artifactId>aspectjweaver</artifactId>
+			<version>1.7.4</version>
+		</dependency>
+
+		<!-- Quartz - Scheduler -->
+		<dependency>
+		  <groupId>org.quartz-scheduler</groupId>
+		  <artifactId>quartz</artifactId>
+		  <version>${quartz.version}</version>
+		</dependency>
+
+		<!-- Ehcache -->
+		<dependency>
+		    <groupId>net.sf.ehcache</groupId>
+		    <artifactId>ehcache</artifactId>
+		    <version>${ehcache.version}</version>
+		</dependency>
+
+		<!-- Prevent XSS -->
+		<dependency>
+		    <groupId>com.googlecode.owasp-java-html-sanitizer</groupId>
+		    <artifactId>owasp-java-html-sanitizer</artifactId>
+		    <version>${sanitizer.version}</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/com.google.guava/guava : Related with com.googlecode.owasp-java-html-sanitizer  -->
+		<dependency>
+		    <groupId>com.google.guava</groupId>
+		    <artifactId>guava</artifactId>
+		    <version>20.0</version>
+		</dependency>
+
+		<!-- javax -->
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>javax.servlet-api</artifactId>
+			<version>${servlet.api.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>javax.servlet.jsp</groupId>
+			<artifactId>jsp-api</artifactId>
+			<version>${jsp.api.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>jstl</artifactId>
+			<version>${jstl.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>javax.annotation</groupId>
+			<artifactId>jsr250-api</artifactId>
+			<version>${jsr250.api.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>javax.websocket</groupId>
+			<artifactId>javax.websocket-api</artifactId>
+			<version>${websocket-api}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>taglibs</groupId>
+			<artifactId>standard</artifactId>
+			<version>${taglibs.version}</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<!-- Commons -->
+		<dependency>
+			<groupId>commons-collections</groupId>
+			<artifactId>commons-collections</artifactId>
+			<version>${commons.collections.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-dbcp</groupId>
+			<artifactId>commons-dbcp</artifactId>
+			<version>${commons.dbcp.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-fileupload</groupId>
+			<artifactId>commons-fileupload</artifactId>
+			<version>${commons.fileupload.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>${commons.io.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-lang</groupId>
+			<artifactId>commons-lang</artifactId>
+			<version>${commons.lang.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.apache.commons</groupId>
+		    <artifactId>commons-compress</artifactId>
+		    <version>${commons.compress.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.apache.commons</groupId>
+		    <artifactId>commons-csv</artifactId>
+		    <version>${commons.csv.version}</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/commons-codec/commons-codec -->
+		<dependency>
+			<groupId>commons-codec</groupId>
+			<artifactId>commons-codec</artifactId>
+			<version>${commons.codec.version}</version>
+		</dependency>
+
+
+		<!-- Gson -->
+		<dependency>
+		    <groupId>com.google.code.gson</groupId>
+		    <artifactId>gson</artifactId>
+		    <version>${gson.version}</version>
+		</dependency>
+
+		<!-- Http Client -->
+		<dependency>
+		    <groupId>org.apache.httpcomponents</groupId>
+		    <artifactId>httpclient</artifactId>
+		    <version>${httpclient.version}</version>
+		</dependency>
+
+		<!-- poi -->
+		<dependency>
+		    <groupId>org.apache.poi</groupId>
+		    <artifactId>poi</artifactId>
+		    <version>${poi.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.apache.poi</groupId>
+			<artifactId>poi-scratchpad</artifactId>
+			<version>${poi.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+		    <artifactId>poi-ooxml</artifactId>
+		    <version>${poi.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.apache.poi</groupId>
+		    <artifactId>poi-ooxml-schemas</artifactId>
+		    <version>${poi.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.apache.xmlbeans</groupId>
+		    <artifactId>xmlbeans</artifactId>
+		    <version>${xmlbeans.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>com.github.virtuald</groupId>
+		    <artifactId>curvesapi</artifactId>
+		    <version>${curves.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>com.opencsv</groupId>
+		    <artifactId>opencsv</artifactId>
+		    <version>${opencsv.version}</version>
+		</dependency>
+
+		<!-- Test -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-test</artifactId>
+			<version>${org.springframework.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- Logging -->
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-access</artifactId>
+			<version>${logback.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+		    <artifactId>logback-core</artifactId>
+		    <version>${logback.version}</version>
+		</dependency>
+		<dependency>
+		    <groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>${logback.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>${slf4j.version}</version>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>jcl-over-slf4j</artifactId>
+			<version>${slf4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>${slf4j.version}</version>
+		</dependency>
+
+		<!-- CGLIB -->
+		<dependency>
+		    <groupId>asm</groupId>
+		    <artifactId>asm</artifactId>
+		    <version>3.3.1</version>
+		</dependency>
+
+		<dependency>
+		    <groupId>cglib</groupId>
+		    <artifactId>cglib</artifactId>
+		    <version>2.2.2</version>
+		</dependency>
+
+		<!-- svnkit -->
+		<dependency>
+			<groupId>org.tmatesoft.svnkit</groupId>
+			<artifactId>svnkit</artifactId>
+			<version>1.8.13</version>
+		</dependency>
+
+		<!-- sqljet -->
+		<dependency>
+			<groupId>org.tmatesoft.sqljet</groupId>
+			<artifactId>sqljet</artifactId>
+			<version>1.1.10</version>
+		</dependency>
+
+		<!-- QDiffGenerator -->
+		<dependency>
+			<groupId>org.codehaus.jtstand</groupId>
+			<artifactId>jtstand-sequence</artifactId>
+			<version>1.2.1</version>
+		</dependency>
+
+		<!-- Log4jdbc -->
+		<dependency>
+			<groupId>org.lazyluke</groupId>
+			<artifactId>log4jdbc-remix</artifactId>
+			<version>0.2.7</version>
+		</dependency>
+
+
+		<!-- https://mvnrepository.com/artifact/javax.mail/mail -->
+		<dependency>
+			<groupId>javax.mail</groupId>
+			<artifactId>mail</artifactId>
+			<version>1.4.7</version>
+		</dependency>
+		
+		<!-- HMT_20220601 Start - create and encrypt PDF from HTML -->
+		<dependency>
+			<groupId>com.lowagie</groupId>
+			<artifactId>itext</artifactId>
+			<version>2.0.8</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk15</artifactId>
+			<version>1.38</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.xhtmlrenderer</groupId>
+			<artifactId>core-renderer</artifactId>
+			<version>R8</version>
+		</dependency>
+		<!-- HMT_20220601 End -->
+
+	</dependencies>
+
+  	<build>
+		<defaultGoal>package</defaultGoal>
+
+		<directory>${project.basedir}/workspace/target</directory>
+      	<sourceDirectory>${project.basedir}/src/</sourceDirectory>
+      	<outputDirectory>${project.build.directory}/classes</outputDirectory>
+	    <resources>
+	      <resource>
+	        <directory>${project.basedir}/src/main/resources</directory>
+	      </resource>
+	    </resources>
+
+		<plugins>
+            <plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>1.8</version>
+                <executions>
+                	<execution>
+                    	<id>compile</id>
+                        <phase>generate-resources</phase>
+                        <configuration>
+	                        <tasks>
+	                        	<delete dir="${project.basedir}/workspace/target" includeemptydirs="true"/>
+	                        </tasks>
+                        </configuration>
+                        <goals>
+                        	<goal>run</goal>
+                        </goals>
+					</execution>
+                </executions>
+        	</plugin>
+            <plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>2.3.2</version>
+				<configuration>
+					<source>1.7</source>
+					<target>1.7</target>
+					<encoding>UTF-8</encoding>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>2.6</version>
+				<configuration>
+                    <warSourceDirectory>${project.basedir}/src/main/webapp</warSourceDirectory>
+			    </configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>1.8</version>
+				<executions>
+					<execution>
+						<id>war_deploy</id>
+						<phase>package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<tasks>
+
+								<delete verbose="true" >
+									<fileset dir="${web.remotedir}" />
+								</delete>
+								<delete verbose="true" >
+									<fileset dir="${was.remotedir}" />
+								</delete>
+
+							  	<copy todir="${was.remotedir}">
+								    <fileset dir="${basedir}/workspace/target/${project.build.finalName}" />
+							  	</copy>
+							  	<copy todir="${web.remotedir}">
+								    <fileset dir="${basedir}/workspace/target/${project.build.finalName}">
+ 										<exclude name="**/*.jsp" />
+										<exclude name="**/*.jspf" />
+										<exclude name="**/WEB-INF/**" />
+									</fileset>
+							  	</copy>
+							  	<copy todir="${web.remotedir}../">
+								    <fileset dir="${basedir}/workspace/target/${project.build.finalName}">
+ 										<include name="index.html" />
+									</fileset>
+							  	</copy>
+							  	<copy todir="${was.remotedir}" overwrite="true"
+						            preservelastmodified="true" verbose="true">
+						            <fileset dir="${basedir}/workspace/target/${project.build.finalName}" includes="**/${resource.pattern}" />
+						            <mapper type="glob" from="${resource.pattern}" to="*" />
+						      	</copy>
+						      	<delete>
+						      		<fileset dir="${web.remotedir}" includes="index.html"/>
+    								<fileset dir="${was.remotedir}" includes="**/ojdbc6-11.1.0.7.0.jar"/>
+    								<fileset dir="${was.remotedir}" includes="**/stax-api*"/>
+    								<fileset dir="${was.remotedir}" includes="**/slf4j-log4j12*"/>
+    								<fileset dir="${was.remotedir}" includes="**/tomcat_server/server.xml"/>
+    								<fileset dir="${was.remotedir}" includes="**/tomcat_server/context.xml"/>
+    								<fileset dir="${was.remotedir}" includes="**/loginForm.jsp"/>
+  								</delete>
+
+								<!-- 
+  								<copy todir="${web.remotedir}/static" overwrite="true"
+						            preservelastmodified="true" verbose="true">
+						            <fileset dir="${basedir}/workspace/target/${project.build.finalName}/static">
+						            	<include name="**/${resource.pattern}" />
+						            	<exclude name="**/*.jsp_prod" />
+						            	<exclude name="**/*.jspf_prod" />
+						            	<exclude name="**/*.xml_prod" />
+						            </fileset>
+						            <mapper type="glob" from="${resource.pattern}" to="*" />
+						      	</copy>
+						      	 -->
+						      	<delete>
+						      		<fileset dir="${web.remotedir}" includes="**/websource/jsp/**"/>
+						      	</delete>
+
+							</tasks>
+						</configuration>
+					</execution>
+				</executions>
+				<dependencies>
+					<dependency>
+						<groupId>ant</groupId>
+						<artifactId>ant-commons-net</artifactId>
+						<version>1.6.5</version>
+					</dependency>
+					<dependency>
+						<groupId>commons-net</groupId>
+						<artifactId>commons-net</artifactId>
+						<version>1.4.1</version>
+					</dependency>
+					<dependency>
+						<groupId>org.apache.ant</groupId>
+						<artifactId>ant-jsch</artifactId>
+						<version>1.8.4</version>
+					</dependency>
+				</dependencies>
+			</plugin>
+            <plugin>
+        	    <groupId>org.apache.maven.plugins</groupId>
+        		<artifactId>maven-deploy-plugin</artifactId>
+        		<version>2.7</version>
+      		</plugin>
+
+      		<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+	            <artifactId>maven-scm-plugin</artifactId>
+	            <version>1.9.5</version>
+                <configuration>
+	                <basedir>${svn.checkout.directory}</basedir>
+	                <connectionUrl>${svn.connectionUrl}</connectionUrl>
+	                <tag>LGVHR_PROD_${maven.build.timestamp}</tag>
+	                <username>${svn.username}</username>
+	                <password>${svn.password}</password>
+	            </configuration>
+            </plugin>
+		</plugins>
+	</build>
+
+</project>

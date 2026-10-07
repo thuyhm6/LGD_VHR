@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+
+	<bean id="mailSenderFactory" class="devonframe.mail.MailSenderFactory">
+		<property name="globalMailPolicy" ref="mailPolicy" />
+		<property name="optionalMailPolicyMap">
+			<map>
+				<entry key="mailPolicy2" value-ref="mailPolicy2" />
+			</map>
+		</property>
+
+		<property name="mailTemplateMap">
+			<map>
+				<entry key="mailTemplate1" value-ref="mailTemplate1" />
+			</map>
+		</property>
+	</bean>
+
+	<bean id="mailPolicy" class="devonframe.mail.policy.MailPolicy">
+		<property name="testMode" value="false" />
+		<property name="testReceivers" value="" />
+		<property name="mailHost" value="172.19.68.58" />
+		<property name="mailPort" value="25" />
+		<property name="authenticationEnabled" value="false" />
+		<property name="authenticationTlsEnabled" value="false" />
+		<property name="authenticationSslEnabled" value="false" />
+		<property name="authenticationId" value="milgarubanjuk" />
+		<property name="authenticationPassword" value="kook0329" />
+		<property name="sessionDebugMessageFlag" value="false" />
+		<property name="defaultSessionLoad" value="true" />
+		<property name="defaultSenderMailAddress" value="devon@lgcns.com" />
+		<property name="defaultSenderName" value="DevOn" />
+		<property name="contentType" value="7bit" />
+		<property name="plainContentType" value="text/plain" />
+		<property name="htmlContentType" value="text/html" />
+		<property name="charsetType" value="EUC-KR" />
+		<property name="encodingType" value="Q" />
+	</bean>
+
+	<bean id="mailPolicy2" class="devonframe.mail.policy.MailPolicy">
+		<property name="testMode" value="true" />
+		<property name="testReceivers" value="jykook@lgcns.com,milgarubanjuk@hanmail.net" />
+		<property name="mailHost" value="172.19.68.58" />
+		<property name="mailPort" value="25" />
+		<property name="sessionDebugMessageFlag" value="false" />
+		<property name="defaultSessionLoad" value="true" />
+		<property name="defaultSenderMailAddress" value="devon@lgcns.com" />
+		<property name="defaultSenderName" value="DevOn" />
+		<property name="contentType" value="7bit" />
+		<property name="plainContentType" value="text/plain" />
+		<property name="htmlContentType" value="text/html" />
+		<property name="charsetType" value="UTF-8" />
+		<property name="encodingType" value="Q" />
+	</bean>
+
+	<bean id="mailTemplate1" class="devonframe.mail.policy.MailTemplate">
+		<property name="directory" value="classpath:/devonframe/mail" />
+		<property name="htmlName" value="template1.jsp" />
+		<property name="imgServerIp" value="127.0.0.1" />
+		<property name="imgServerPort" value="8080" />
+		<property name="imgServerContext" value="sample" />
+		<property name="saveResolvedhtmlFlag" value="true" />
+		<property name="saveResolvedhtmlDir" value="d:/" />
+	</bean>
+
+
+
+</beans>

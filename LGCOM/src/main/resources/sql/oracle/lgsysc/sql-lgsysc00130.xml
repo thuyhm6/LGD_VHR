@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00130">
+	<!-- Role 목록 조회 -->
+	<select id="retrieveRolePopupList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT 1 AS application_id
+		       , 1 AS responsibility_id
+		       , system_code
+		       , module_code
+		       , role_code
+		       , role_name
+		       , role_desc
+		       , TO_CHAR(apply_start_date,'YYYY-MM-DD') AS apply_start_date
+		       , TO_CHAR(apply_end_date,'YYYY-MM-DD') AS apply_end_date
+		    FROM LGCOM_ROLE_M a
+		   WHERE (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		     AND (apply_end_date is NULL OR apply_end_date &gt;= TRUNC(SYSDATE))
+		<if test="systemCode != null and systemCode != ''">
+			AND system_code = #{systemCode}
+		</if>
+		<if test="moduleCode != null and moduleCode != ''">
+			AND module_code = #{moduleCode}
+		</if>
+		<if test="roleName != null and roleName != ''">
+			AND role_name LIKE #{roleName} || '%'
+		</if>
+		     AND NOT EXISTS (SELECT 1
+		                       FROM LGCOM_COMMON_CODE_C
+		                      WHERE common_code = a.role_code
+		                        AND code_type_code = 'LGCOM_SUPER_USER_EXCLUDE_ROLE'
+		                        AND use_flag = 'Y'
+		                        AND (apply_start_date IS NULL OR apply_start_date &lt;= TRUNC(SYSDATE))
+		                        AND (apply_end_date IS NULL OR apply_end_date &gt;= TRUNC(SYSDATE)))
+		<if test="extraType eq 'User'.toString() and extraOwn eq 'Y'.toString()">
+			AND NOT EXISTS (SELECT 1
+			                  FROM LGCOM_USER_ROLE_N_V
+			                 WHERE application_user_id = #{ownUserId}
+			                   AND system_code = a.system_code
+			                   AND module_code = a.module_code
+			                   AND role_code   = a.role_code)
+		</if>
+		<if test="extraType eq 'Program'.toString() and extraOwn eq 'Y'.toString()">
+			AND NOT EXISTS (SELECT 1
+			                  FROM LGCOM_PROGRAM_ACCESS_N
+			                 WHERE program_id        = #{ownPgmId}
+			                   AND system_service_id = #{ownSvcId}
+			                   AND role_code         = a.role_code)
+		</if>
+		ORDER BY system_code, module_code, role_code
+	</select>
+</mapper>

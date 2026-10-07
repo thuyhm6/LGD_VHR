@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00018">
+
+    <!-- User Define Table Row 조회 -->
+    <select id="retrieveUserDefineTableRowList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00018.retrieveUserDefineTableRowList */
+               udtm.table_seq_no
+             , udtm.table_name
+             , udtr.row_no
+             , udtr.sort_order_no
+             , udtr.sort_order_no AS ori_sort_order_no
+             , udtr.lower_limit_critical_value
+             , udtr.upper_limit_critical_value
+             , TO_CHAR(TO_DATE(udtr.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_start_yyyymmdd
+             , TO_CHAR(TO_DATE(udtr.effective_end_yyyymmdd  , 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_end_yyyymmdd
+             , TO_CHAR(TO_DATE(udtr.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS ori_effective_start_yyyymmdd
+        FROM   tb_pay_user_dfin_table_row_n udtr
+             , tb_pay_user_dfin_table_m     udtm
+        WHERE  udtm.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* 해외법인코드 */
+        AND    udtr.table_seq_no    = udtm.table_seq_no
+        AND    udtm.table_seq_no    = #{tableSeqNo, jdbcType=NUMERIC}
+        <if test="sortOrderNo != null and sortOrderNo != ''">
+        AND    udtr.sort_order_no          = #{sortOrderNo, jdbcType=NUMERIC}
+        </if>
+        ORDER BY udtm.table_name, udtr.sort_order_no
+    </select>
+
+    <!-- User Define Table Row 저장 전 유효성 체크 -->
+    <select id="retireveValidateUserDefineTableRowData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00018.retireveValidateUserDefineTableRowData */
+                   table_seq_no
+                 , row_no
+                 , sort_order_no
+                 , lower_limit_critical_value
+                 , upper_limit_critical_value
+                 , effective_start_yyyymmdd
+                 , effective_end_yyyymmdd
+            FROM   tb_pay_user_dfin_table_row_n
+            WHERE  table_seq_no = #{parameter.tableSeqNo, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND    row_no NOT IN
+            <foreach collection="deleted" item="deleteItem" open="(" close=")" separator="UNION ALL">
+                SELECT #{deleteItem.rowNo, jdbcType=NUMERIC} AS row_no
+                FROM dual
+
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="createItem" open="(" close=")" separator="UNION ALL">
+               SELECT  TO_NUMBER(#{parameter.tableSeqNo}) AS table_seq_no
+                     , TO_NUMBER(#{createItem.rowNo})     AS row_no
+                     , TO_NUMBER(#{createItem.sortOrderNo})             AS sort_order_no
+                     , #{createItem.lowerLimitCriticalValue}            AS lower_limit_critical_value
+                     , #{createItem.upperLimitCriticalValue}            AS upper_limit_critical_value
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.table_seq_no
+                      , NVL(update_list.row_no, detail_list.row_no) AS row_no
+                      , NVL(update_list.sort_order_no              , detail_list.sort_order_no              ) AS sort_order_no
+                      , NVL(update_list.lower_limit_critical_value , detail_list.lower_limit_critical_value ) AS lower_limit_critical_value
+                      , NVL(update_list.upper_limit_critical_value , detail_list.upper_limit_critical_value ) AS upper_limit_critical_value
+                      , NVL(update_list.effective_start_yyyymmdd   , detail_list.effective_start_yyyymmdd   ) AS effective_start_yyyymmdd
+                      , NVL(update_list.effective_end_yyyymmdd     , detail_list.effective_end_yyyymmdd     ) AS effective_end_yyyymmdd
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  TO_NUMBER(#{parameter.tableSeqNo, jdbcType=NUMERIC}) AS table_seq_no
+                                 , TO_NUMBER(#{updated[${idx}].rowNo})                  AS row_no
+                                 , TO_NUMBER(#{updated[${idx}].sortOrderNo})                      AS sort_order_no
+                                 , TO_NUMBER(#{updated[${idx}].oriSortOrderNo})                   AS ori_sort_order_no
+                                 , #{updated[${idx}].lowerLimitCriticalValue}                     AS lower_limit_critical_value
+                                 , #{updated[${idx}].upperLimitCriticalValue}                     AS upper_limit_critical_value
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS ori_effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveStartYyyymmdd}   , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveEndYyyymmdd}     , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.table_seq_no = update_list.table_seq_no(+)
+                AND     detail_list.row_no = update_list.row_no(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.table_seq_no
+                      , detail_list.row_no
+                      , detail_list.sort_order_no
+                      , detail_list.lower_limit_critical_value
+                      , detail_list.upper_limit_critical_value
+                      , detail_list.effective_start_yyyymmdd
+                      , detail_list.effective_end_yyyymmdd
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT (SELECT DISTINCT
+                       listagg(rs.lower_limit_critical_value, ', ') WITHIN GROUP (ORDER BY rs.lower_limit_critical_value) OVER (PARTITION BY 1)
+                FROM   rs
+                WHERE  EXISTS (SELECT 'x'
+                               FROM   rs rs0
+                               WHERE  rs0.lower_limit_critical_value = rs.lower_limit_critical_value
+                               /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                               AND   (rs0.effective_start_yyyymmdd BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd
+                               OR     rs0.effective_end_yyyymmdd   BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd)
+                               GROUP BY rs0.lower_limit_critical_value
+                               HAVING COUNT(1) > 1
+                              )
+                GROUP BY rs.lower_limit_critical_value) AS dup_lower_names /* Lower Bound 중복 */
+
+              ,(SELECT DISTINCT
+                       listagg(rs.upper_limit_critical_value, ', ') WITHIN GROUP (ORDER BY rs.upper_limit_critical_value) OVER (PARTITION BY 1)
+                FROM   rs
+                WHERE  EXISTS (SELECT 'x'
+                               FROM   rs rs0
+                               WHERE  rs0.upper_limit_critical_value = rs.upper_limit_critical_value
+                               /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                               AND   (rs0.effective_start_yyyymmdd BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd
+                               OR     rs0.effective_end_yyyymmdd   BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd)
+                               GROUP BY rs0.upper_limit_critical_value
+                               HAVING COUNT(1) > 1
+                              )
+                GROUP BY rs.upper_limit_critical_value) AS dup_upper_names /* Upper Bound 중복 */
+
+              ,(SELECT DISTINCT
+                       listagg(rs.sort_order_no, ', ') WITHIN GROUP (ORDER BY rs.sort_order_no) OVER (PARTITION BY 1)
+                FROM   rs
+                WHERE  EXISTS (SELECT 'x'
+                               FROM   rs rs0
+                               WHERE  rs0.sort_order_no = rs.sort_order_no
+                               AND    rs0.effective_start_yyyymmdd = rs.effective_start_yyyymmdd
+                               GROUP BY rs0.sort_order_no
+                               HAVING COUNT(1) > 1
+                              )
+                GROUP BY rs.sort_order_no) AS dup_sort_order /* 중복된 정렬순서번호 */
+
+              ,(SELECT  CASE WHEN COUNT(1) > 0 THEN 'Y' ELSE 'N' END
+                FROM   (
+                        SELECT rs.lower_limit_critical_value, rs.upper_limit_critical_value
+                        FROM   rs
+                             , tb_pay_user_dfin_table_m udtm
+                             , rs rs0
+                        WHERE  udtm.table_seq_no = rs.table_seq_no
+                        AND    udtm.data_management_way_code = 'R'
+                        AND    udtm.data_type_code = 'N'
+                        AND    NVL(udtm.data_validation_flag, 'N') = 'Y'
+                        AND   (TO_NUMBER(rs.lower_limit_critical_value) BETWEEN TO_NUMBER(rs0.lower_limit_critical_value) AND TO_NUMBER(rs0.upper_limit_critical_value)
+                        OR     TO_NUMBER(rs.upper_limit_critical_value) BETWEEN TO_NUMBER(rs0.lower_limit_critical_value) AND TO_NUMBER(rs0.upper_limit_critical_value))
+                        AND   (rs.effective_start_yyyymmdd BETWEEN rs0.effective_start_yyyymmdd AND rs0.effective_end_yyyymmdd
+                        OR     rs.effective_end_yyyymmdd   BETWEEN rs0.effective_start_yyyymmdd AND rs0.effective_end_yyyymmdd)
+                        GROUP BY rs.lower_limit_critical_value, rs.upper_limit_critical_value, rs.effective_start_yyyymmdd, rs.effective_end_yyyymmdd
+                        HAVING COUNT(1) > 1) tmp) AS dup_range_flag /* Lower, Upper Bound Range 중복 */
+
+              ,(SELECT DISTINCT
+                       listagg(rs.upper_limit_critical_value, ', ') WITHIN GROUP (ORDER BY rs.upper_limit_critical_value) OVER (PARTITION BY 1)
+                FROM   rs
+                     , tb_pay_user_dfin_table_m udtm
+                <![CDATA[
+                WHERE  TO_NUMBER(rs.upper_limit_critical_value) < TO_NUMBER(rs.lower_limit_critical_value)
+                ]]>
+                AND    udtm.table_seq_no = rs.table_seq_no
+                AND    udtm.data_management_way_code = 'R'
+                AND    udtm.data_type_code = 'N'
+                AND    NVL(udtm.data_validation_flag, 'N') = 'Y'
+                GROUP BY rs.upper_limit_critical_value) AS less_upper /* Upper Bound 가 Lower Bound 보다 작은지 체크  */
+
+             <![CDATA[
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.lowerBound' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_lower_names_title
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.upperBound' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_upper_names_title
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.rowSeq'     AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_sort_order_title
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.exact'      AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_exact_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- User Define Table Row 등록 -->
+    <insert id="insertUserDefineTableRow" parameterType="LGCOMData">
+        INSERT /* LGVPAY00018.insertUserDefineTableRow */
+        INTO   tb_pay_user_dfin_table_row_n(
+               row_no                                            /* 로우번호 */
+             , table_seq_no                                      /* 테이블일련순서번호 */
+             , sort_order_no                                     /* 정렬순서번호 */
+             , lower_limit_critical_value                        /* 하한임계문자값 */
+             , upper_limit_critical_value                        /* 상한임계문자값 */
+             , effective_start_yyyymmdd                          /* 유효시작년월일 */
+             , effective_end_yyyymmdd                            /* 유효종료년월일 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_user_dfin_tab_row_n.nextval            /* row_no => 로우번호 */
+             , #{tableSeqNo, jdbcType=NUMERIC}                  /* table_seq_no => 테이블일련순서번호 */
+             , #{sortOrderNo, jdbcType=NUMERIC}                 /* sort_order_no => 정렬순서번호 */
+             , #{lowerLimitCriticalValue}                       /* lower_limit_critical_value => 하한임계문자값 */
+             , #{upperLimitCriticalValue}                       /* upper_limit_critical_value => 상한임계문자값 */
+             , TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_start_yyyymmdd => 유효시작년월일 */
+             , TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_end_yyyymmdd => 유효종료년월일 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+        )
+    </insert>
+
+    <!-- User Define Table Row 수정 -->
+    <update id="updateUserDefineTableRow" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00018.updateUserDefineTableRow */
+               tb_pay_user_dfin_table_row_n
+        SET    sort_order_no                          = #{sortOrderNo, jdbcType=NUMERIC}                  /* 정렬순서번호 */
+             , lower_limit_critical_value             = #{lowerLimitCriticalValue}                        /* 하한임계문자값 */
+             , upper_limit_critical_value             = #{upperLimitCriticalValue}                        /* 상한임계문자값 */
+             , effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효시작년월일 */
+             , effective_end_yyyymmdd                 = TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효종료년월일 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+        WHERE  row_no                                 = #{rowNo, jdbcType=NUMERIC}                        /* 로우번호 */
+    </update>
+
+    <!-- User Define Table Row 삭제 -->
+    <delete id="deleteUserDefineTableRow" parameterType="LGCOMData">
+        DELETE /* LGVPAY00018.deleteUserDefineTableRow */
+        FROM   tb_pay_user_dfin_table_row_n
+        WHERE  row_no                                 = #{rowNo, jdbcType=NUMERIC}                        /* 로우번호 */
+    </delete>
+
+
+</mapper>

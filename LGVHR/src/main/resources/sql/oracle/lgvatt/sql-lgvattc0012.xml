@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTC0012">
+
+	<select id="executeApplyAttContractPl" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVATTC0012.executeApplyAttContractPl */
+		       lgvatt_batch_pkg.apply_att_contract_pl( #{errorCode, mode=OUT, jdbcType=VARCHAR}, 
+		                                               #{errorBuf,  mode=OUT, jdbcType=VARCHAR}
+		                                             ) }
+	</select>
+	
+</mapper>

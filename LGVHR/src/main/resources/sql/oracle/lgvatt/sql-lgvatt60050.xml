@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT60050">
+
+    <select id="retrieveHalfdayWorkingList" parameterType="LGCOMData" resultType="LGCOMData">
+    <![CDATA[
+	select /* LGVATT60030.retrieveHalfdayWorkingList */
+	    to_char(r.time_and_attendance_date,'dd/mm/yyyy') as day_of_month
+	    ,r.shift_type_code as shift_code
+	    ,r.employee_no
+	    ,r.a_day_of_the_week_code as day_of_week
+	    ,r.time_and_attendance_code as attendance_code
+	    ,r.work_hours 
+	    ,r.time_attend_detail_code as attend_detail_code
+	    ,r.time_attend_input_reason_desc as reason_desc
+	    from tb_att_result_n r 
+	    where 
+	    ((r.TIME_AND_ATTENDANCE_CODE LIKE 'HL%' 
+	    and r.WORK_HOURS NOT IN ('4', '4.5'))
+	    or (r.time_and_attendance_code in ('OB','DR','DB','OR','NW')
+	    and r.work_hours = 0)
+	    or (r.time_and_attendance_code in ('UM','UF','WH','PS','US','AL','PL','HO','PH','AB','UL','PM','PF')
+	    and r.work_hours <> 0))
+	    ]]>
+		<if test="monthSearch != null and monthSearch != ''">
+		   	AND r.TIME_AND_ATTENDANCE_YYYYMM = TO_CHAR(TO_DATE(#{monthSearch},'mm/yyyy'),'yyyymm')
+		</if>
+    </select>
+    
+    <update id="updateAttendance" parameterType="LGCOMData">
+        UPDATE /*LGVATT60050.updateAttendance*/
+               tb_att_result_n 
+        SET    TIME_AND_ATTENDANCE_CODE        = #{attendanceCode}             
+             , work_hours                      = #{workHours}                 
+             , time_attend_detail_code         = #{attendDetailCode}
+             , time_attend_input_reason_desc   = #{reasonDesc}
+             , last_update_user_id             = NVL(#{USER_SESSION.applicationUserId}, '247970')
+             , last_update_date                = trunc(sysdate)
+        WHERE  employee_no                     = #{employeeNo}     
+        and time_and_attendance_date           = to_date(#{dayOfMonth},'dd/mm/yyyy')      
+    </update>
+</mapper>

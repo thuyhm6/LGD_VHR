@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="concurrent">
+
+    <select id="retrieveNotificationCandidates" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[    
+		SELECT lbl.request_id AS request_id
+		      ,lbl.status_code AS status_code
+		      ,lbl.request_user_id as user_id
+		      ,lbl.pop_up_alarm_flag
+		      ,lbl.user_check_flag
+		      ,to_char(lbl.actual_start_date, 'HH24:MI') AS request_date 
+		FROM   lgcom_batch_log lbl
+		WHERE  lbl.actual_start_date > SYSDATE - 3
+		AND    lbl.schedule_flag = 'N'
+		AND    lbl.pop_up_alarm_flag = 'N'
+		AND    lbl.user_check_flag = 'N'
+    ]]> 	     
+    </select>
+    
+    <update id="updateNotificationCandidates" parameterType="java.util.HashMap">
+        UPDATE /* concurrent.updateNotificationCandidates */ lgcom_batch_log
+           SET pop_up_alarm_flag = 'Y'
+         WHERE request_id = #{requestId}
+    </update>       
+	
+    <update id="concurrentconcurrentconcurrent" parameterType="java.util.HashMap">
+        UPDATE /* concurrent.concurrentconcurrentconcurrent */ lgcom_batch_log
+           SET user_check_flag = 'Y'
+         WHERE request_id = #{requestId}
+    </update>      	
+
+    <!-- 지금 로그인한 사용자가 이전에 알람을 받았는데 확인하지 않은 것에 대해서 목록을 만들어 전송 -->
+    <select id="retrieveUnReadNotification" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[       
+      SELECT /* concurrent.retrieveUnReadNotificationCandidates */
+             request_id AS REQUEST_ID,
+             TO_CHAR(lbl.creation_date, 'MM:DD HH24:MI') AS REQUEST_DATE,
+             program_name
+        FROM lgcom_batch_log lbl, 
+             lgcom_program_m lpm
+       WHERE lbl.POP_UP_ALARM_FLAG = 'Y'
+         AND lbl.user_check_flag = 'N'
+         AND lbl.schedule_flag = 'N'
+         and lbl.program_id = lpm.program_id
+         and lpm.program_type_code = 'BATCH'
+         AND actual_start_date > SYSDATE - 3
+         AND request_user_id = #{USER_SESSION.applicationUserId}
+   ]]>          
+    </select>
+    
+    <!-- 지금 로그인한 사용자가 처음 알람을 받는 과정에 대해서 목록을 만들어 전송 -->
+    <select id="retrieveUnReadNotificationCandidates" parameterType="java.util.HashMap" resultType="LGCOMData">
+    <![CDATA[       
+      SELECT /* concurrent.retrieveUnReadNotificationCandidates */
+             request_id AS REQUEST_ID,
+             TO_CHAR(lbl.creation_date, 'MM:DD HH24:MI') AS REQUEST_DATE,
+             program_name
+        FROM lgcom_batch_log lbl, 
+             lgcom_program_m lpm
+       WHERE lbl.POP_UP_ALARM_FLAG = 'N'
+         AND lbl.user_check_flag = 'N'
+         AND lbl.schedule_flag = 'N'
+         and lbl.program_id = lpm.program_id
+         and lpm.program_type_code = 'BATCH'
+         AND actual_start_date > SYSDATE - 3
+         AND request_user_id = #{USER_SESSION.applicationUserId}
+   ]]>          
+    </select>
+    
+    
+	<!--  retrieveUnReadNotificationCandidates 으로 화면에 전달하는 데이터가 출발하면, 즉시 POP_UP_ALARM_FLAG 상태를  변경처리한다.  -->
+	<update id="updateBatchPopupAlarmFlag" parameterType="LGCOMData">
+        UPDATE /* concurrent.updateBatchPopupAlarmFlag */ 
+               LGCOM_BATCH_LOG
+           SET POP_UP_ALARM_FLAG = 'Y',
+               last_updated_by = #{USER_SESSION.applicationUserId},
+               last_update_date = SYSDATE
+         WHERE request_id = #{requestId}
+	</update>
+
+</mapper>

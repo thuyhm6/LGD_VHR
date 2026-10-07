@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="User">
+
+	<select id="retrieveUserInfo" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /* User.retrieveUserInfo */
+		         USER_NAME
+		       , SYSTEM_CODE
+		       , LANGUAGE_CODE
+		       , TIMEZONE_TYPE_CODE
+		       , TO_CHAR( APPLICATION_USER_ID ) AS APPLICATION_USER_ID
+		       , TO_CHAR( EMPLOYEE_ID ) AS EMPLOYEE_ID
+		       , MAIL_ADDR AS MAIL_ADDR
+		       , SUBSTR(mail_addr,1,INSTR(MAIL_ADDR,'@')-1) AS SSO_ID
+		       , NVL(FULL_NAME_LOCAL,ENGLISH_FULL_NAME) as "FULL_NAME_LOCAL"
+		       , DEPARTMENT_CODE
+		       , TITLE_NAME
+		       , POSITION_CODE
+		       , POSITION_NAME
+		       , ORGANIZATION_NAME_ENG as "ORGANIZATION_NAME"
+		       , OFFICE_PHONE_NUMBER
+		       , NVL(SCREEN_DESIGN_THEME_ID, 'A' ) AS SCREEN_DESIGN_THEME_ID
+		       , NVL( TO_CHAR( DEFAULT_ORG_ID ), '89' ) AS DEFAULT_ORG_ID
+		       , DEFAULT_ORG_NAME
+		       , DEFAULT_ORG_SHORT_CODE
+		       , DEFAULT_ORG_ID_USE_FLAG
+		       , REQUEST_REGION_CODE
+		       , REQUEST_REGION_NAME
+		       , REQUEST_REGION_CODE_USE_FLAG
+		       , SERVER_TIME_DIFFERENCE_SEQS
+		       , MENU_USE_FLAG
+		       , OU_USE_FLAG
+		    FROM LGCOM_USER_M_V  USR
+		<![CDATA[
+		   WHERE TO_CHAR(APPLY_START_DATE, 'YYYYMMDD')  <= TO_CHAR(SYSDATE, 'YYYYMMDD')
+		     AND TO_CHAR(APPLY_END_DATE, 'YYYYMMDD')    > TO_CHAR(SYSDATE, 'YYYYMMDD')
+		]]>
+		<choose>
+			<when test="applicationUserId != null and applicationUserId != ''" >
+		     AND APPLICATION_USER_ID                    = #{applicationUserId, jdbcType=VARCHAR }
+			</when>
+			<when test="useSubsidiary != null and useSubsidiary != ''">
+		     AND APPLICATION_USER_ID  IN (SELECT lumv.application_user_id
+		                                    FROM LGCOM_USER_M_V             lumv
+		                                   WHERE lumv.user_name = #{erpUserName}
+		                                     AND lumv.subsidiary_id = 81  /* 한국으로 고정 */
+		                                     AND lumv.user_name = USR.user_name)
+			</when>
+			<otherwise>
+		     AND USER_NAME = #{userName, jdbcType=VARCHAR }
+			</otherwise>
+		</choose>
+	</select>
+
+	<select id="retrieveSsoUserList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT /* User.retrieveSsoUserList */
+		         USER_NAME
+		       , SYSTEM_CODE
+		       , LANGUAGE_CODE
+		       , TIMEZONE_TYPE_CODE
+		       , TO_CHAR( APPLICATION_USER_ID ) AS APPLICATION_USER_ID
+		       , TO_CHAR( EMPLOYEE_ID ) AS EMPLOYEE_ID
+		       , MAIL_ADDR
+		       , SUBSTR(mail_addr,1,INSTR(MAIL_ADDR,'@')-1) AS SSO_ID
+		       , NVL(FULL_NAME_LOCAL,ENGLISH_FULL_NAME) as "FULL_NAME_LOCAL"
+		       , DEPARTMENT_CODE
+		       , TITLE_NAME
+		       , ORGANIZATION_NAME_ENG as "ORGANIZATION_NAME"
+		       , OFFICE_PHONE_NUMBER
+		       , NVL(SCREEN_DESIGN_THEME_ID, 'A' ) AS SCREEN_DESIGN_THEME_ID
+		       , NVL( TO_CHAR( DEFAULT_ORG_ID ), '89' ) AS DEFAULT_ORG_ID
+		       , DEFAULT_ORG_NAME
+		       , DEFAULT_ORG_SHORT_CODE
+		       , DEFAULT_ORG_ID_USE_FLAG
+		       , REQUEST_REGION_CODE
+		       , REQUEST_REGION_NAME
+		       , REQUEST_REGION_CODE_USE_FLAG
+		       , SERVER_TIME_DIFFERENCE_SEQS
+		       , MENU_USE_FLAG
+		       , OU_USE_FLAG
+		    FROM LGCOM_USER_M_V
+		   WHERE TO_CHAR(APPLY_START_DATE, 'YYYYMMDD')  <= TO_CHAR(SYSDATE, 'YYYYMMDD')
+		     AND TO_CHAR(APPLY_END_DATE, 'YYYYMMDD')     > TO_CHAR(SYSDATE, 'YYYYMMDD')
+		     AND SUBSTR(MAIL_ADDR,1,INSTR(MAIL_ADDR,'@')-1) = #{ssoId, jdbcType=VARCHAR}
+		ORDER BY USER_NAME
+	]]>
+	</select>
+
+	<update id="updateDefaultSystem" parameterType="java.util.HashMap">
+		<![CDATA[
+		UPDATE LGCOM_USER_M lum
+		   SET lum.system_code  = (SELECT m.system_code
+		                             FROM (  SELECT lu.user_name
+		                                          , lrm.system_code
+		                                          , COUNT(1)
+		                                       FROM LGCOM_USER_ROLE_N lurn
+		                                          , LGCOM_ROLE_M      lrm
+		                                          , LGCOM_USER_M      lu
+		                                      WHERE lurn.application_user_id = lu.application_user_id
+		                                        AND lurn.role_code = lrm.role_code
+		                                        AND lu.system_code IS NULL
+		                                        AND NVL(lurn.apply_start_date, SYSDATE) >= trunc( SYSDATE )
+		                                        AND NVL(lurn.apply_end_date, SYSDATE) < SYSDATE + 1
+		                                   GROUP BY lu.user_name, lrm.system_code
+		                                   ORDER BY 1, 3 DESC) m
+		                            WHERE m.user_name = lum.user_name
+		                              AND ROWNUM = 1)
+		 WHERE lum.user_name IN
+		 ]]>
+		<foreach collection="userNames" index="index" open="(" close=")" separator=",">
+			#{userNames[${index}]}
+		</foreach>
+		   AND lum.system_code IS NULL
+	</update>
+
+
+	<update id="updateDefaultSystemByCode" parameterType="java.util.HashMap">
+		UPDATE LGCOM_USER_M lum
+		   SET lum.system_code  = #{systemCode},
+		       lum.MENU_USE_FLAG = 'N'
+		 WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+	</update>
+
+
+	<select id="retrieveUserRoleList" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /* User.retrieveUserRoleList */
+		       SYSTEM_CODE
+		     , MODULE_CODE
+		     , ROLE_CODE
+		  FROM LGCOM_USER_ROLE_AUTHO_V
+		 WHERE APPLICATION_USER_ID = #{applicationUserId}
+	]]>
+	</select>
+
+	<select id="validateLoginProc" parameterType="LGCOMData" statementType="CALLABLE">
+		{ CALL /* User.validateLoginProc */
+		       LGCOM_VALIDATE_LOGIN_PROC(#{userName, mode=IN, jdbcType=VARCHAR},
+		                                 #{password, mode=IN, jdbcType=VARCHAR},
+		                                 #{resultCode, mode=OUT, jdbcType=VARCHAR},
+		                                 #{resultMsg, mode=OUT, jdbcType=VARCHAR})
+		}
+	</select>
+
+	<select id="validateAutho" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* User.validateAutho */
+		       DECODE(COUNT(1),1,'Y','N') AS "result"
+		  FROM LGCOM_USER_MENU_AUTHO_V
+		 WHERE application_user_id       = #{applicationUserId}
+		   AND menu_id                   = #{menuId}
+		   AND ROWNUM                    = 1
+	</select>
+
+
+	<select id="testProcedure" parameterType="java.util.HashMap" statementType="CALLABLE">
+		{ CALL /* User.testProcedure */
+		       MO_GLOBAL.SET_POLICY_CONTEXT(#{gubun, mode=IN, jdbcType=VARCHAR},
+		                                    #{orgId, mode=IN, jdbcType=DECIMAL})
+		}
+	</select>
+</mapper>

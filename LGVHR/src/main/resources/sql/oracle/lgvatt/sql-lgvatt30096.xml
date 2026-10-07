@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT30096">
+	<!-- SPECIAL OT REQUEST 목록 조회 -->
+	<select id="retrieveFlexibleWorkingRequestList" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT DISTINCT /* LGVATT30096.retrieveFlexibleWorkingRequestList */
+		  			REQ.REQUEST_NO                                                                                    AS REQUEST_NO
+		  		   ,TO_CHAR(NVL(SO.REQUEST_DATE, REQ.REQUEST_DATE), 'DD/MM/YYYY')                                     AS REQUEST_DATE
+			       ,SO.SUBSIDIARY_CODE                                                                                AS SUBSIDIARY_CODE
+			       ,USR.full_name_local || '/' ||NVL(USR.position_name, USR.title_name) ||'/'|| USR.organization_name_eng AS REQUESTOR  
+			       ,SO.APPROVAL_REQUEST_ID                                                                            AS APPROVAL_REQUEST_ID
+			       ,NVL(SO.PROGRESS_STATUS_CODE, REQ.PROCESS_STATUS_CODE)                                             AS STATUS
+			       ,lgvhr_common_pkg.decode_lookup(
+			       			'LGVHR_ATT_APPROVAL_STATUS'
+                            ,lgvatt_common_pkg.get_approval_status(
+                            		NVL(SO.approval_request_id, REQ.request_master_id)
+			                       ,NVL(SO.request_code, REQ.request_code)
+			                       ,USR.USER_NAME)
+			                       ,NULL
+			                       ,#{USER_SESSION.languageCode}) 													  AS approval_status			                                                                                                          
+			       ,NVL(SO.REQUEST_CODE, REQ.REQUEST_CODE)                                                            AS REQUEST_CODE
+			       ,lgvatt_common_pkg.get_approval_status(
+			                            NVL(SO.approval_request_id, REQ.request_master_id)
+			                          , NVL(SO.request_code, REQ.request_code), '')                                   AS STATUS_VAL
+			  FROM TB_ATT_FLEXIBLE_RESULT_N SO
+			 LEFT OUTER JOIN LGCOM_APPROVAL_REQUEST_N REQ 
+			      ON( SO.APPROVAL_REQUEST_ID = REQ.REQUEST_MASTER_ID AND SO.REQUEST_CODE = REQ.REQUEST_CODE)
+			 LEFT OUTER JOIN LGCOM_USER_M_V USR
+			      ON (SO.CREATION_USER_ID = USR.APPLICATION_USER_ID)
+			            
+			WHERE SO.REQUEST_DATE BETWEEN to_date(#{requestStartDate}, 'dd/mm/yyyy') AND to_date(#{requestEndDate}, 'dd/mm/yyyy')+1
+			  AND SO.SUBSIDIARY_CODE = #{subsidiaryCode}
+		]]>
+		<if test="isHrManager != null and isHrManager != ''">
+			AND SO.CREATION_USER_ID = #{sessionUserId}
+		</if>
+		<if test="approvalStatusCode != null and approvalStatusCode != ''">
+		 	AND lgvatt_common_pkg.get_approval_status(
+			                            NVL(SO.approval_request_id, REQ.request_master_id)
+			                          , NVL(SO.request_code, REQ.request_code), '')  = #{approvalStatusCode}
+		</if>	
+			ORDER BY REQ.REQUEST_NO DESC			
+	</select>
+	
+	
+</mapper>

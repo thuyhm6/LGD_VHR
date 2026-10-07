@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT20440">
+	<!-- Long Term Plan 목록 조회 -->
+	<select id="retrieveMutiplanList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		  SELECT /*LGVATT20450.retrieveMutiplanList*/
+				   a.planning_id as planning_id
+				  ,b.request_no
+			      ,a.subsidiary_code as subsidiary_code
+			      ,a.employee_no as employee_no
+			      ,e.full_name_local || '/' || NVL(e.position_name,e.title_name) || '/' || e.organization_name_eng AS requestor
+			      ,(	select  
+                      		lcc.common_code_desc as name
+		                from lgcom_common_code_c lcc, tb_att_code_c cac
+		                where lcc.code_type_code = 'LGVHR_ATTENDANCE_TYPE_CODE' 
+		                and lcc.common_code = cac.time_and_attendance_type_code
+		                and cac.time_and_attendance_code = a.time_and_attendance_code
+		            ) AS attendance_type
+			      ,(SELECT TAC.TIME_AND_ATTENDANCE_NAME FROM TB_ATT_CODE_C TAC WHERE TAC.TIME_AND_ATTENDANCE_CODE = a.time_and_attendance_code) AS attendance_type_detail
+			      ,(select lcc.common_code_desc from lgcom_common_code_c lcc where lcc.code_type_code  =  'LGVHR_ATTENDANCE_DETAIL_CODE' and lcc.common_code = a.time_attend_detail_code) as detail_reason
+			      ,a.time_and_attendance_code as time_and_attendance_code
+			      ,TO_CHAR(a.plan_start_date,'dd/mm/yyyy') as plan_start_date
+			      ,TO_CHAR(a.plan_end_date,'dd/mm/yyyy') as plan_end_date
+			      ,a.request_reason_content as request_reason_content
+			      ,a.approval_request_id as approval_request_id
+			      ,a.creation_user_id as creation_user_id
+			      ,TO_CHAR(a.creation_date,'dd/mm/yyyy') as creation_date
+			      ,a.last_update_user_id as last_update_user_id
+			      ,TO_CHAR(a.last_update_date,'dd-mm-yyyy') as last_update_date
+            	  ,TO_CHAR(a.creation_date,'dd/mm/yyyy') as request_date
+            	  ,nvl(a.progress_status_code, b.process_status_code) as status
+            	  ,lgvhr_common_pkg.decode_lookup('LGVHR_ATT_APPROVAL_STATUS', lgvatt_common_pkg.get_approval_status(NVL(a.approval_request_id, b.request_master_id), NVL(a.request_code, b.request_code), a.employee_no), NULL, #{USER_SESSION.languageCode})  AS approval_status
+            	  ,NVL(a.request_code, b.request_code) as request_code
+            	  ,lgvatt_common_pkg.get_approval_status(NVL(a.approval_request_id, b.request_master_id), NVL(a.request_code, b.request_code), '') as status_val
+            	  ,(select lum.application_user_id from lgcom_user_m_v lum where lum.user_name = a.employee_no) as application_user_id
+			FROM tb_att_lt_time_attend_plan_n a
+			LEFT OUTER JOIN lgcom_approval_request_n b
+			ON a.approval_request_id = b.request_master_id
+		    LEFT OUTER JOIN lgcom_user_m_v e
+		    ON a.employee_no = e.user_name
+		   	WHERE TO_CHAR(a.creation_date,'dd/mm/yyyy') BETWEEN #{planStartDate} AND #{planEndDate}
+		   	AND  a.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		   	AND a.creation_user_id = #{applicationUserId} 
+		]]>
+		<if test="approvaStatusCode != null and approvaStatusCode != ''">
+		 	AND lgvatt_common_pkg.get_approval_status(NVL(a.approval_request_id, b.request_master_id), NVL(a.request_code, b.request_code), '') = #{approvaStatusCode}
+		</if>	
+			ORDER BY a.planning_id desc			
+	</select>
+	
+	<!-- Attendance Detail 목록 조회 -->
+	<select id="retrieveAttendanceList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  	SELECT /*LGVATT20440.retrieveAttendanceList*/
+				   tac.time_and_attendance_code as code, tac.time_and_attendance_name as name
+			FROM tb_att_code_n tac
+			WHERE tac.time_attend_type_name = #{timeAttendTypeName}
+	</select>
+	
+	<!-- 해외주재원 여부 조회 -->
+	<select id="retrieveFseYn" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /*LGVATT20440.retrieveFseYn*/
+		 	   fse_yn
+		 FROM emp_master
+		 WHERE employee_number = #{employeeNo} 
+	]]>			 					  
+	</select>
+</mapper>

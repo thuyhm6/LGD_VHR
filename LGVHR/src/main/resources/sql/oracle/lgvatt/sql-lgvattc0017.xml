@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATTC0017">
+<!-- Automatically changes to Unpaid leave -->
+	<select id="executeDailyAttReportCreate" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVATTC0017.executeUpdateAttResultWithoutInOut */
+		       lgvatt_batch_pkg.daily_att_count
+		 }
+	</select>
+	
+</mapper>

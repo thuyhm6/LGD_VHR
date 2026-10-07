@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSETC00030">
+	<!-- code value 목록 조회 -->
+	<select id="retrieveCodeValueList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT  /*LGSETC00030.retrieveCodeValueList*/
+		        a.company_id
+			  , a.code_type_code	
+			  , a.inventory_organization_id
+			  , '' inventory_organization_id_name 
+			  , a.common_code
+			  , a.common_code_desc
+			  , a.sort_order_no
+			  , a.use_flag
+			  , TO_CHAR(a.apply_start_date,'YYYY-MM-DD') AS apply_start_date
+			  , TO_CHAR(a.apply_end_date,'YYYY-MM-DD') AS apply_end_date
+			  , a.parent_common_code
+		      , a.parent_code_type_code
+		      , a.code_data1_value
+		      , a.code_data2_value
+		      , a.code_data3_value
+		      , a.code_data4_value
+		      , a.code_data5_value
+		FROM lgcom_common_code_c a
+		WHERE a.code_type_code = #{codeTypeCode}  
+		ORDER BY a.sort_order_no, a.common_code, a.company_id, a.inventory_organization_id 
+	]]>										   
+	</select>
+	
+	<!-- code의 다국어 목록 조회 -->
+	<select id="retrieveCodeLangList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+	  SELECT lcc.language_code
+           , lc.common_code_desc
+           , lcc.common_code_name 
+           , lc.code_type_code
+           , lc.common_code
+           , lc.company_id
+           , lc.inventory_organization_id
+      FROM   lgcom_common_code_c            lc
+            ,lgcom_common_code_multi_lang_c lcc
+      WHERE  lc.common_code = lcc.common_code
+      AND    lc.code_type_code = lcc.code_type_code
+      AND    lc.company_id = lcc.company_id
+      AND    lc.inventory_organization_id = lcc.inventory_organization_id
+      AND    lc.use_flag = 'Y'
+      AND    lc.common_code = #{commonCode}
+      AND    lc.code_type_code = #{codeTypeCode}
+      AND    lc.company_id = #{companyId}
+      AND    lc.inventory_organization_id = #{inventoryOrganizationId}
+	]]>										   
+	</select>
+	
+	<!-- code의 다국어 목록 조회 -->
+	<select id="retrieveCompanyIdList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+        SELECT lod.organization_id AS code
+             , lod.name AS name
+        FROM   lgcom_company_v lod
+		ORDER  BY 1 
+	]]>										   
+	</select>
+	
+	
+	<select id="retrieveCodeValDupChk" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT  COUNT(a.common_code) AS cnt 		  
+		FROM  lgcom_common_code_c a
+		WHERE a.code_type_code = #{codeTypeCode}
+		AND   a.common_code = #{commonCode}  		
+		AND   a.company_id = #{companyId}
+		AND   a.inventory_organization_id = #{inventoryOrganizationId}		
+	]]>						   
+	</select>
+	
+	<select id="retrieveLangCodeDupChk" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT  COUNT(a.code_type_code) AS cnt 		  
+		FROM  lgcom_common_code_multi_lang_c a
+		WHERE a.code_type_code = #{codeTypeCode}
+		AND   a.common_code = #{commonCode}  
+		AND   a.company_id = #{companyId}
+		AND   a.inventory_organization_id = #{inventoryOrganizationId}
+		AND   a.language_code = #{languageCode}
+	]]>										   
+	</select>
+	
+	<!-- code value 정보 등록 -->
+	<insert id="insertCodeValueList" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_COMMON_CODE_C
+		( COMMON_CODE
+		, CODE_TYPE_CODE
+		, COMPANY_ID
+		, INVENTORY_ORGANIZATION_ID
+		, COMMON_CODE_DESC
+		, PARENT_COMMON_CODE
+		, PARENT_CODE_TYPE_CODE
+		, USE_FLAG
+		, APPLY_START_DATE
+		, APPLY_END_DATE
+		, SORT_ORDER_NO
+		, CODE_DATA1_VALUE
+		, CODE_DATA2_VALUE
+		, CODE_DATA3_VALUE
+		, CODE_DATA4_VALUE
+		, CODE_DATA5_VALUE
+		, CREATED_BY
+		, CREATION_DATE
+		, LAST_UPDATED_BY
+		, LAST_UPDATE_DATE
+		) values
+		(  #{commonCode}
+		 , #{codeTypeCode}
+		 , #{companyId}
+		 , #{inventoryOrganizationId}
+		 , #{commonCodeDesc}		 
+		 , #{parentCommonCode}
+		 , #{parentCodeTypeCode}
+		 , #{useFlag}
+		 , TO_DATE(#{applyStartDate},'YYYY-MM-DD')         
+		 , TO_DATE(#{applyEndDate},'YYYY-MM-DD')
+		 , #{sortOrderNo}
+		 , #{codeData1Value}
+		 , #{codeData2Value}
+		 , #{codeData3Value}
+		 , #{codeData4Value}
+		 , #{codeData5Value}
+		 , #{sessionUserId}
+		 , SYSDATE
+		 , #{sessionUserId}
+		 , SYSDATE
+		)
+	</insert>
+	
+	<!-- code value 정보 수정 -->
+	<update id="updateCodeValueList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_COMMON_CODE_C
+		   SET COMMON_CODE_DESC      = #{commonCodeDesc}            
+			 , PARENT_COMMON_CODE    = #{parentCommonCode}          
+			 , PARENT_CODE_TYPE_CODE = #{parentCodeTypeCode}
+			 , USE_FLAG              = #{useFlag}        
+			 , APPLY_START_DATE      = TO_DATE(#{applyStartDate},'YYYY-MM-DD')         
+			 , APPLY_END_DATE        = TO_DATE(#{applyEndDate},'YYYY-MM-DD')     
+			 , SORT_ORDER_NO         = #{sortOrderNo}               
+			 , CODE_DATA1_VALUE      = #{codeData1Value}               
+			 , CODE_DATA2_VALUE      = #{codeData2Value}                 
+			 , CODE_DATA3_VALUE      = #{codeData3Value}                  
+			 , CODE_DATA4_VALUE      = #{codeData4Value}            
+			 , CODE_DATA5_VALUE      = #{codeData5Value}            
+		     , LAST_UPDATED_BY    	 = #{sessionUserId}
+		     , LAST_UPDATE_DATE    	 = SYSDATE
+		 WHERE COMMON_CODE     			= #{commonCode}
+		   AND CODE_TYPE_CODE         	= #{codeTypeCode}
+		   AND COMPANY_ID         		= #{companyId}
+		   AND INVENTORY_ORGANIZATION_ID= #{inventoryOrganizationId}
+	</update>		
+	
+	<!-- code 다국어 정보 등록 -->
+	<insert id="insertCodeLangList" parameterType="java.util.HashMap">
+		INSERT INTO LGCOM_COMMON_CODE_MULTI_LANG_C
+		( CODE_TYPE_CODE
+		, COMMON_CODE
+		, COMPANY_ID
+		, INVENTORY_ORGANIZATION_ID
+		, LANGUAGE_CODE
+		, COMMON_CODE_NAME
+		, CREATED_BY
+		, CREATION_DATE
+		, LAST_UPDATED_BY
+		, LAST_UPDATE_DATE
+		) VALUES
+		( #{codeTypeCode}
+		, #{commonCode}
+	    , #{companyId}
+		, #{inventoryOrganizationId}
+		, #{languageCode}
+		, #{commonCodeName}
+		, #{sessionUserId}
+		, SYSDATE
+		, #{sessionUserId}
+		, SYSDATE
+		)
+	</insert>
+	
+	<!-- code 다국어 정보 수정 -->
+	<update id="updateCodeLangList" parameterType="java.util.HashMap">
+		UPDATE LGCOM_COMMON_CODE_MULTI_LANG_C
+		   SET COMMON_CODE_NAME      	= #{commonCodeName}
+		     , LAST_UPDATED_BY   		= #{sessionUserId}
+		     , LAST_UPDATE_DATE 		= SYSDATE
+		 WHERE CODE_TYPE_CODE 			= #{codeTypeCode}
+		   AND COMMON_CODE 				= #{commonCode}
+		   AND COMPANY_ID 				= #{companyId}
+		   AND LANGUAGE_CODE 			= #{languageCode}
+		   AND INVENTORY_ORGANIZATION_ID= #{inventoryOrganizationId}
+	</update>	
+
+	<!-- code 다국어 정보 삭제 -->
+	<update id="deleteCodeLangList" parameterType="java.util.HashMap">
+		DELETE FROM LGCOM_COMMON_CODE_MULTI_LANG_C
+		 WHERE CODE_TYPE_CODE 			= #{codeTypeCode}
+		   AND COMMON_CODE 				= #{commonCode}
+		   AND COMPANY_ID 				= #{companyId}
+		   AND LANGUAGE_CODE 			= #{languageCode}
+		   AND INVENTORY_ORGANIZATION_ID= #{inventoryOrganizationId}
+	</update>
+</mapper>

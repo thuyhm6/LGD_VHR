@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT20552">
+	<!-- Search overtime level -->
+	<select id="retrieveSwapMaster" parameterType="LGCOMData" resultType="LGCOMData">
+		 <![CDATA[
+			SELECT /* LGVATT20552.retrieveSwapMaster */
+			       sh.request_no                                  AS request_no
+			      ,sh.request_seq_no                              AS request_seq_no
+			      ,em.organization_id                             AS employee_org
+			      ,sh.employee_no                                 AS employee_no
+			      ,em.full_name_local                             AS employee_name
+			      ,sh.time_attend_input_reason_desc               AS time_attend_input_reason_desc
+			      ,lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE'
+			                                     ,em.grade_title
+			                                     ,NULL
+			                                     ,#{USER_SESSION.languageCode})           AS employee_grade
+			      ,sh.shift_type_code 
+		          ,TO_CHAR(sh.weekly_holiday, 'DD/MM/YYYY') AS weekly_holiday
+		          ,sh.weekly_holiday_shift_type_code
+		          ,(select t.shift_type_code
+			          from tb_att_result_n t
+			         where t.subsidiary_code = sh.subsidiary_code
+			           and t.time_and_attendance_date = sh.weekly_holiday
+			           and t.employee_no = sh.employee_no) as result_wh_shift_type_code
+		          ,TO_CHAR(sh.working_day, 'DD/MM/YYYY') AS working_day
+		          ,sh.working_day_shift_type_code
+		          ,(select t.shift_type_code
+			          from tb_att_result_n t
+			         where t.subsidiary_code = sh.subsidiary_code
+			           and t.time_and_attendance_date = sh.working_day
+			           and t.employee_no = sh.employee_no) as result_nw_shift_type_code
+		          ,sh.progress_status_code
+			      ,lgvhr_common_pkg.decode_lookup('LGCOM_APPROVAL_REQ_STATUS_CODE'
+			                                     ,sh.progress_status_code
+			                                     ,NULL
+			                                     ,#{USER_SESSION.languageCode})           AS approval_status
+			      ,sh.confirm_flag                                AS confirm_flag
+			      ,sh.approval_request_id                         AS request_master_id
+			      ,sh.request_code                                AS request_code
+			      ,lgvatt_common_pkg.get_approval_status(sh.approval_request_id
+                                                        ,sh.request_code
+                                                        ,#{LGVHR_PROJECT_SESSION.employeeNo}) AS approval_status_code
+                  ,(select local_language_full_name from lgcom_user_m where application_user_id = sh.last_update_user_id) as last_update_user_id
+		          ,TO_CHAR(sh.last_update_date, 'DD/MM/YYYY HH24:MI') as last_update_date
+			  FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N sh
+			      ,emp_master em
+			 WHERE sh.subsidiary_code = em.subsidiary_code
+			   AND sh.employee_no = em.employee_number
+			   AND sh.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}	
+		]]>
+		<if test="requestStartDate != null and requestStartDate != '' and requestEndDate != null and requestEndDate != ''">
+			   AND sh.request_date BETWEEN TRUNC(TO_DATE(#{requestStartDate},'DD/MM/YYYY')) AND TRUNC(TO_DATE(#{requestEndDate},'DD/MM/YYYY')+1)
+		</if>
+		<if test="confirmFlag != null and confirmFlag != ''">
+			   AND sh.confirm_flag = #{confirmFlag}
+		</if>
+		<if test="orgId != null and orgId != ''">
+			   AND em.organization_id = #{orgId}
+		</if>
+		<if test="empNo != null and empNo != ''">
+			   AND sh.employee_no like '%' || UPPER(#{empNo}) || '%'
+		</if>
+		<if test="empName != null and empName != ''">
+			   AND UPPER(em.full_name_local) like '%' || UPPER(#{empName}) || '%'
+		</if>
+		<if test="approvaStatusCode != null and approvaStatusCode != ''">
+		 	AND sh.progress_status_code = #{approvaStatusCode}
+		</if>
+	</select>
+	
+	<!-- 행추가된 사용자 정보를 조회 -->
+    <select id="retrieveEmployeeInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20552.retrieveEmployeeInfo */
+               em.employee_number     AS employee_no
+             , em.full_name_english   AS employee_name
+             , em.grade               AS grade_code
+             , em.attribute10         AS shift_type_code
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+             , em.org_name_local      AS organization_name
+             , em.grade_type          AS emp_category_name
+             , em.job_family||'.'||em.job_group||'.'||em.job_detail  AS work_type_name
+             , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+             , TO_CHAR(em.date_retire, 'DD/MM/YYYY') as date_retire
+        FROM emp_master em
+        WHERE em.employee_number = #{employeeNo}
+    </select>
+    <select id="checkLockDate" parameterType="LGCOMData" resultType="LGCOMData">
+    	<![CDATA[
+    	    SELECT SUM(length) length FROM (
+    	    SELECT /* LGVATT20552.checkLockDate */ count(1) length
+            FROM TB_ATT_CLOSE_N r
+            WHERE r.subsidiary_code = #{subsidiaryCode}
+              AND (time_and_attendance_yyyymm = to_char(TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY'), 'YYYYMM') 
+                OR time_and_attendance_yyyymm =  to_char(TO_DATE(#{workingDay}, 'DD/MM/YYYY'), 'YYYYMM'))
+              AND r.confirm_flag = 'Y'
+           UNION ALL
+           SELECT count(1) length 
+           FROM TB_ATT_LT_TIME_ATTEND_PLAN_N pn
+           WHERE  pn.progress_status_code in ('20','30')
+             AND  pn.employee_no = #{employeeNo}
+             AND (TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY') between pn.plan_start_date and pn.plan_end_date 
+               OR TO_DATE(#{workingDay}, 'DD/MM/YYYY') between pn.plan_start_date and pn.plan_end_date )
+           UNION ALL
+           SELECT count(1) length 
+           FROM TB_ATT_UPDATE_REQ_N rn
+           WHERE  rn.progress_status_code in ('20','30')
+             AND  rn.employee_no = #{employeeNo}
+             AND  (rn.time_and_attendance_date =  TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY')
+               OR  rn.time_and_attendance_date = TO_DATE(#{workingDay}, 'DD/MM/YYYY'))
+           UNION ALL
+           SELECT count(1) length 
+           FROM TB_ATT_SWAP_HOLIDAY_REQUEST_N sn
+           WHERE  sn.progress_status_code in ('20','30')
+             AND  sn.employee_no = #{employeeNo}
+             AND  (sn.weekly_holiday =  TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY')
+               OR  sn.working_day = TO_DATE(#{workingDay}, 'DD/MM/YYYY'))
+           )
+		]]>
+    </select>
+    <select id="applyAttSwapWhMaster" statementType="CALLABLE" parameterType="LGCOMData">
+        {call /* LGVATT20552.applyAttSwapWhMaster */
+              lgvatt_transaction_pkg.apply_att_swap_wh_master(#{retCode , mode=OUT, jdbcType=VARCHAR}    /*po_return_code*/,
+                                                              #{errorMessage, mode=OUT, jdbcType=VARCHAR}    /*po_return_msg*/,
+                                                              #{applicationUserId},
+                                                              #{subsidiaryCode},
+                                                              TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY'),
+                                                              TO_DATE(#{workingDay}, 'DD/MM/YYYY'),
+                                                              #{employeeNo},
+                                                              #{swapType}        
+                                                              )
+        }
+    </select>
+    
+	<update id="updateSwapHolidayByHR" parameterType="LGCOMData">
+		UPDATE /* LGVATT20552.applyAttSwapWhMaster */ TB_ATT_SWAP_HOLIDAY_REQUEST_N sh
+		   SET sh.weekly_holiday                 = TO_DATE(#{weeklyHoliday}, 'DD/MM/YYYY')
+		      ,sh.weekly_holiday_shift_type_code = #{weeklyHolidayShiftTypeCode}
+		      ,sh.working_day                    = TO_DATE(#{workingDay}, 'DD/MM/YYYY')
+		      ,sh.working_day_shift_type_code    = #{workingDayShiftTypeCode}
+		      ,sh.time_attend_input_reason_desc  = #{timeAttendInputReasonDesc}
+		      ,sh.confirm_flag                   = #{confirmType}
+		      ,sh.last_update_user_id            = #{applicationUserId}
+		      ,sh.last_update_date               = SYSDATE
+		 WHERE sh.subsidiary_code = #{subsidiaryCode}
+		   AND sh.employee_no = #{employeeNo}
+		   AND sh.approval_request_id = #{requestMasterId}
+		   AND sh.request_code = #{requestCode}
+		   AND sh.request_seq_no = #{requestSeqNo}
+	</update>
+    
+</mapper>

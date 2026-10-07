@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT20030">
+
+	<select id="retrieveOtLevelRequest" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT  ATT_SO.SUBSIDIARY_CODE
+		       ,ATT_SO.EMPLOYEE_NO
+		       ,EM.FULL_NAME_LOCAL        AS employee_Name
+		       ,EM.ORG_NAME_LOCAL         AS organization_Name
+		       ,EM.organization_ID        AS organization_ID
+		       ,ATT_SO.SHIFT_TYPE_CODE       AS SHIFT_TYPE_CODE
+	           ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', ATT_SO.SHIFT_TYPE_CODE, NULL, 'en') AS FROM dual) AS SHIFT_TYPE_NAME
+		       ,ATT_SO.TIME_AND_ATTENDANCE_YYYYMM
+		       ,ATT_SO.OT_LEVEL
+		       ,ATT_SO.OT_TOTAL
+		       ,ATT_SO.LOWER_LIMIT
+		       ,ATT_SO.UPPER_LIMIT
+		       ,ATT_SO.TIME_ATTEND_INPUT_REASON_DESC
+		       ,ATT_SO.CREATION_USER_ID
+		       ,ATT_SO.CREATION_DATE
+		       ,ATT_SO.LAST_UPDATE_USER_ID
+		       ,ATT_SO.LAST_UPDATE_DATE
+		  FROM TB_ATT_OT_LEVEL_REQUEST_N ATT_SO LEFT OUTER JOIN EMP_MASTER EM ON (ATT_SO.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER)
+		 WHERE 1=1		 
+		   AND ATT_SO.SUBSIDIARY_CODE = #{subsidiaryCode}                                                            
+		   <if test="requestNo != null and requestNo != ''">
+		   AND ATT_SO.REQUEST_NO = #{requestNo}
+		   </if>
+		   AND ATT_SO.approval_request_id = #{requestMasterId}
+		 ORDER BY ATT_SO.REQUEST_SEQ_NO ASC
+	</select>
+
+    <!-- 근태 담당자 조직 가져오기 -->
+    <select id="retrieveAttContractOrg" parameterType="LGCOMData" resultType="LGCOMData">
+    	SELECT /*  LGVATT20030.retrieveAttContractOrg  */ 
+    	       ATT.ORGANIZATION_ID AS CODE
+		      ,ORG_M.ORG_NAME_LOCAL AS NAME       
+		  FROM TB_ATT_CONTRACT_N ATT LEFT OUTER JOIN ORG_MASTER ORG_M ON (ATT.ORGANIZATION_ID = ORG_M.ORGANIZATION_ID)    
+		 WHERE ATT.TIME_ATTEND_CONTACT_USER_ID=#{employeeNo}
+		   AND att.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+           AND SYSDATE BETWEEN nvl(att.effective_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(att.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+           AND SYSDATE BETWEEN nvl(ORG_M.org_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(ORG_M.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+         ORDER BY ORG_M.ORG_NAME_LOCAL
+    </select>
+    
+    <!-- 근태 담당자 조직 산하 기능직 직원 리스트 조회 -->
+    <select id="retrieveAttContractOrgLineWorkerList" parameterType="LGCOMData" resultType="LGCOMData">
+    	        SELECT   /*  LGVATT20030.retrieveAttContractOrgLineWorkerList  */ 
+    	        		ATT.ORGANIZATION_ID AS ORGANIZATION_ID
+				        ,M.EMPLOYEE_NUMBER  AS CODE
+				        ,M.EMPLOYEE_NUMBER  AS NAME	             
+				  FROM TB_ATT_CONTRACT_N ATT LEFT OUTER JOIN EMP_MASTER M ON (ATT.ORGANIZATION_ID = M.ORGANIZATION_ID)  
+				 WHERE ATT.TIME_ATTEND_CONTACT_USER_ID=#{employeeNo} 
+				   AND att.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                   AND SYSDATE BETWEEN nvl(att.effective_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(att.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+                   AND M.Status = 'Active Assignment'
+                   AND M.flsa_yn = 'N'
+                   AND M.fse_yn = 'N'
+    </select>
+    
+    <select id="retrieveEmployeeName" parameterType="LGCOMData" resultType="LGCOMData">
+    	        SELECT   /*  LGVATT20030."retrieveEmployeeName"  */ 
+    	        	   M.FULL_NAME_LOCAL  AS EMPLOYEE_NAME             
+				  FROM EMP_MASTER M   
+				 WHERE M.EMPLOYEE_NUMBER=#{employeeNo} 
+    </select>
+    
+    <select id="retrieveEmployeeNo" parameterType="LGCOMData" resultType="LGCOMData">
+    	         
+			 SELECT  EM.ORGANIZATION_ID AS ORGANIZATION_ID
+			        ,EM.EMPLOYEE_NUMBER CODE
+			        ,EM.EMPLOYEE_NUMBER NAME
+			        ,lgvatt_common_pkg.get_unit_requestor( #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			                                            ,#{orgId} ) AS org_get_arm_info
+			        ,lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, #{timeAndAttendanceYyyymm}, 'request_next_ot_level') AS ot_level
+			  FROM EMP_MASTER EM
+			 WHERE EM.ORGANIZATION_ID = #{orgId}
+			   AND EM.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			   AND EM.Status = 'Active Assignment'
+			   AND EM.flsa_yn = 'N'
+               AND EM.fse_yn = 'N'
+               AND lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, #{timeAndAttendanceYyyymm}, 'request_next_ot_level') = #{otLevel}
+             ORDER BY EM.EMPLOYEE_NUMBER
+    </select>
+    
+    <select id="retrieveOtLevelInfo" parameterType="LGCOMData" resultType="LGCOMData">
+    	        select /* LGVATT20030.retrieveOtLevelInfo */ 
+    	        		em.attribute10 as shift_type_code
+						,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code, em.employee_number, 
+						                                        TO_DATE(#{timeAndAttendanceYyyymm}, 'YYYYMM'),TO_DATE(#{timeAndAttendanceYyyymm}, 'YYYYMM'), 'month_total_ot_yyyymm') as ot_total
+						,lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, #{timeAndAttendanceYyyymm}, 'request_next_ot_level') as ot_level
+						,lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, #{timeAndAttendanceYyyymm}, 'request_lower_limit') as lower_limit
+						,lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, #{timeAndAttendanceYyyymm}, 'request_upper_limit') as upper_limit
+				  from emp_master em
+				 where em.subsidiary_code = 'LGDVN'
+				  AND  em.employee_number = #{employeeNo}
+				  <if test="isAttContract != null and isAttContract != ''">
+				     AND  lgvatt_ot_level_pkg.get_ot_level(em.subsidiary_code, em.employee_number, #{timeAndAttendanceYyyymm}, 'request_next_ot_level') = #{otLevel}
+				  </if>
+				  <if test="organizationId != null and organizationId != ''">
+				     AND  em.ORGANIZATION_ID = #{organizationId}
+				  </if>
+    </select>
+    
+    <!-- 특별 연장근무 저장 -->
+    <update id="saveOtLevelRequest" parameterType="LGCOMData">
+    	 MERGE /* LGVATT20030.saveOtLevelRequest */ INTO TB_ATT_OT_LEVEL_REQUEST_N ATT_SO
+         USING DUAL
+                 ON (     
+                      	  ATT_SO.REQUEST_CODE = #{requestCode}
+                      AND ATT_SO.APPROVAL_REQUEST_ID = #{approvalRequestId}
+                      AND ATT_SO.EMPLOYEE_NO = #{employeeNo}
+                      AND ATT_SO.TIME_AND_ATTENDANCE_YYYYMM = #{timeAndAttendanceYyyymm}
+                    )
+           WHEN MATCHED THEN
+                UPDATE SET                         
+                         ATT_SO.OT_LEVEL               = #{otLevel}
+                        ,ATT_SO.OT_TOTAL               = #{otTotal}
+                        ,ATT_SO.SHIFT_TYPE_CODE        = #{shiftTypeCode}
+                        ,ATT_SO.LOWER_LIMIT            = #{lowerLimit}
+                        ,ATT_SO.UPPER_LIMIT            = #{upperLimit}
+                        ,CONFIRM_FLAG                  = 'Y'
+                        ,PROGRESS_STATUS_CODE          = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = ATT_SO.approval_request_id AND request_code = ATT_SO.request_code) 
+                        ,LAST_UPDATE_USER_ID                   = #{sessionUserId}
+                        ,LAST_UPDATE_DATE                      = SYSDATE
+           WHEN NOT MATCHED THEN
+                INSERT 
+                       ( 
+                        REQUEST_NO
+                       ,REQUEST_SEQ_NO 
+                       ,REQUEST_DATE
+                       ,SUBSIDIARY_CODE
+                       ,EMPLOYEE_NO
+                       ,TIME_AND_ATTENDANCE_YYYYMM
+                       ,OT_LEVEL
+                       ,OT_TOTAL
+                       ,SHIFT_TYPE_CODE
+                       ,LOWER_LIMIT
+                       ,UPPER_LIMIT
+                       ,TIME_ATTEND_INPUT_REASON_DESC
+                       ,APPROVAL_REQUEST_ID
+                       ,REQUEST_CODE
+                       ,PROGRESS_STATUS_CODE
+                       ,CONFIRM_FLAG                   
+                       ,CREATION_USER_ID
+                       ,CREATION_DATE
+                       ,LAST_UPDATE_USER_ID
+                       ,LAST_UPDATE_DATE
+                        )VALUES(
+                        #{requestNo}
+                       ,sq_tb_att_special_ot_id.NEXTVAL
+                       ,SYSDATE
+                       ,#{subsidiaryCode} 
+                       ,#{employeeNo}
+                       ,#{timeAndAttendanceYyyymm}
+                       ,#{otLevel}
+                       ,#{otTotal}
+                       ,#{shiftTypeCode}
+                       ,#{lowerLimit}
+                       ,#{upperLimit}
+                       ,#{timeAttendInputReasonDesc}
+                       ,#{approvalRequestId}
+                       ,#{requestCode}
+                       ,'20'
+                       ,'N'                     
+                       ,#{sessionUserId}
+                       ,SYSDATE
+                       ,#{sessionUserId}
+                       ,SYSDATE
+                           )
+
+    </update>
+    
+    <update id="updateOtLevelRequest" parameterType="LGCOMData">
+    	UPDATE TB_ATT_OT_LEVEL_REQUEST_N ATT_SO
+    	   SET ATT_SO.PROGRESS_STATUS_CODE		= (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = ATT_SO.approval_request_id AND request_code = ATT_SO.request_code) 
+              ,ATT_SO.LAST_UPDATE_USER_ID      = #{sessionUserId}
+              ,ATT_SO.LAST_UPDATE_DATE         = SYSDATE
+    	 WHERE ATT_SO.SUBSIDIARY_CODE 			= #{LGVHR_PROJECT_SESSION.subsidiaryCode} 
+    	   AND ATT_SO.REQUEST_CODE 			= #{requestCode}
+           AND ATT_SO.APPROVAL_REQUEST_ID 		= #{approvalRequestId}
+    </update>
+    
+    <update id="deleteOtLevelRequest" parameterType="LGCOMData">
+    	DELETE FROM TB_ATT_OT_LEVEL_REQUEST_N ATT_SO
+    	 WHERE ATT_SO.SUBSIDIARY_CODE = #{subsidiaryCode} 
+    	   AND ATT_SO.TIME_AND_ATTENDANCE_DATE = TO_DATE(#{timeAndAttendanceDate}, 'DD/MM/YYYY') 
+    	   AND ATT_SO.EMPLOYEE_NO = #{employeeNo}
+    </update>
+    
+    <!-- 요청서 작성 시 필요한 기본정보를 조회한다.(재량권 번호, 요청서번호) -->
+    <select id="retrieveRequestDocBaseInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT20030.retrieveRequestDocBaseInfo */
+               cc.code_data1_value   AS arm_no
+             , cc.parent_common_code AS request_code /* LGCOM 결재의 문서유형코드LGCOM_APPROVAL_REQUEST_CODE와 매핑 */
+        FROM   lgcom_common_code_c cc
+        WHERE  cc.code_type_code = 'LGVCOM_APPROVAL_REQUEST_CODE'
+        AND    cc.common_code    = 'ATT0006' /* 사무직 수정요청서 결재요청 */
+    </select>
+    
+    <select id="retrieveRequestHeaderInfo" parameterType="LGCOMData" resultType="LGCOMData">
+		    SELECT  
+		           
+		           EM.FULL_NAME_LOCAL        AS requestor_info
+		           ,(SELECT common_code_name
+		              FROM LGCOM_COMMON_CODE_MULTI_LANG_C
+		             WHERE code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+		               AND language_code  = NVL('en','en')
+		               AND common_code    = ATT_SO.PROGRESS_STATUS_CODE) AS status_name
+		           ,TO_CHAR(ATT_SO.LAST_UPDATE_DATE, 'DD/MM/YYYY') AS request_date   
+		           , ATT_SO.PROGRESS_STATUS_CODE as startus_code    		    
+		           
+		      FROM TB_ATT_OT_LEVEL_REQUEST_N ATT_SO LEFT OUTER JOIN EMP_MASTER EM ON (ATT_SO.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER)
+		  LEFT OUTER JOIN tb_att_result_n tar ON (tar.employee_no = ATT_SO.EMPLOYEE_NO AND TAR.time_and_attendance_date = ATT_SO.TIME_AND_ATTENDANCE_DATE) 
+		     WHERE 1=1 
+		       AND ATT_SO.TIME_AND_ATTENDANCE_DATE = TO_DATE(#{timeAndAttendanceDate}, 'DD/MM/YYYY') 
+		       AND ATT_SO.EMPLOYEE_NO = #{employeeNo}
+		       AND ATT_SO.SUBSIDIARY_CODE = #{subsidiaryCode}                                                        
+		       AND ATT_SO.LAST_UPDATE_USER_ID = #{sessionUserId}
+		       
+    
+    </select>
+    
+    <select id="retrieveDupData" parameterType="LGCOMData" resultType="LGCOMData">
+    	<![CDATA[
+		    SELECT COUNT(*) AS dup_count
+			FROM   TB_ATT_OT_LEVEL_REQUEST_N ta
+			WHERE  1 = 1
+			AND    ta.subsidiary_code = #{subsidiaryCode}
+			AND    ta.time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+			AND    ta.progress_status_code IN ('20', '30') --기등록 건( 50: Cancel 제외)
+			AND    NVL(ta.confirm_flag, 'N') <> 'R'   -- Rejected
+			AND    ta.employee_no = #{employeeNo}
+		]]>
+    </select>
+    
+</mapper>

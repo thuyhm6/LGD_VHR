@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT50030">
+	<!-- 연간휴가 조회 HMT_20210424 Add date_hire_subsidiary-->
+	<select id="retrieveAttendanceLeave" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT50030.retrieveAttendanceLeave*/
+					  curr.time_and_attendance_yyyymm
+				    , ep.employee_no
+				    , ep.employee_name
+				    , ep.employee_grade
+				    , ep.org_name_local
+				    , ep.date_hire_subsidiary
+				    , TO_CHAR(NVL(prev.residual_annual_leave_days, 0),                                                                               'FM9990.0')    AS prev_year_carr_fwd_days       -- 전년이월 (Accumulationfrom Last Year)
+				    , TO_CHAR(NVL(curr.curr_month_accu_creation_days, 0),                                                                            'FM9990.0')    AS curr_year_accu_creation_days  -- 당년누적생성 (Create at This Year)
+				    , TO_CHAR(NVL(prev.residual_annual_leave_days, 0) + NVL(curr.curr_month_accu_creation_days, 0),                                  'FM9990.0')    AS total_creation_days
+				    , TO_CHAR(NVL(curr.curr_month_use_days, 0),                                                                                      'FM9990.0')    AS curr_month_use_days           -- 당월사용 (Used Annual Leave at This Month)
+				    , TO_CHAR(NVL(curr.total_use_days, 0),                                                                                           'FM9990.0')    AS total_use_days                -- 당년 총 사용
+				    , TO_CHAR(NVL(curr.total_residual_days, 0),                                                                                      'FM9990.0')    AS total_residual_days           -- 총잔여 (Remained Annual Leave of This Year)
+			FROM
+			    (
+			      SELECT tal.employee_no           
+			                ,emp.full_name_local AS employee_name
+			                ,lcc.common_code_desc AS employee_grade      
+			                ,emp.org_name_local
+			                ,TO_CHAR(emp.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+			      FROM tb_att_annual_leave_n tal
+			          ,emp_master             emp
+			          ,lgcom_common_code_c    lcc
+			      WHERE tal.employee_no = emp.employee_number
+			      AND emp.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			      AND emp.grade_title = lcc.common_code
+			      AND lcc.code_type_code = 'IF_VIETNAM_GRADE_TITLE'
+			      AND emp.flsa_yn = 'N'
+			      AND emp.fse_yn = 'N'
+			    <if test="orgName != null and orgName != ''">
+					AND emp.organization_id = #{orgName}
+				</if>
+				<if test="orgName == null or orgName == ''">
+					AND emp.organization_id IN ( SELECT to_char(tac.organization_id)
+											 	   FROM tb_att_contract_n tac
+											 	  WHERE tac.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo}
+												    AND SYSDATE BETWEEN tac.effective_start_date AND nvl(tac.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+												 UNION
+												 SELECT om.organization_id
+												   FROM org_master om
+												  WHERE SYSDATE BETWEEN om.org_start_date AND NVL(om.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+												    AND om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+												    AND ( SELECT COUNT(*) AS master_count
+												          FROM lgcom_user_role_n lur
+												               ,lgcom_user_m      lum
+												          WHERE lur.application_user_id = lum.application_user_id
+												          AND lum.user_name = #{LGVHR_PROJECT_SESSION.employeeNo}
+												          AND role_code = 'VN_ATT_MASTER_USER') > 0 
+												)
+				</if>
+				<if test="employeeNo != null and employeeNo != ''">
+					AND tal.employee_no like '%' || UPPER(#{employeeNo})
+				</if>
+				<if test="employeeName != null and employeeName != ''">
+					AND UPPER(emp.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+				</if>
+				<if test="hireStartDate != null and hireStartDate != '' and hireEndDate != null and hireEndDate != ''">
+			        AND emp.date_hire_subsidiary BETWEEN TRUNC(TO_DATE(#{hireStartDate},'DD/MM/YYYY')) AND TRUNC(TO_DATE(#{hireEndDate},'DD/MM/YYYY')+1)
+				</if>
+					AND tal.time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+					ORDER BY tal.employee_no
+			   ) ep
+			   ,(SELECT employee_no
+			            ,#{timeAndAttendanceYyyymm} AS time_and_attendance_yyyymm     -- 년월
+			            , TO_CHAR(ADD_MONTHS(TO_DATE(MAX(time_and_attendance_yyyymm), 'YYYYMM'), -12), 'YYYY') || '12' AS prev_dec_yyyymm -- 전년12월
+			            , NVL(SUM(NVL(occur_basic_annual_leave_days, 0) + NVL(occur_monthly_ann_lv_days, 0) + NVL(annual_calibration_days, 0)), 0) AS curr_month_accu_creation_days -- 당월누적 생성일수
+			            , NVL(SUM(NVL(use_annual_leave_days, 0)), 0) AS total_use_days -- 총 사용일수
+			            , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{timeAndAttendanceYyyymm}, use_annual_leave_days,      0)), 0) AS curr_month_use_days -- 당월 사용일수
+			            , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{timeAndAttendanceYyyymm}, NVL(residual_annual_leave_days, 0) + NVL(annual_compensation_days, 0), 0)), 0) AS total_residual_days -- 총 남은일수
+			       FROM   tb_att_annual_leave_n
+			       WHERE  subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			       AND    time_and_attendance_yyyymm BETWEEN SUBSTR(#{timeAndAttendanceYyyymm}, 1, 4) || '01' AND #{timeAndAttendanceYyyymm}
+			       GROUP BY employee_no
+			    ) curr
+			    , tb_att_annual_leave_n prev
+			WHERE curr.employee_no = ep.employee_no
+			AND   curr.employee_no = prev.employee_no(+)
+			AND   curr.prev_dec_yyyymm = prev.time_and_attendance_yyyymm(+)
+			ORDER BY ep.employee_no asc
+	</select>
+	
+	<!-- Export Excel HMT_20210424 Add total_use_days and date_hire_subsidiary-->
+	<insert id="excelDownData">
+  		INSERT INTO xxlge_export_info (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+  									 , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+  									 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10, ATTRIBUTE11, ATTRIBUTE12) 
+				SELECT #{sessionId}
+		           , #{USER_SESSION.applicationUserId}
+		           , SYSDATE
+		           , 1 AS ORDER_BY
+		           , 'KO16KSC5601'
+		           , 'Employee No'      AS employee_no
+		           , 'Employee Name'    AS employee_name
+		           , 'Job Title'        AS employee_grade
+		           , 'Organization'  	AS org_name_local
+		           , 'Hire Date'    	AS date_hire_subsidiary
+		           , 'Accumulation from Last Year'     AS prev_year_carr_fwd_days
+		           , 'Create at This Year'       AS curr_year_accu_creation_days
+				   , 'Total Annual Leave of This Year'         AS total_creation_days
+				   , 'Used Annual Leave at This Month'    AS curr_month_use_days
+				   , 'Used Annual Leave at This Year'    AS total_use_days
+				   , 'Remained Annual Leave'           AS total_residual_days
+				   , 'Annual Compensation Days'           AS annual_compensation_days
+				FROM DUAL
+				UNION ALL
+		  		SELECT #{sessionId}
+		  		    , #{USER_SESSION.applicationUserId}
+		  		    , SYSDATE
+		  		    , 2 AS ORDER_BY
+		  		    , 'KO16KSC5601'
+				    , ep.employee_no
+				    , ep.employee_name
+				    , ep.employee_grade
+				    , ep.org_name_local
+				    , ep.date_hire_subsidiary
+				    , TO_CHAR(NVL(prev.residual_annual_leave_days, 0),                                                                               'FM9990.0')    AS prev_year_carr_fwd_days       -- 전년이월 (Accumulationfrom Last Year)
+				    , TO_CHAR(NVL(curr.curr_month_accu_creation_days, 0),                                                                            'FM9990.0')    AS curr_year_accu_creation_days  -- 당년누적생성 (Create at This Year)
+				    , TO_CHAR(NVL(prev.residual_annual_leave_days, 0) + NVL(curr.curr_month_accu_creation_days, 0),                                  'FM9990.0')    AS total_creation_days
+				    , TO_CHAR(NVL(curr.curr_month_use_days, 0),                                                                                      'FM9990.0')    AS curr_month_use_days           -- 당월사용 (Used Annual Leave at This Month)
+				    , TO_CHAR(NVL(curr.total_use_days, 0),                                                                                           'FM9990.0')    AS total_use_days                -- 당년 총 사용
+				    , TO_CHAR(NVL(curr.total_residual_days, 0),                                                                                      'FM9990.0')    AS total_residual_days           -- 총잔여 (Remained Annual Leave of This Year)
+				    , TO_CHAR(NVL(curr.annual_compensation_days, 0),                                                                                      'FM9990.0')    AS annual_compensation_days      -- TaiDD (Annual Compensation Days at This Month)				    
+			FROM
+			    (
+			      SELECT tal.employee_no           
+			                ,emp.full_name_local AS employee_name
+			                ,lcc.common_code_desc AS employee_grade    
+							,emp.org_name_local 
+							,TO_CHAR(emp.date_hire_subsidiary, 'DD/MM/YYYY') as date_hire_subsidiary
+			      FROM tb_att_annual_leave_n tal
+			          ,emp_master             emp
+			          ,lgcom_common_code_c    lcc
+			      WHERE tal.employee_no = emp.employee_number
+			      AND emp.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			      AND emp.grade_title = lcc.common_code
+			      AND lcc.code_type_code = 'IF_VIETNAM_GRADE_TITLE'
+			      AND emp.flsa_yn = 'N'
+			      AND emp.fse_yn = 'N'
+			    <if test="orgName != null and orgName != ''">
+					AND emp.organization_id = #{orgName}
+				</if>
+				<if test="orgName == null or orgName == ''">
+					AND emp.organization_id IN ( SELECT to_char(tac.organization_id)
+											 	   FROM tb_att_contract_n tac
+											 	  WHERE tac.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo}
+												    AND SYSDATE BETWEEN tac.effective_start_date AND nvl(tac.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+												 UNION
+												 SELECT om.organization_id
+												   FROM org_master om
+												  WHERE SYSDATE BETWEEN om.org_start_date AND NVL(om.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+												    AND om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+												    AND ( SELECT COUNT(*) AS master_count
+												          FROM lgcom_user_role_n lur
+												               ,lgcom_user_m      lum
+												          WHERE lur.application_user_id = lum.application_user_id
+												          AND lum.user_name = #{LGVHR_PROJECT_SESSION.employeeNo}
+												          AND role_code = 'VN_ATT_MASTER_USER') > 0 
+												)
+				</if>
+				<if test="employeeNo != null and employeeNo != ''">
+					AND tal.employee_no like '%' || UPPER(#{employeeNo})
+				</if>
+				<if test="employeeName != null and employeeName != ''">
+					AND UPPER(emp.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+				</if>
+				<if test="hireStartDate != null and hireStartDate != '' and hireEndDate != null and hireEndDate != ''">
+			        AND emp.date_hire_subsidiary BETWEEN TRUNC(TO_DATE(#{hireStartDate},'DD/MM/YYYY')) AND TRUNC(TO_DATE(#{hireEndDate},'DD/MM/YYYY')+1)
+				</if>
+					AND tal.time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+					ORDER BY tal.employee_no
+			   ) ep
+			   ,(SELECT employee_no
+			            ,#{timeAndAttendanceYyyymm} AS time_and_attendance_yyyymm     -- 년월
+			            , TO_CHAR(ADD_MONTHS(TO_DATE(MAX(time_and_attendance_yyyymm), 'YYYYMM'), -12), 'YYYY') || '12' AS prev_dec_yyyymm -- 전년12월
+			            , NVL(SUM(NVL(occur_basic_annual_leave_days, 0) + NVL(occur_monthly_ann_lv_days, 0) + NVL(annual_calibration_days, 0)), 0) AS curr_month_accu_creation_days -- 당월누적 생성일수
+			            , NVL(SUM(NVL(use_annual_leave_days, 0)), 0) AS total_use_days -- 총 사용일수
+			            , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{timeAndAttendanceYyyymm}, use_annual_leave_days,      0)), 0) AS curr_month_use_days -- 당월 사용일수
+			            , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{timeAndAttendanceYyyymm}, NVL(residual_annual_leave_days, 0) + NVL(annual_compensation_days, 0), 0)), 0) AS total_residual_days
+			            , NVL(MAX(DECODE(time_and_attendance_yyyymm, #{timeAndAttendanceYyyymm}, annual_compensation_days, 0)), 0) AS annual_compensation_days -- TaiDD
+			       FROM   tb_att_annual_leave_n
+			       WHERE  subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			       AND    time_and_attendance_yyyymm BETWEEN SUBSTR(#{timeAndAttendanceYyyymm}, 1, 4) || '01' AND #{timeAndAttendanceYyyymm}
+			       GROUP BY employee_no
+			    ) curr
+			    , tb_att_annual_leave_n prev
+			WHERE curr.employee_no = ep.employee_no
+			AND   curr.employee_no = prev.employee_no(+)
+			AND   curr.prev_dec_yyyymm = prev.time_and_attendance_yyyymm(+)
+			ORDER BY ORDER_BY, employee_no asc
+	</insert>
+	
+</mapper>

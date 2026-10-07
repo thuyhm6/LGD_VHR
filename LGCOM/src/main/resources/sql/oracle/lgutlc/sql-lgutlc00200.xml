@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00200">
+	
+	<!-- Summary 목록 조회 -->
+	<select id="retrieveSummaryList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /*LGUTLC00200.retrieveSummaryList*/
+			   period_name
+             , year_basis_week_id AS yyyy_ww
+             , large_class_name AS class_name     
+             , medium_class_name AS dashboard_report_center
+             , report_department_name AS report_department
+             , medium_account_name AS medium_account
+		     , account_type_name AS account_type
+		     , krw_expense_amount AS expense_amount
+		  FROM LGEMF_EXPENSE_RESULT_S
+		 WHERE 1 = 1
+		<if test="ledger != null and ledger != ''">
+		   AND ledger_id = #{ledger}
+		</if>		 
+		<if test="yyyyWw != null and yyyyWw != ''">
+		   AND year_basis_week_id = #{yyyyWw}
+		</if>
+		<if test="accountType != null and accountType != ''">
+		   AND account_type_name = #{accountType}
+		</if>
+		<if test="periodName != null and periodName != ''">
+		   AND period_name = #{periodName}
+		</if>
+		<if test="dashboardReportCenter != null and dashboardReportCenter != ''">
+		   AND medium_class_name = #{dashboardReportCenter}
+		</if>
+		<if test="reportDepartment != null and reportDepartment != ''">
+		   AND report_department_name LIKE #{reportDepartment}||'%'
+		</if>
+		<if test="mediumAccount != null and mediumAccount != ''">
+		   AND medium_account_name = #{mediumAccount}
+		</if>															   
+	</select>
+
+	
+	<!-- Week 목록을 조회. -->
+	<select id="retrieveWeekList" parameterType="java.util.HashMap" resultType="LGCOMData">
+       /*LGUTLC00200.retrieveWeekList*/	
+		SELECT week_id AS yyyy_ww
+			 , TO_CHAR(start_date,'YYYY-MM-DD')||'~'||
+			   TO_CHAR(end_date,'YYYY-MM-DD') AS week_date 
+		  FROM (SELECT year_basis_week_id AS week_id
+		  			 , MIN(week_start_date) AS start_date
+		  			 , MAX(week_end_date) AS end_date
+		  		 FROM lgemf_weekly_basis_status_v xwp
+		  		WHERE xwp.ledger_id = #{ledger}
+		  		  AND xwp.close_status_code IN ('C','O')
+		  		GROUP BY year_basis_week_id)
+    	 WHERE 1=1
+    	 <if test="yyyyWw != null and yyyyWw != ''">
+    	   AND week_id LIKE '%'||#{yyyyWw}||'%'
+     	 </if>
+      ORDER BY 1 DESC
+    	 	  
+	</select>	
+</mapper>

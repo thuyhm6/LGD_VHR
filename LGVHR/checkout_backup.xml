@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="svn-info" basedir=".">
+
+	<path id="ant.classpath"> <!-- SVNANT를 위한 추가 클래스패스 설정 -->
+        <fileset dir="/engn001/juscom01/ciserv/ant/lib">
+            <include name="**/*.jar"/>
+        </fileset>
+    </path>
+         
+    <taskdef classpathref="ant.classpath" resource="net/sf/antcontrib/antlib.xml"/> <!-- ant-contrib task 설정 파일 -->
+    <taskdef classpathref="ant.classpath" resource="org/tigris/subversion/svnant/svnantlib.xml"/> <!-- SVNANT task 설정 파일 -->
+     
+    <svnSetting
+        id="svn.settings"
+        svnkit="false"
+        javahl="false"/> <!-- SVNANT 사용을 위한 svnSetting 정보 -->
+	
+	<for list="${projectNames}" param="project">
+    	<sequential>
+			<svn refid="svn.settings"> <!-- 위에서 설정한 svnSetting을 사용함-->
+	    		<checkout
+			    	revision="HEAD"
+			        url="svn://172.19.79.162:4690/svn/trunk/@{project}"
+			        destPath="/sorc001/jussvc01/SVN_BACKUP/@{project}"/> 
+			</svn>
+      	</sequential>
+    </for>
+</project>

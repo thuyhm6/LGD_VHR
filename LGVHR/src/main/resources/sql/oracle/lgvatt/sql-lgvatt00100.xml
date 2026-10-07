@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT00100">
+	<!-- PIC 조회 -->
+	<select id="retrieveOrgContactList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  <![CDATA[
+		  SELECT OM.ACC_ORG_CODE AS ORGANIZATION_CODE
+		        ,OM.ORG_NAME_LOCAL 
+		        ,EM.EMPLOYEE_NUMBER
+		        ,EM.FULL_NAME_LOCAL
+		        ,lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', EM.grade_title) AS "grade_title"
+		        ,to_char(TACN.EFFECTIVE_START_DATE, 'yyyy-mm-dd') AS EFFECTIVE_START_DATE
+		        ,to_char(TACN.EFFECTIVE_END_DATE, 'yyyy-mm-dd') AS EFFECTIVE_END_DATE
+		        ,OM.ORGANIZATION_ID
+		  FROM   EMP_MASTER EM
+		        ,ORG_MASTER OM
+		        ,TB_ATT_CONTRACT_N TACN
+		  WHERE  EM.EMPLOYEE_NUMBER = TACN.TIME_ATTEND_CONTACT_USER_ID
+		  AND    TACN.Organization_Id  = OM.Organization_Id
+          AND    OM.ORG_END_DATE IS NULL
+		  AND    EM.FSE_YN  	= 'N'
+          AND    EM.FLSA_YN = 'N'
+		  ]]>
+		  <if test="orgCode != null and orgCode != ''">
+	      AND OM.ACC_ORG_CODE = #{orgCode}
+	      </if>											   
+	      <if test="employeeNo != null and employeeNo != ''">
+	      AND EM.EMPLOYEE_NUMBER = #{employeeNo}
+	      </if>
+	</select>
+	
+	<!-- PIC 등록 가능여부 체크 -->
+	<select id="retrieveOrgContactCheck" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  <![CDATA[
+		  SELECT count(*) AS chk_cnt
+		  FROM  EMP_MASTER EM
+		       ,TB_ATT_CONTRACT_N TACN
+		  WHERE TACN.TIME_ATTEND_CONTACT_USER_ID = EM.EMPLOYEE_NUMBER
+          AND   TACN.ORGANIZATION_ID = #{organizationId}
+          AND   EM.EMPLOYEE_NUMBER = #{employeeNumber}
+          AND   EM.FSE_YN  = 'N'
+          AND   EM.FLSA_YN = 'N'
+          AND   EM.STATUS = 'Active Assignment'
+		  ]]>                 											   
+	</select>
+	
+	<!-- PIC 등록  -->
+	<insert id="insertContatList" parameterType="java.util.HashMap">
+		INSERT INTO TB_ATT_CONTRACT_N
+		( SUBSIDIARY_CODE
+		 ,TIME_ATTEND_CONTACT_USER_ID
+		 ,ORGANIZATION_ID
+		 ,EFFECTIVE_START_DATE
+		 ,EFFECTIVE_END_DATE
+		 ,CREATION_USER_ID
+		 ,CREATION_DATE
+		 ,LAST_UPDATE_USER_ID
+		 ,LAST_UPDATE_DATE
+		
+		) values
+		( #{subsidiaryCode}
+		 ,#{employeeNumber}
+		 ,#{organizationId}
+		 ,trunc(sysdate)
+		 ,''
+		 ,#{sessionUserId}
+		 ,trunc(sysdate)
+		 ,#{sessionUserId}
+		 ,trunc(sysdate)
+		)
+	</insert>
+	
+	<!-- PIC 삭제 -->
+	<update id="deleteConatacList" parameterType="java.util.HashMap">
+		DELETE FROM TB_ATT_CONTRACT_N
+		WHERE TIME_ATTEND_CONTACT_USER_ID = #{employeeNumber}
+		AND   ORGANIZATION_ID             = #{organizationId}
+	</update>		
+
+	<insert id="UploadExcelFile" parameterType="java.util.HashMap">
+     	insert into tb_att_contract_n 
+     	(SUBSIDIARY_CODE, TIME_ATTEND_CONTACT_USER_ID
+     	, ORGANIZATION_ID
+     	, EFFECTIVE_START_DATE
+     	, CREATION_USER_ID
+     	, CREATION_DATE
+     	, LAST_UPDATE_USER_ID
+     	, LAST_UPDATE_DATE)
+		SELECT 'LGDVN'
+			,P.ATTRIBUTE2
+			,O.ORGANIZATION_ID
+			,SYSDATE
+			,'-9'
+			,SYSDATE
+			,'-9'
+			,SYSDATE
+      	FROM LGCOM_IMPORT_N P, org_master O
+     	WHERE o.acc_org_code   = P.ATTRIBUTE6
+     	AND P.session_id = #{sessionId}
+     	AND P.seq_no > 1
+     	AND (P.ATTRIBUTE2, O.ORGANIZATION_ID) NOT IN (SELECT C.TIME_ATTEND_CONTACT_USER_ID, C.ORGANIZATION_ID FROM tb_att_contract_n C)
+	</insert>
+
+	<update id="DeleteExcelFile" parameterType="java.util.HashMap">
+		DELETE FROM  tb_att_contract_n c 
+		WHERE (c.TIME_ATTEND_CONTACT_USER_ID, c.organization_id) in (
+																	SELECT P.ATTRIBUTE2 , O.ORGANIZATION_ID
+																      FROM LGCOM_IMPORT_N P, org_master O
+																     WHERE o.acc_org_code   = P.ATTRIBUTE6
+																       AND P.session_id = #{sessionId}
+																       AND P.seq_no > 1
+		)
+	</update>
+
+</mapper>

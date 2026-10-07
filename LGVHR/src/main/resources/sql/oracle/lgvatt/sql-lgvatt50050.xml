@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT50050">
+	<!-- Search Korean Leader department info -->
+	<select id="getKoreanLeaderInfo" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT50050.getKoreanLeaderInfo*/
+			      kl.subsidiary_code 
+			     ,kl.employee_number
+			     ,kl.employee_number AS old_employee_number
+			     ,kl.mail_addr
+			     ,kl.english_full_name
+			     ,kl.local_language_full_name
+			     ,kl.organization_id
+			     ,kl.organization_id AS old_organization_id
+			     ,kl.organization_name
+			     ,kl.english_organization_name			     
+			FROM  tb_att_korean_leader_n kl
+		    WHERE kl.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode} /* Session Parameter로 셋팅*/
+		      AND kl.employee_number like '%'||#{employeeNumber}||'%'
+		      AND UPPER(kl.english_full_name) like '%'||UPPER(#{englishFullName})||'%'
+			ORDER BY kl.english_full_name asc ,kl.organization_name asc ,kl.employee_number asc
+	</select>
+	
+	<!-- Excel Upload 후속 처리 -->
+    <select id="uploadExcelPartLeaderInfo" statementType="CALLABLE" parameterType="LGCOMData">
+        {call LGVATT_EXCEL_PKG.lgvatt50050(				#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},                      /* p_errcode */
+                                                        #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},                    /* p_errbuf */
+                                                        #{sessionId, mode=IN , jdbcType=NUMERIC, javaType=string},
+                                                        #{applicationUserId, mode=IN , jdbcType=NUMERIC, javaType=string}             /* p_application_user_id */
+                                                         )}
+    </select>
+	
+	<!-- Insert Korean Leader department -->
+	<insert id="insertKoreanLeaderInfo" parameterType="java.util.HashMap">
+		INSERT /*LGVATT50050.insertKoreanLeaderInfo*/ INTO TB_ATT_KOREAN_LEADER_N
+		( 
+		  subsidiary_code
+	     ,employee_number
+	     ,mail_addr
+	     ,english_full_name
+	     ,local_language_full_name
+	     ,organization_id
+	     ,organization_name
+	     ,english_organization_name
+		) values ( 
+		  #{subsidiaryCode}
+		 ,#{employeeNumber}
+		 ,#{mailAddr}
+		 ,#{englishFullName}
+		 ,#{localLanguageFullName}
+		 ,#{organizationId}
+		 ,#{organizationName}
+		 ,#{englishOrganizationName}
+		)
+	</insert>
+	
+	<!-- Update Korean Leader department -->
+    <update id="updateKoreanLeaderInfo" parameterType="LGCOMData">
+        UPDATE /*LGVATT50050.updateKoreanLeaderInfo*/
+               TB_ATT_KOREAN_LEADER_N
+        SET    
+        	   employee_number                 = #{employeeNumber}
+        	 , mail_addr                       = #{mailAddr}
+             , english_full_name               = #{englishFullName}
+             , local_language_full_name        = #{localLanguageFullName}
+             , organization_id                 = #{organizationId}
+             , organization_name               = #{organizationName}
+             , english_organization_name       = #{englishOrganizationName}
+        WHERE  employee_number                 = #{oldEmployeeNumber}
+          AND  organization_id                 = #{oldOrganizationId}
+    </update>
+    
+    <!-- delete Korean Leader department -->
+	<delete id="deleteKoreanLeaderInfo" parameterType="LGCOMData">
+		 DELETE FROM TB_ATT_KOREAN_LEADER_N
+		 WHERE subsidiary_code = #{subsidiaryCode}
+		   AND employee_number = #{employeeNumber}
+		   AND organization_id = #{organizationId}
+	</delete>
+    
+</mapper>

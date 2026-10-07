@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYCOMM">
+
+    <!-- 사용자 정보 조회 -->
+    <select id="retrieveEmployee" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYCOMM.retrieveEmployee */
+               em.employee_number     AS employee_no
+             , em.full_name_local     AS employee_name
+             , em.grade               AS grade_code
+             , em.grade_title
+             ,(SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL) as grade_title_name
+             , em.grade_type          AS emp_category_name
+             , em.organization_id
+             , um.default_org_id
+             , em.org_name_local      AS organization_name
+             , em.attribute10         AS shift_type_code
+             , em.job_family||'.'||em.job_group||'.'||em.job_detail  AS work_type_name
+             , em.assignment_category AS employment_category_code /* 재량권 조회시 사용 */
+             ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
+             , um.application_user_id
+             , um.mail_addr
+             , cv.organization_id     AS operating_unit_id
+             , lgvhr_common_pkg.get_org_resp_flag_func(em.subsidiary_code, em.employee_number, TRUNC(SYSDATE)) AS org_resp_flag /* 조직책임자 여부 */
+             , em.subsidiary_code
+             , um.language_code
+             , em.fse_yn  /* FSE 여부 */
+             , em.flsa_yn /* 단기파견자 여부 */
+        FROM   emp_master          em
+             , lgcom_user_m        um
+             , lgcom_company_v     cv
+        <if test="employeeNo == null or employeeNo == ''">
+        WHERE  em.employee_number   = #{USER_SESSION.userName}
+        </if>
+        <if test="employeeNo != null and employeeNo != ''">
+        WHERE  em.employee_number   = #{employeeNo}
+        </if>
+        AND    um.user_name         = em.employee_number
+        AND    cv.short_code        = em.subsidiary_code
+        
+		UNION ALL
+		SELECT 
+               um.user_name           AS employee_no
+             , um.local_language_full_name     AS employee_name
+             , NULL               AS grade_code
+             , NULL               AS grade_title
+             , um.grade_title_name as grade_title_name
+             , NULL          AS emp_category_name
+             , NULL
+             , um.default_org_id
+             , NULL      AS organization_name
+             , NULL      AS shift_type_code
+             , NULL  AS work_type_name
+             , NULL AS employment_category_code /* 재량권 조회시 사용 */
+             , NULL AS shift_type_name
+             , um.application_user_id
+             , um.mail_addr
+             , cv.organization_id     AS operating_unit_id
+             , NULL AS org_resp_flag /* 조직책임자 여부 */
+             , cv.short_code AS subsidiary_code
+             , um.language_code
+             , NULL AS fse_yn  /* FSE 여부 */
+             , NULL AS flsa_yn /* 단기파견자 여부 */
+        FROM   
+			   lgcom_user_m        um
+             , lgcom_company_v     CV
+             , lgcom_common_code_c cc
+			 
+        <if test="employeeNo == null or employeeNo == ''">
+        WHERE  um.user_name         = #{USER_SESSION.userName}
+        </if>
+        <if test="employeeNo != null and employeeNo != ''">
+        WHERE  um.user_name         = #{employeeNo}
+        </if>
+        AND    cv.organization_id = um.default_org_id
+        AND    cc.code_type_code = 'LGVCOM_SYSTEM_ADMIN_ID' /* system admin */
+        AND    cc.common_code = um.user_name
+        AND    cc.use_flag = 'Y'
+        AND    trunc(SYSDATE) BETWEEN cc.apply_start_date AND NVL(cc.apply_end_date, trunc(SYSDATE))
+    </select>
+
+    <!-- 급여 담당자 권한이 있는지 여부 조회 -->
+    <select id="retrievePayMasterAuthFlag" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYCOMM.retrievePayMasterAuthFlag */
+               DECODE(COUNT(1), 0, 'N', 'Y') AS auth_flag
+        FROM   dual
+        WHERE  1=1
+        <if test="authGroup != null and authGroup != ''">
+        AND    #{authGroup} = 'MASTER'
+        </if>
+        <choose>
+            <when test="employeeRoleList != null and employeeRoleList != ''">
+        AND
+        <foreach collection="employeeRoleList" item="item" index="idx" open="(" close=")" separator="OR">
+               ( #{employeeRoleList[${idx}].roleCode} IN ('VN_PAY_MASTER_USER', 'VN_PAY_SYSTEM_MASTER_USER') )
+        </foreach>
+            </when>
+            <otherwise>
+        AND    1=2
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 급여 시스템 담당자 권한이 있는지 여부 조회 -->
+    <select id="retrievePaySystemMasterAuthFlag" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYCOMM.retrievePaySystemMasterAuthFlag */
+               DECODE(COUNT(1), 0, 'N', 'Y') AS auth_flag
+        FROM   dual
+        WHERE  1=1
+        <choose>
+            <when test="employeeRoleList != null and employeeRoleList != ''">
+        AND
+        <foreach collection="employeeRoleList" item="item" index="idx" open="(" close=")" separator="OR">
+               ( #{employeeRoleList[${idx}].roleCode} IN ('VN_PAY_SYSTEM_MASTER_USER') )
+        </foreach>
+            </when>
+            <otherwise>
+        AND    1=2
+            </otherwise>
+        </choose>
+    </select>
+
+</mapper>

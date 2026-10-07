@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0012">
+
+    <!-- 가족정보 조회 -->
+    <select id="retrieveDependantList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0012.retrieveDependantList */
+               a.employee_no
+             , a.family_name
+             , a.relation_desc
+             , TO_CHAR(a.relation_start_date, 'DD/MM/YYYY') AS relation_start_date
+             , a.dependent_flag
+        FROM  tb_pay_emp_family_n a
+        WHERE a.employee_no = #{employeeNo}
+    </select>
+
+</mapper>

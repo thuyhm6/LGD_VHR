@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT00010">
+
+	<!-- Retrieve ID Card History -->
+	<select id="retrieveIdCardHis" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		SELECT xai.employee_number           AS employee_no
+		      ,emp.full_name_local           AS employee_name
+		      ,lcc.common_code_desc          AS employee_grade
+		      ,emp.org_name_local            AS emp_org_name
+		      ,lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                                ,xai.employee_number
+		                                                ,xai.log_orgn_dtm) AS shift_type_code
+		      ,xai.bildg_nm                  AS building
+		      ,xai.loct_nm                   AS location_name
+		      ,xai.in_out_dv                 AS in_out
+		      ,to_char(xai.log_orgn_dtm, 'DD/MM/YYYY HH24:MI:SS')              AS transaction_date
+		      ,xai.application_transfer_flag AS transfer_flag
+		      ,to_char(xai.application_transfer_date, 'DD/MM/YYYY HH24:MI:SS') AS transfer_date
+		  FROM xvh_att_idcard_hist_if xai
+		      ,emp_master             emp
+		      ,lgcom_common_code_c    lcc
+		 WHERE 1 = 1
+		   AND xai.employee_number = emp.employee_number
+		   AND emp.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		   AND emp.grade_title = lcc.common_code
+		   AND lcc.code_type_code = 'IF_VIETNAM_GRADE_TITLE'
+		   AND emp.flsa_yn = 'N'
+		   AND emp.fse_yn = 'N'
+	]]>
+	<if test="orgName != null and orgName != ''">
+		AND emp.organization_id = #{orgName}
+	</if>
+	<if test="orgName == null or orgName == ''">
+		AND emp.organization_id IN ( SELECT to_char(tac.organization_id)
+								 	   FROM tb_att_contract_n tac
+								 	  WHERE tac.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo}
+									    AND SYSDATE BETWEEN tac.effective_start_date AND nvl(tac.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+									 UNION
+									 SELECT om.organization_id
+									   FROM org_master om
+									  WHERE SYSDATE BETWEEN om.org_start_date AND NVL(om.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+									    AND om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+									    AND (SELECT COUNT(*) AS master_count
+									           FROM lgcom_user_role_n lur
+									               ,lgcom_user_m      lum
+									          WHERE lur.application_user_id = lum.application_user_id
+									            AND lum.user_name = #{LGVHR_PROJECT_SESSION.employeeNo}
+									            AND role_code = 'VN_ATT_MASTER_USER') > 0 )
+	</if>
+	<if test="shiftCode != null and shiftCode != ''">
+		AND lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                                               ,xai.employee_number
+		                                               ,xai.log_orgn_dtm) = #{shiftCode}
+	</if>
+	<if test="employeeNo != null and employeeNo != ''">
+		AND xai.employee_number like '%' || UPPER(#{employeeNo})
+	</if>
+	<if test="employeeName != null and employeeName != ''">
+		AND UPPER(emp.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+	</if>
+	<if test="fromDate != null and fromDate != '' and toDate != null and toDate != ''">
+		AND xai.log_orgn_dtm BETWEEN to_date(#{fromDate}, 'DD/MM/YYYY') AND to_date(#{toDate}, 'DD/MM/YYYY')+1
+	</if>
+	<if test="inOutFlag != null and inOutFlag != ''">
+		AND xai.in_out_dv = #{inOutFlag}
+	</if>
+		ORDER BY xai.log_orgn_dtm desc
+	</select>
+	
+	<insert id="excelDownData">
+  		INSERT INTO xxlge_export_info (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+  									 , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+  									 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+  									 , ATTRIBUTE11) 
+  		SELECT AA.*
+		FROM (SELECT #{sessionId}
+		           , #{USER_SESSION.applicationUserId}
+		           , SYSDATE
+		           , 1
+		           , 'KO16KSC5601'
+		           , 'Employee No'      AS employee_no
+		           , 'Employee Name'    AS employee_name
+		           , 'Job Title'        AS employee_grade
+		           , 'Organization'     AS emp_org_name
+		           , 'Shift Type'       AS shift_type_code
+				   , 'Building'         AS building
+				   , 'Location Name'    AS location_name
+				   , 'IN/OUT'           AS in_out
+				   , 'Transaction Date' AS transaction_date
+				   , 'Transfer Flag'    AS transfer_flag
+				   , 'Transfer Date'    AS transfer_date
+		       FROM DUAL
+		       
+		      UNION ALL
+		  		SELECT #{sessionId}
+		  		     , #{USER_SESSION.applicationUserId}
+		  		     , SYSDATE
+		  		     , 2
+		  		     , 'KO16KSC5601'
+		  		     , xai.employee_number           AS employee_no
+				     , emp.full_name_local           AS employee_name
+				     , lcc.common_code_desc          AS employee_grade
+				     , emp.org_name_local            AS emp_org_name
+				     , lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+				                                                ,xai.employee_number
+				                                                ,xai.log_orgn_dtm) AS shift_type_code
+				     , xai.bildg_nm                  AS building
+				     , xai.loct_nm                   AS location_name
+				     , xai.in_out_dv                 AS in_out
+				     , to_char(xai.log_orgn_dtm, 'DD/MM/YYYY HH24:MI:SS')              AS transaction_date
+				     , xai.application_transfer_flag AS transfer_flag
+				     , to_char(xai.application_transfer_date, 'DD/MM/YYYY HH24:MI:SS') AS transfer_date
+				  FROM xvh_att_idcard_hist_if xai
+				      ,emp_master             emp
+				      ,lgcom_common_code_c    lcc
+				 WHERE 1 = 1
+				   AND xai.employee_number = emp.employee_number
+				   AND emp.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+				   AND emp.grade_title = lcc.common_code
+				   AND lcc.code_type_code = 'IF_VIETNAM_GRADE_TITLE'
+				   AND emp.flsa_yn = 'N'
+				   AND emp.fse_yn = 'N'
+				<if test="orgName != null and orgName != ''">
+					AND emp.organization_id = #{orgName}
+				</if>
+				<if test="orgName == null or orgName == ''">
+					AND emp.organization_id IN ( SELECT to_char(tac.organization_id)
+											 	   FROM tb_att_contract_n tac
+											 	  WHERE tac.time_attend_contact_user_id = #{LGVHR_PROJECT_SESSION.employeeNo}
+												    AND SYSDATE BETWEEN tac.effective_start_date AND nvl(tac.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+												 UNION
+												 SELECT om.organization_id
+												   FROM org_master om
+												  WHERE SYSDATE BETWEEN om.org_start_date AND NVL(om.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+												    AND om.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+												    AND (SELECT COUNT(*) AS master_count
+												           FROM lgcom_user_role_n lur
+												               ,lgcom_user_m      lum
+												          WHERE lur.application_user_id = lum.application_user_id
+												            AND lum.user_name = #{LGVHR_PROJECT_SESSION.employeeNo}
+												            AND role_code = 'VN_ATT_MASTER_USER') > 0 )
+				</if>
+				<if test="shiftCode != null and shiftCode != ''">
+					AND lgvhr_common_pkg.get_shift_type_code_func(#{LGVHR_PROJECT_SESSION.subsidiaryCode}
+					                                               ,xai.employee_number
+					                                               ,xai.log_orgn_dtm) = #{shiftCode}
+				</if>
+				<if test="employeeNo != null and employeeNo != ''">
+					AND xai.employee_number like '%' || UPPER(#{employeeNo})
+				</if>
+				<if test="employeeName != null and employeeName != ''">
+					AND UPPER(emp.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
+				</if>
+				<if test="fromDate != null and fromDate != '' and toDate != null and toDate != ''">
+					AND xai.log_orgn_dtm BETWEEN to_date(#{fromDate}, 'DD/MM/YYYY') AND to_date(#{toDate}, 'DD/MM/YYYY')+1
+				</if>
+				<if test="inOutFlag != null and inOutFlag != ''">
+					AND xai.in_out_dv = #{inOutFlag}
+				</if>
+		) AA
+		ORDER BY AA.transaction_date desc
+	</insert>
+	
+</mapper>

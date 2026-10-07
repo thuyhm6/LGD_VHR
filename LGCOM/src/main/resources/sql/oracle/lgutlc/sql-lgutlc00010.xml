@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGUTLC00010">
+
+	<insert id="createAccessLog">
+	/*LGUTLC00010.createAccessLog*/
+		<![CDATA[
+			INSERT INTO LGCOM_SYSTEM_ACCESS_LOGGING_N
+			     ( EXECUTION_YYYYMM
+				 , LOGIN_SERIAL_NO
+				 , APPLICATION_USER_ID
+				 , MENU_ID
+				 , ACCESS_DATE
+				 , LOGIN_IP_ADDR
+				 , CREATED_BY
+				 , CREATION_DATE
+				 , LAST_UPDATED_BY
+				 , LAST_UPDATE_DATE )
+			VALUES
+				(  TO_CHAR(SYSDATE,'YYYYMM')
+				 , LGCOM_SYSTEM_ACC_LOGGING_N_SEQ.NEXTVAL
+				 , #{applicationUserId}
+				 , #{menuId}
+				 , #{accessDate}
+				 , #{loginIpAddr}
+				 , #{createdBy}
+				 , SYSDATE
+				 , #{lastUpdatedBy}
+				 , SYSDATE )
+		]]>
+	</insert>
+	
+	<insert id="createServiceTimeLog">
+	/*LGUTLC00010.createServiceTimeLog*/
+		<![CDATA[
+			INSERT INTO LGCOM_SYSTEM_SERVICE_LOGGING_N
+			     ( EXECUTION_YYYYMM
+				 , LOG_SEQ_NO
+				 , APPLICATION_USER_ID
+				 , MENU_ID
+				 , PROGRAM_ID
+				 , SYSTEM_SERVICE_DESC
+				 , ACTUAL_START_TIMESTAMP
+				 , ACTUAL_END_TIMESTAMP
+				 , CREATED_BY
+				 , CREATION_DATE
+				 , LAST_UPDATED_BY
+				 , LAST_UPDATE_DATE )
+			VALUES
+				(  TO_CHAR(SYSDATE,'YYYYMM')
+				 , LGCOM_SYSTEM_SVC_LOGGING_N_SEQ.NEXTVAL
+				 , #{applicationUserId}
+				 , #{menuId}
+				 , #{programId}
+				 , #{systemServiceDesc}
+				 , #{actualStartTimestamp}
+				 , #{actualEndTimestamp}
+				 , #{createdBy}
+				 , SYSDATE
+				 , #{lastUpdatedBy}
+				 , SYSDATE )
+		]]>
+	</insert>
+	
+	<!-- 로깅 목록 조회 -->
+	<select id="retrieveLoggingList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /*LGUTLC00010.retrieveLoggingList*/
+			   execution_yyyymm
+             , a.application_user_id
+             , NVL(b.full_name_local,b.english_full_name) AS employee_name     
+             , a.menu_id
+             , c.menu_name AS menu_name
+             , a.login_ip_addr
+		     , TO_CHAR(access_date,'YYYY-MM-DD hh24:mi:ss') AS access_date
+		  FROM LGCOM_SYSTEM_ACCESS_LOGGING_N a
+		  	 , LGCOM_USER_M_V b
+		  	 , LGCOM_MENU_M C
+		 WHERE a.application_user_id = b.application_user_id
+		   AND a.menu_id = c.menu_id
+		<if test="dateFrom != null and dateFrom != ''">
+			<![CDATA[AND access_date >= TO_DATE(#{dateFrom},'yyyy-mm-dd')]]> 
+			<![CDATA[AND access_date < TO_DATE(#{dateTo},'yyyy-mm-dd')+1]]> 
+		</if>
+		<if test="userId != null and userId != ''">
+			AND a.application_user_id = #{userId}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND (UPPER(b.full_name_local) LIKE '%' || UPPER(#{employeeName}) || '%' OR UPPER(b.english_full_name) LIKE '%' || UPPER(#{employeeName}) || '%')
+		</if>		
+		<if test="menuId != null and menuId != ''">
+		    AND UPPER(a.menu_id) LIKE '%' || UPPER(#{menuId}) || '%'		
+		</if>
+		<if test="menuName != null and menuName != ''">
+		    AND UPPER(c.menu_Name) LIKE '%' || UPPER(#{menuName}) || '%'	
+		</if>					
+		<if test="loginIpAddr != null and loginIpAddr != ''">
+			AND (UPPER(login_ip_addr) LIKE '%' || UPPER(#{loginIpAddr}) || '%')
+		</if>
+		ORDER BY access_date										   
+	</select>
+	
+</mapper>

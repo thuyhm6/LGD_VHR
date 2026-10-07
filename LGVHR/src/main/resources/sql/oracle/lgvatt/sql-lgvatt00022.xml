@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT00022">
+
+	<select id="retrieveOsKPI" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT  /*  LGVATT00022.retrieveOsKPI  */
+		        kor.SUBSIDIARY_CODE
+		       ,kor.VENDOR_CODE
+		       ,VM.VENDOR_NAME        AS VENDOR_NAME
+		       ,kor.TIME_AND_ATTENDANCE_YYYYMM
+               ,kor.ORGANIZATION_ID
+               ,om.ORG_NAME_LOCAL  AS ORG_NAME
+               ,kor.ITEM_NO
+               ,kos.ITEM_NAME
+               ,kor.PERFECT_TARGET
+               ,kor.PERFECT_POINT
+               ,kor.ACTUAL_TARGET
+               ,kor.ACTUAL_POINT
+               ,kos.CRITERIA
+		       ,kor.REASON_DESC
+		       ,kor.CREATION_USER_ID
+		       ,kor.CREATION_DATE
+		       ,kor.LAST_UPDATE_USER_ID
+		       ,kor.LAST_UPDATE_DATE
+		  FROM TB_PAY_KPI_OS_REQUEST kor LEFT OUTER JOIN TB_VENDOR_MASTER VM ON (kor.VENDOR_CODE = VM.VENDOR_CODE)
+		  LEFT OUTER JOIN ORG_MASTER om ON (om.ORGANIZATION_ID = kor.ORGANIZATION_ID)
+		  LEFT OUTER JOIN TB_PAY_KPI_OS_STANDARD kos ON (kos.ITEM_NO = kor.ITEM_NO)
+		 WHERE 1=1		 
+		   AND kor.SUBSIDIARY_CODE = #{subsidiaryCode}                                                            
+		   <if test="requestNo != null and requestNo != ''">
+		   AND kor.REQUEST_NO = #{requestNo}
+		   </if>
+		   AND kor.approval_request_id = #{requestMasterId}
+		 ORDER BY kor.ITEM_NO ASC
+	</select>
+
+    <!-- 근태 담당자 조직 가져오기 -->
+    <select id="retrieveAttContractOrg" parameterType="LGCOMData" resultType="LGCOMData">
+    	SELECT /*  LGVATT00022.retrieveAttContractOrg  */ 
+    	       ATT.ORGANIZATION_ID AS CODE
+		      ,ORG_M.ORG_NAME_LOCAL AS NAME       
+		  FROM TB_ATT_CONTRACT_N ATT LEFT OUTER JOIN ORG_MASTER ORG_M ON (ATT.ORGANIZATION_ID = ORG_M.ORGANIZATION_ID)    
+		 WHERE ATT.TIME_ATTEND_CONTACT_USER_ID=#{employeeNo}
+		   AND att.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+           AND SYSDATE BETWEEN nvl(att.effective_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(att.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+           AND SYSDATE BETWEEN nvl(ORG_M.org_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(ORG_M.org_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+         ORDER BY ORG_M.ORG_NAME_LOCAL
+    </select>
+    
+    <!-- 근태 담당자 조직 산하 기능직 직원 리스트 조회 -->
+    <select id="retrieveAttContractOrgLineWorkerList" parameterType="LGCOMData" resultType="LGCOMData">
+    	        SELECT   /*  LGVATT00022.retrieveAttContractOrgLineWorkerList  */ 
+    	        		ATT.ORGANIZATION_ID AS ORGANIZATION_ID
+				        ,M.EMPLOYEE_NUMBER  AS CODE
+				        ,M.EMPLOYEE_NUMBER  AS NAME	             
+				  FROM TB_ATT_CONTRACT_N ATT LEFT OUTER JOIN EMP_MASTER M ON (ATT.ORGANIZATION_ID = M.ORGANIZATION_ID)  
+				 WHERE ATT.TIME_ATTEND_CONTACT_USER_ID=#{employeeNo} 
+				   AND att.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+                   AND SYSDATE BETWEEN nvl(att.effective_start_date, to_date('0001-01-01', 'yyyy-mm-dd')) AND NVL(att.effective_end_date, to_date('9999-12-31', 'yyyy-mm-dd'))
+                   AND M.Status = 'Active Assignment'
+                   AND M.flsa_yn = 'N'
+                   AND M.fse_yn = 'N'
+    </select>
+    
+    <select id="retrieveEmployeeName" parameterType="LGCOMData" resultType="LGCOMData">
+    	        SELECT   /*  LGVATT00022."retrieveEmployeeName"  */ 
+    	        	   M.FULL_NAME_LOCAL  AS EMPLOYEE_NAME             
+				  FROM EMP_MASTER M   
+				 WHERE M.EMPLOYEE_NUMBER=#{employeeNo} 
+    </select>
+    
+    <select id="retrieveEmployeeNo" parameterType="LGCOMData" resultType="LGCOMData">
+    	         
+			 SELECT  EM.ORGANIZATION_ID AS ORGANIZATION_ID
+			        ,EM.EMPLOYEE_NUMBER CODE
+			        ,EM.EMPLOYEE_NUMBER NAME
+			        ,lgvatt_common_pkg.get_unit_requestor( #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			                                            ,#{orgId} ) AS org_get_arm_info           
+			  FROM EMP_MASTER EM
+			 WHERE EM.ORGANIZATION_ID = #{orgId}
+			   AND EM.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+			   AND EM.Status = 'Active Assignment'
+			   AND EM.flsa_yn = 'N'
+               AND EM.fse_yn = 'N'
+             ORDER BY EM.EMPLOYEE_NUMBER
+    </select>
+    
+    <select id="retrieveKpiOsStandard" parameterType="LGCOMData" resultType="LGCOMData">
+	     WITH TurnoverCalc AS (
+	     <![CDATA[
+		    SELECT 
+		        CASE 
+		            WHEN (NVL(SUM(active_flag), 0) + NVL(SUM(resign_flag), 0)) = 0 THEN 0
+		            ELSE ROUND((NVL(SUM(resign_flag), 0) / (NVL(SUM(active_flag), 0) + NVL(SUM(resign_flag), 0))) * 100, 2) 
+		        END AS TURNOVER_RATE
+		    FROM (
+		        SELECT 
+		            CASE WHEN DATE_HIRE_LGE <= LAST_DAY(TO_DATE(#{timeAndAttendanceYyyymm}, 'YYYYMM')) 
+		                  AND (DATE_RETIRE IS NULL OR DATE_RETIRE > LAST_DAY(TO_DATE(#{timeAndAttendanceYyyymm}, 'YYYYMM'))) 
+		                 THEN 1 ELSE 0 END AS active_flag,
+		            CASE WHEN DATE_RETIRE >= TO_DATE(#{timeAndAttendanceYyyymm}, 'YYYYMM') 
+		                  AND DATE_RETIRE <= LAST_DAY(TO_DATE(#{timeAndAttendanceYyyymm}, 'YYYYMM')) 
+		                 THEN 1 ELSE 0 END AS resign_flag
+		        FROM emp_master
+		        WHERE organization_id IN (
+		            SELECT ORGANIZATION_ID FROM ORG_MASTER 
+		            START WITH ORGANIZATION_ID = #{orgName} CONNECT BY PRIOR ORGANIZATION_ID = PARENT_ORG_ID
+		        )
+		    )
+		),
+		AttendanceCalc AS (
+		    SELECT 
+		        CASE 
+		            WHEN (SUM(DECODE(b.time_and_attendance_code, 'NW', 1, 'PH', 1, 0)) - 
+		                  SUM(CASE WHEN (r.time_and_attendance_code = 'NN' and b.time_and_attendance_code IN ('NW', 'PH')) THEN 1 ELSE 0 END)) = 0 
+		            THEN 0 
+		            ELSE 
+		                (SUM(CASE WHEN (c.paid_days > 0 OR c.attendance_days > 0) THEN 1 ELSE 0 END) 
+		                 + SUM(DECODE(r.time_attend_detail_code, 'UL_SW', 1, 0)) 
+		                 + SUM(DECODE(r.time_attend_detail_code, 'US_CHB', 1, 0)))
+		                / 
+		                (SUM(DECODE(b.time_and_attendance_code, 'NW', 1, 'PH', 1, 0)) - 
+		                 SUM(CASE WHEN (r.time_and_attendance_code = 'NN' and b.time_and_attendance_code IN ('NW', 'PH')) THEN 1 ELSE 0 END))
+		        END AS ATTENDANCE_RATE
+		    FROM tb_att_result_n r
+		    JOIN tb_att_code_c c ON r.time_and_attendance_code = c.time_and_attendance_code
+		    JOIN tb_att_base_bas_n b ON r.shift_type_code = b.shift_type_code AND r.time_and_attendance_date = b.time_and_attendance_date
+		    JOIN emp_master em ON em.employee_number = r.employee_no
+		    WHERE r.time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+		      AND em.organization_id IN (
+		          SELECT ORGANIZATION_ID FROM ORG_MASTER 
+		          START WITH ORGANIZATION_ID = #{orgName} CONNECT BY PRIOR ORGANIZATION_ID = PARENT_ORG_ID
+		      )
+		),]]>
+		PointMapping AS (
+		    SELECT /*+ MATERIALIZE */ 
+		           UPPER(udtc.user_column_name) AS kpi_type, 
+		           TO_NUMBER(udtr.lower_limit_critical_value) AS lower_limit,
+		           TO_NUMBER(udtr.upper_limit_critical_value) AS upper_limit,
+		           TO_NUMBER(udtv.table_cell_value) AS point_value
+		    FROM tb_pay_user_dfin_table_m udt
+		    JOIN tb_pay_user_dfin_table_col_n udtc ON udtc.table_seq_no = udt.table_seq_no
+		    JOIN tb_pay_user_dfin_table_row_n udtr ON udtr.table_seq_no = udt.table_seq_no
+		    JOIN tb_pay_user_dfin_table_value_n udtv ON udtv.column_seq_no = udtc.column_seq_no AND udtv.row_no = udtr.row_no
+		    WHERE udt.table_name IN ('RESIGNATION_RATE', 'ATTENDANCE_RATE')
+		      AND udtc.user_column_name IN ('RESIGNATION_RATE', 'ATTENDANCE_RATE')
+		      AND TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN udtr.effective_start_yyyymmdd AND udtr.effective_end_yyyymmdd
+		      AND TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN udtv.effective_start_yyyymmdd AND udtv.effective_end_yyyymmdd
+		),
+		KPI_Base AS (
+		    SELECT 
+		        KOS.*,
+		        
+		        CASE 
+		            WHEN UPPER(KOS.ITEM_NAME) = 'RESIGNATION RATE' THEN TO_CHAR(TR.TURNOVER_RATE)
+		            WHEN UPPER(KOS.ITEM_NAME) = 'ATTENDANCE RATE'  THEN TO_CHAR(ROUND(AC.ATTENDANCE_RATE * 100, 2)) 
+		            ELSE TO_CHAR(KOS.ACTUAL_TARGET) 
+		        END AS DYNAMIC_ACTUAL_TARGET_STR,
+		        
+		        CASE 
+		            WHEN UPPER(KOS.ITEM_NAME) = 'RESIGNATION RATE' THEN TR.TURNOVER_RATE
+		            WHEN UPPER(KOS.ITEM_NAME) = 'ATTENDANCE RATE'  THEN ROUND(AC.ATTENDANCE_RATE * 100, 2)
+		            ELSE NULL 
+		        END AS DYNAMIC_ACTUAL_TARGET_NUM
+		        
+		    FROM TB_PAY_KPI_OS_STANDARD KOS
+		    CROSS JOIN TurnoverCalc TR 
+		    CROSS JOIN AttendanceCalc AC 
+		    WHERE 1 = 1
+		)
+		select /* LGVATT00022.retrieveKpiOsStandard */
+		    NVL(#{orgName}, '') AS ORGANIZATION_ID
+		  , (SELECT ORG_NAME_LOCAL FROM ORG_MASTER WHERE ORGANIZATION_ID = #{orgName}) AS ORG_NAME
+		  , NVL(#{vendorCode}, '') AS VENDOR_CODE
+		  , (SELECT VENDOR_NAME FROM TB_VENDOR_MASTER WHERE VENDOR_CODE = #{vendorCode}) AS VENDOR_NAME
+		  , NVL(#{timeAndAttendanceYyyymm}, '') AS TIME_AND_ATTENDANCE_YYYYMM
+		  , KB.ITEM_NO
+		  , KB.ITEM_NAME
+		  , KB.PERFECT_TARGET
+		  , KB.PERFECT_POINT
+		  , KB.DYNAMIC_ACTUAL_TARGET_STR AS ACTUAL_TARGET
+		  , CASE 
+		        WHEN UPPER(KB.ITEM_NAME) IN ('RESIGNATION RATE', 'ATTENDANCE RATE') THEN PM.point_value
+		        ELSE TO_NUMBER(KB.ACTUAL_POINT) 
+		    END AS ACTUAL_POINT
+		
+		  , KB.CRITERIA
+		FROM KPI_Base KB
+		LEFT JOIN PointMapping PM 
+		  ON UPPER(KB.ITEM_NAME) IN ('RESIGNATION RATE', 'ATTENDANCE RATE')
+		 AND PM.kpi_type = REPLACE(UPPER(KB.ITEM_NAME), ' ', '_') 
+		 AND KB.DYNAMIC_ACTUAL_TARGET_NUM BETWEEN PM.lower_limit AND PM.upper_limit
+		
+		ORDER BY KB.ITEM_NO
+    </select>
+    
+    <select id="retrieveVendorList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT00022.retrieveVendorList */
+               vm.vendor_code AS code                /* 근태년월 */
+             , vm.vendor_name AS name                /* 근태년월 */
+             , to_char(vm.effective_start_date, 'DD/MM/YYYY')    AS effective_start_date
+             , to_char(vm.effective_end_date, 'DD/MM/YYYY')      AS effective_end_date
+        FROM   tb_vendor_master vm
+        WHERE  1 = 1
+           AND trunc(sysdate) between vm.effective_start_date and  nvl(vm.effective_end_date, trunc(sysdate))
+        ORDER BY vm.vendor_code DESC
+    </select>
+    
+    <!-- 특별 연장근무 저장 -->
+    <update id="saveOsKPI" parameterType="LGCOMData">
+    	 MERGE /* LGVATT00022.saveOsKPI */ INTO TB_PAY_KPI_OS_REQUEST KOR
+         USING DUAL
+                 ON (     
+                      	  KOR.REQUEST_CODE = #{requestCode}
+                      AND KOR.APPROVAL_REQUEST_ID = #{approvalRequestId}
+                      AND KOR.TIME_AND_ATTENDANCE_YYYYMM = #{timeAndAttendanceYyyymm}
+                      AND KOR.VENDOR_CODE = #{vendorCode}
+                      AND KOR.ORGANIZATION_ID = #{organizationId}
+                      AND KOR.ITEM_NO = #{itemNo}
+                    )
+           WHEN MATCHED THEN
+                UPDATE SET                         
+                        CONFIRM_FLAG						   = 'Y'
+                        ,PROGRESS_STATUS_CODE				   = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = KOR.approval_request_id AND request_code = KOR.request_code) 
+                        ,LAST_UPDATE_USER_ID                   = #{sessionUserId}
+                        ,LAST_UPDATE_DATE                      = SYSDATE
+           WHEN NOT MATCHED THEN
+                INSERT 
+                       ( 
+                        REQUEST_NO
+                       ,REQUEST_SEQ_NO 
+                       ,REQUEST_DATE
+                       ,SUBSIDIARY_CODE
+                       ,TIME_AND_ATTENDANCE_YYYYMM
+                       ,VENDOR_CODE
+                       ,ORGANIZATION_ID
+                       ,ITEM_NO
+                       ,PERFECT_TARGET
+                       ,PERFECT_POINT
+                       ,ACTUAL_TARGET
+                       ,ACTUAL_POINT
+                       ,REASON_DESC
+                       ,APPROVAL_REQUEST_ID
+                       ,REQUEST_CODE
+                       ,PROGRESS_STATUS_CODE
+                       ,CONFIRM_FLAG                   
+                       ,CREATION_USER_ID
+                       ,CREATION_DATE
+                       ,LAST_UPDATE_USER_ID
+                       ,LAST_UPDATE_DATE
+                        )VALUES(
+                        #{requestNo}
+                       ,SQ_TB_PAY_KPI_OS_REQUEST.NEXTVAL
+                       ,SYSDATE
+                       ,#{subsidiaryCode} 
+                       ,#{timeAndAttendanceYyyymm}
+                       ,#{vendorCode}
+                       ,#{organizationId}
+                       ,#{itemNo}
+                       ,#{perfectTarget}
+                       ,#{perfectPoint}
+                       ,#{actualTarget}
+                       ,#{actualPoint}
+                       ,#{reasonDesc}
+                       ,#{approvalRequestId}
+                       ,#{requestCode}
+                       ,'20'
+                       ,'N'                     
+                       ,#{sessionUserId}
+                       ,SYSDATE
+                       ,#{sessionUserId}
+                       ,SYSDATE
+                           )
+
+    </update>
+    
+    <update id="updateOsKPI" parameterType="LGCOMData">
+    	UPDATE TB_PAY_KPI_OS_REQUEST KOR
+    	   SET KOR.PROGRESS_STATUS_CODE	  = (SELECT status_code FROM lgcom_approval_request_n WHERE request_master_id = KOR.approval_request_id AND request_code = KOR.request_code) 
+              ,KOR.LAST_UPDATE_USER_ID      = #{sessionUserId}
+              ,KOR.LAST_UPDATE_DATE         = SYSDATE
+    	 WHERE KOR.SUBSIDIARY_CODE 		  = #{LGVHR_PROJECT_SESSION.subsidiaryCode} 
+    	   AND KOR.REQUEST_CODE 			  = #{requestCode}
+           AND KOR.APPROVAL_REQUEST_ID 	  = #{approvalRequestId}
+    </update>
+    
+    <update id="deleteOsKPI" parameterType="LGCOMData">
+    	DELETE FROM TB_PAY_KPI_OS_REQUEST ATT_F
+    	 WHERE ATT_F.SUBSIDIARY_CODE = #{subsidiaryCode} 
+    	   AND ATT_F.REQUEST_SEQ_NO = #{requestSeqNo}
+    </update>
+    
+    <!-- 요청서 작성 시 필요한 기본정보를 조회한다.(재량권 번호, 요청서번호) -->
+    <select id="retrieveRequestDocBaseInfo" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATT00022.retrieveRequestDocBaseInfo */
+               cc.code_data1_value   AS arm_no
+             , cc.parent_common_code AS request_code /* LGCOM 결재의 문서유형코드LGCOM_APPROVAL_REQUEST_CODE와 매핑 */
+        FROM   lgcom_common_code_c cc
+        WHERE  cc.code_type_code = 'LGVCOM_APPROVAL_REQUEST_CODE'
+        AND    cc.common_code    = 'ATT0009' /* 사무직 수정요청서 결재요청 */
+    </select>
+    
+    <select id="retrieveRequestHeaderInfo" parameterType="LGCOMData" resultType="LGCOMData">
+		    SELECT  
+		           
+		           EM.FULL_NAME_LOCAL        AS requestor_info
+		           ,(SELECT common_code_name
+		              FROM LGCOM_COMMON_CODE_MULTI_LANG_C
+		             WHERE code_type_code = 'LGCOM_APPROVAL_REQ_STATUS_CODE'
+		               AND language_code  = NVL('en','en')
+		               AND common_code    = ATT_F.PROGRESS_STATUS_CODE) AS status_name
+		           ,TO_CHAR(ATT_F.LAST_UPDATE_DATE, 'DD/MM/YYYY') AS request_date   
+		           , ATT_F.PROGRESS_STATUS_CODE as startus_code    		    
+		           
+		      FROM TB_PAY_KPI_OS_REQUEST ATT_F LEFT OUTER JOIN EMP_MASTER EM ON (ATT_F.EMPLOYEE_NO = EM.EMPLOYEE_NUMBER)
+		  LEFT OUTER JOIN tb_att_result_n tar ON (tar.employee_no = ATT_F.EMPLOYEE_NO AND TAR.time_and_attendance_date = ATT_F.TIME_AND_ATTENDANCE_DATE) 
+		     WHERE 1=1 
+		       AND ATT_F.TIME_AND_ATTENDANCE_DATE = TO_DATE(#{timeAndAttendanceDate}, 'DD/MM/YYYY') 
+		       AND ATT_F.EMPLOYEE_NO = #{employeeNo}
+		       AND ATT_F.SUBSIDIARY_CODE = #{subsidiaryCode}                                                        
+		       AND ATT_F.LAST_UPDATE_USER_ID = #{sessionUserId}
+		       
+    
+    </select>
+    
+    <select id="retrieveDupData" parameterType="LGCOMData" resultType="LGCOMData">
+    	<![CDATA[
+		    SELECT COUNT(*) AS dup_count
+			FROM   TB_PAY_KPI_OS_REQUEST kos
+			WHERE  1 = 1
+			AND    kos.time_and_attendance_yyyymm = #{timeAndAttendanceYyyymm}
+			AND    kos.progress_status_code IN ('20', '30', '40') --기등록 건( 50: Cancel 제외)
+			AND    NVL(kos.confirm_flag, 'N') <> 'R'   -- Rejected
+			AND    kos.vendor_code = #{vendorCode}
+			AND    kos.organization_id = #{orgName}
+		]]>
+    </select>
+    
+    <select id="retrieveARMInfoWithHRLead" parameterType="LGCOMData" resultType="LGCOMData">
+            WITH ApprovalTree AS (
+		    SELECT 
+		        EMPLOYEE_NUMBER,
+		        SUPERVISOR,
+		        GRADE,
+		        LEVEL AS m_level
+		    FROM emp_master
+		    WHERE SUPERVISOR IS NOT NULL
+		    START WITH EMPLOYEE_NUMBER = #{ARM_PARAM.employeeNo}
+		    CONNECT BY PRIOR SUPERVISOR = EMPLOYEE_NUMBER
+		           AND PRIOR GRADE NOT IN ('G10', 'G09', 'E16', 'E19')
+		)
+		SELECT /* LGVATT20551.retrieveARMInfoWithHRPartLD */
+		    sv.application_user_id       AS employee_id,
+		    sv.user_name                 AS employee_no,
+		    sv.local_language_full_name  AS employee_name,
+		    sv.grade_title_name          AS title_name,
+		    sv.department_code           AS department_code,
+		    sv.organization_name         AS department_name,
+		    sv.position_name             AS position_name,
+		    'APPROVAL'                   AS approval_action_code,
+		    md.application_user_id       AS mandator_user_id,
+		    md.user_name                 AS mandator_employee_no,
+		    md.local_language_full_name  AS mendator_employee_name,
+		    md.position_name             AS mendator_title_name,
+		    md.department_code           AS mendator_department_code
+		FROM ApprovalTree ht
+		JOIN lgcom_user_m sv ON ht.EMPLOYEE_NUMBER = sv.user_name
+		JOIN lgcom_user_m md ON ht.EMPLOYEE_NUMBER = md.user_name
+		WHERE ht.m_level > 1
+		UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,org_master om
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = om.org_manager_number
+        AND    om.organization_id = '51031' /* change HR leader 84010 to 87543 84044*/
+        AND    em.employee_number      = sv.user_name
+        AND    em.employee_number      = md.user_name(+)
+        AND    em.employee_number != '11111'
+        AND   NOT EXISTS (select 1 from emp_master e 
+                           where e.employee_number = #{ARM_PARAM.employeeNo}
+                            and (e.attribute2 = em.employee_number or e.attribute5 = em.employee_number or e.attribute1 = em.employee_number or e.attribute4 = em.employee_number))
+		UNION ALL
+        SELECT sv.application_user_id      AS employee_id    /* 결재자 application_user_id */
+              ,sv.user_name                AS employee_no    /* 결재자 사번 */
+              ,sv.local_language_full_name AS employee_name
+              ,sv.grade_title_name         AS title_name
+              ,sv.department_code          AS department_code  /* 결재자 조직코드 */
+              ,sv.organization_name        AS department_name
+              ,sv.position_name            AS position_name
+              ,'APPROVAL'                  AS approval_action_code
+              ,md.application_user_id      AS mandator_user_id        /* 위임자 application_user_id */
+              ,md.user_name                AS mandator_employee_no    /* 위임자 사번 */
+              ,md.local_language_full_name AS mendator_employee_name
+              ,md.position_name            AS mendator_title_name
+              ,md.department_code          AS mendator_department_code
+        FROM   emp_master   em
+              ,lgcom_organization_m om
+              ,lgcom_user_m sv
+              ,lgcom_user_m md
+        WHERE  em.employee_number = om.organization_manager_emp_no
+        AND    om.organization_code = '84010' /* change HR leader 84010 to 87543 84044*/
+        AND    em.employee_number      = sv.user_name
+        AND    em.employee_number      = md.user_name(+)
+        AND    em.employee_number != '11111'
+        AND   NOT EXISTS (select 1 from emp_master e 
+                           where e.employee_number = #{ARM_PARAM.employeeNo}
+                            and (e.attribute2 = em.employee_number or e.attribute5 = em.employee_number or e.attribute1 = em.employee_number or e.attribute4 = em.employee_number))
+    </select>
+    
+</mapper>

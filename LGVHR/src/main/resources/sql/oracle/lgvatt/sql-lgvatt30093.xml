@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT30093">
+	<!-- Search Daily Att Summary List -->
+	<select id="getMonthlySummaryList" parameterType="LGCOMData" resultType="LGCOMData">
+		  	<if test='organizationId == "25777"'>
+		      SELECT 
+					 nvl((select org_name_local from org_master where organization_id = a.team_organization_origin_id),' ') as team
+					,nvl((select org_name_local from org_master where organization_id = a.section_code),' ') as section
+					,nvl((select org_name_local from org_master where organization_id = a.task_code),' ') as task
+					,nvl((select org_name_local from org_master where organization_id = a.part_group_code),' ') as part
+					,nvl((select org_name_local from org_master where organization_id = a.unit_code),' ') as unit
+		            ,a.employee_head_count as total
+		            ,a.lateness
+		            ,a.leaving_early
+		            ,a.outing
+		            ,a.training
+		            ,a.annual_leave
+		      FROM (
+			        SELECT 
+			                 a.division_code
+			                ,a.department_code
+			                ,a.team_organization_origin_id
+			                ,a.section_code
+			                ,a.task_code 
+			                ,a.part_group_code
+			                ,a.unit_code
+			                ,a.employee_head_count
+			                ,sum(a.tardy_count) as lateness
+			                ,sum(a.early_leave_days) as leaving_early
+			                ,sum(a.going_out_count) as outing
+			                ,sum(a.sel_training_complt_count) as training
+			                ,sum(a.use_annual_leave_days) as annual_leave
+			           FROM tb_att_daily_report_s a
+			          WHERE to_char(a.time_and_attendance_date,'YYYYMM') = #{dateMonth}
+			       GROUP BY a.division_code ,a.department_code ,a.team_organization_origin_id ,a.section_code ,a.task_code ,a.part_group_code ,a.unit_code ,a.employee_head_count
+		     ) a
+		     order by a.unit_code asc, a.part_group_code asc, a.task_code asc, a.section_code asc
+		</if>
+		<if test='organizationId != "25777"'>
+		      SELECT 
+					 nvl((select org_name_local from org_master where organization_id = a.team_organization_origin_id),' ') as team
+					,nvl((select org_name_local from org_master where organization_id = a.section_code),' ') as section
+					,nvl((select org_name_local from org_master where organization_id = a.task_code),' ') as task
+					,nvl((select org_name_local from org_master where organization_id = a.part_group_code),' ') as part
+					,nvl((select org_name_local from org_master where organization_id = a.unit_code),' ') as unit
+		            ,a.employee_head_count as total
+		            ,a.lateness
+		            ,a.leaving_early
+		            ,a.outing
+		            ,a.training
+		            ,a.annual_leave
+		      FROM (
+		        SELECT 
+		                 a.division_code
+		                ,a.department_code
+		                ,a.team_organization_origin_id
+		                ,a.section_code
+		                ,a.task_code 
+		                ,a.part_group_code
+		                ,a.unit_code
+		                ,a.employee_head_count
+		                ,sum(a.tardy_count) as lateness
+		                ,sum(a.early_leave_days) as leaving_early
+		                ,sum(a.going_out_count) as outing
+		                ,sum(a.sel_training_complt_count) as training
+		                ,sum(a.use_annual_leave_days) as annual_leave
+		           FROM tb_att_daily_report_s a
+		          WHERE to_char(a.time_and_attendance_date,'YYYYMM') = #{dateMonth}
+		            <if test='orgType == "650"'>
+				    and a.unit_code = #{organizationId}
+					</if>
+					<if test='orgType == "500"'>
+					and a.part_group_code = #{organizationId}
+					</if>
+					<if test='orgType == "400"'>
+					and a.task_code = #{organizationId}
+					</if>
+					<if test='orgType == "350"'>
+					and a.section_code = #{organizationId}
+					</if>
+					<if test='orgType == "300"'>
+					and a.team_organization_origin_id = #{organizationId}
+					</if>
+					<if test='orgType == "250"'>
+					and a.department_code = #{organizationId}
+					</if>
+					<if test='orgType == "200"'>
+					and a.division_code = #{organizationId}
+				   </if>
+		       GROUP BY a.division_code ,a.department_code ,a.team_organization_origin_id ,a.section_code ,a.task_code ,a.part_group_code ,a.unit_code ,a.employee_head_count
+		     ) a
+		     order by a.unit_code asc, a.part_group_code asc, a.task_code asc, a.section_code asc
+		</if>
+	</select>
+</mapper>

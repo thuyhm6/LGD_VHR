@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00070">
+	<!-- 사용자 즐겨찾기 목록 조회 -->
+	<select id="retrieveTop10ListForMain" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGSYSC00070.retrieveTop10ListForMain */
+		       LSU.SYSTEM_CODE
+		      ,LSU.MENU_ID
+		      ,LMM.MENU_NAME
+		      ,PROGRAM_ID
+		      ,URL_ADDR
+		      ,(SELECT DECODE(COUNT(1), 1, 'Y', 'N')
+		       FROM   LGCOM_USER_MENU_AUTHO_V LU
+		       WHERE  LU.APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+		       AND    LU.MENU_ID = LSU.MENU_ID
+		       AND    ROWNUM = 1) AS MENU_AUTHO_FLAG
+		FROM   LGCOM_SYSTEM_USER_FAVORITES_N LSU
+		      ,LGCOM_MENU_M                  LM
+		      ,LGCOM_MENU_MULTI_LANG_N       LMM
+		WHERE  LSU.MENU_ID = LM.MENU_ID
+		AND    LM.MENU_ID = LMM.MENU_ID
+		AND    LMM.LANGUAGE_CODE                 = #{USER_SESSION.languageCode}
+		AND    LSU.FAVORITES_CREATION_CLASS_CODE = 'SYSTEM_EACH_LOGGING'
+		AND    LSU.SYSTEM_CODE                   = UPPER( #{USER_SESSION.systemCode} )
+		ORDER BY LSU.SORT_ORDER_NO
+	</select>
+
+	<!-- 사용자 즐겨찾기 목록 조회 -->
+	<select id="retrieveFavoriteList" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /* LGSYSC00070.retrieveFavoriteList */
+		       system_code
+		      ,menu_id
+		      ,menu_name
+		      ,program_id
+		      ,DECODE(item_type,'USER_SELECT_FAVORITE','SELECTED','ALL') as item_type
+		      ,sort_order_no
+		FROM(
+		SELECT       men.system_code
+		           , fav.menu_id
+		           , lmm.menu_name
+		           , men.program_id
+		           , fav.favorites_creation_class_code AS item_type
+		           , fav.sort_order_no AS sort_order_no
+		        FROM LGCOM_SYSTEM_USER_FAVORITES_N fav
+		           , LGCOM_MENU_M                  men
+		           , LGCOM_MENU_MULTI_LANG_N       lmm
+		           , (
+		                SELECT application_user_id
+		                     , org_id
+		                     , menu_id
+		                  FROM (
+		                        SELECT a.application_user_id
+		                             , a.role_code
+		                             , NULL AS org_id
+		                             , b.menu_id
+		                          FROM lgcom_user_role_n a
+		                             , lgcom_role_menu_n b
+		                         WHERE a.role_code = b.role_code
+		                           AND a.application_user_id = #{USER_SESSION.applicationUserId}
+		                           AND NVL(a.apply_start_date,SYSDATE) <= SYSDATE
+		                           AND NVL(a.apply_end_date,SYSDATE) >= SYSDATE
+		                           AND NOT EXISTS (SELECT '1'
+		                                             FROM LGCOM_ROLE_BIZ_ORG_N
+		                                            WHERE role_code = a.role_code
+		                                              AND organization_type_code = 'C')
+		                        UNION
+		                        SELECT urn.application_user_id
+		                             , urn.role_code
+		                             , rbo.company_id AS org_id
+		                             , rmn.menu_id
+		                          FROM LGCOM_USER_ROLE_N    urn
+		                             , LGCOM_ROLE_BIZ_ORG_N rbo
+		                             , LGCOM_ROLE_MENU_N    rmn
+		                         WHERE urn.role_code = rbo.role_code
+		                           AND urn.role_code = rmn.role_code
+		                           AND rbo.organization_type_code = 'C'
+		                           AND urn.application_user_id = #{USER_SESSION.applicationUserId}
+		                           AND NVL(urn.apply_start_date,SYSDATE) <= SYSDATE
+		                           AND NVL(urn.apply_end_date,SYSDATE) >= SYSDATE
+		                       )
+		              GROUP BY application_user_id, org_id, menu_id
+		             ) orm
+		       WHERE fav.menu_id             = men.menu_id
+		         AND men.menu_id             = lmm.menu_id
+		         AND lmm.language_code       = #{USER_SESSION.languageCode}
+		         AND fav.application_user_id = orm.application_user_id
+		         AND fav.menu_id             = orm.menu_id
+		         AND fav.favorites_creation_class_code IN ( 'USER_SELECT_FAVORITE')
+		         AND fav.application_user_id = #{USER_SESSION.applicationUserId}
+		         AND (orm.org_id IS NULL OR orm.org_id = #{USER_SESSION.defaultOrgId} )         
+		UNION ALL
+		SELECT m.system_code
+		      ,m.menu_id
+		      ,m.menu_name
+		      ,m.program_id
+		      ,'ALL' item_type
+		      ,seq sort_order_no
+		FROM   (SELECT row_number() over(ORDER BY access_date DESC) AS seq
+		              ,menu_id
+		              ,access_date
+		        FROM   (SELECT a.menu_id
+		                      ,MAX(access_date) AS access_date
+		                FROM   lgcom_system_access_logging_n a
+		                      ,lgcom_menu_m m
+		                WHERE  a.execution_yyyymm = to_char(sysdate, 'yyyymm')
+		                AND    a.application_user_id = #{USER_SESSION.applicationUserId}
+		                AND    a.menu_id LIKE 'M%'
+		                AND    a.menu_id = m.menu_id
+		                AND    m.use_flag = 'Y'
+		                AND    m.display_flag = 'Y'
+		                GROUP  BY a.menu_id
+		                )) x
+		      ,(SELECT lmm.system_code, lmm.menu_id, lmn.menu_name, lmm.program_id
+		        FROM   lgcom_menu_m lmm
+		           ,   lgcom_menu_multi_lang_n lmn
+		        WHERE  lmm.menu_id = lmn.menu_id
+                AND    lmn.language_code = #{USER_SESSION.languageCode}
+		        ) m
+		WHERE x.menu_id = m.menu_id
+		AND x.seq <= 10
+		)
+		ORDER BY item_type, sort_order_no
+	]]>
+	</select>
+
+	<!-- 사용자 즐겨찾기의 등록 -->
+	<insert id="insertFavoriteItem" parameterType="java.util.HashMap">
+	    INSERT /*LGSYSC00070.insertFavoriteItem*/
+	          INTO LGCOM_SYSTEM_USER_FAVORITES_N
+	      (  APPLICATION_USER_ID
+			,MENU_ID
+			,SYSTEM_CODE
+			,FAVORITES_CREATION_CLASS_CODE
+			,SORT_ORDER_NO
+			,CREATED_BY
+			,CREATION_DATE
+			,LAST_UPDATED_BY
+			,LAST_UPDATE_DATE )
+        VALUES
+          (
+             #{USER_SESSION.applicationUserId}
+            ,#{menuId}
+            ,( SELECT SYSTEM_CODE FROM LGCOM_MENU_M WHERE MENU_ID = #{menuId} )
+            ,'USER_SELECT_FAVORITE'
+            ,( SELECT NVL( MAX(SORT_ORDER_NO) + 1 , 1 ) FROM LGCOM_SYSTEM_USER_FAVORITES_N WHERE APPLICATION_USER_ID = #{USER_SESSION.applicationUserId} )
+            ,#{USER_SESSION.applicationUserId}
+            ,SYSDATE
+            ,#{USER_SESSION.applicationUserId}
+            ,SYSDATE
+          )
+	</insert>
+
+	<delete id="deleteFavoriteItem" parameterType="java.util.HashMap">
+		    DELETE /*LGSYSC00070.deleteFavoriteItem*/
+		      FROM LGCOM_SYSTEM_USER_FAVORITES_N
+		     WHERE FAVORITES_CREATION_CLASS_CODE = 'USER_SELECT_FAVORITE'
+		       AND APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+		       AND MENU_ID = #{menuId}
+	</delete>
+
+	<update id="updateFavoriteSortOrder" parameterType="java.util.HashMap">
+	    UPDATE /*LGSYSC00070.updateFavoriteSortOrder*/
+	           LGCOM_SYSTEM_USER_FAVORITES_N
+	       SET SORT_ORDER_NO = #{sortOrderNo}
+	     WHERE FAVORITES_CREATION_CLASS_CODE = 'USER_SELECT_FAVORITE'
+	       AND APPLICATION_USER_ID = #{USER_SESSION.applicationUserId}
+	       AND MENU_ID = #{menuId}
+	</update>
+
+</mapper>

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00230">
+	<!-- Reponsibility Super User List 조회 -->
+	<select id="retrieveReponsibilitySuperUserList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT NVL(rum.application_id,1) AS application_id
+		       , NVL(rum.responsibility_id,1) AS responsibility_id
+		       , NVL(rum.responsibility_key,rm.role_code) AS responsibility_key
+		       , rm.role_name AS responsibility_name
+		       , rum.name AS employee_name
+		       , rum.employee_num
+		       , rum.team
+		       , rum.email_address
+		       , rum.description AS employee_desc
+		       , NVL(rum.section,'KR') AS section
+		       , NVL(rum.domain,rm.system_code) AS domain
+		       , NVL(rum.org,'LGDKR') AS org
+		       , NVL(rum.txn_flag,'I') AS txn_flag
+		       , NVL(rum.intf_flag,'N') AS intf_flag
+		       , NVL(rum.attribute1,'N') AS mail_send_flag
+		       , rum.attribute8 AS resp_kor_desc
+		       , rum.attribute9 AS resp_chn_desc
+		       , rum.attribute10 AS resp_eng_desc
+		    FROM LGCOM_ROLE_M           rm
+		       , XXLGE_RESP_USER_MASTER rum
+		   WHERE rm.role_code      = rum.responsibility_key(+)
+		     AND rm.system_code    = rum.domain(+)
+		     AND rum.attribute2(+) = 'BizWeb'
+		     /* ERP Responsibility와 동일한 Role은 system에서 권한부여하므로 제외(BizWeb만 적용). */
+		     /* Admin권한,Common, SM권한은 Super User Mapping에서 제외. */
+		     AND NOT EXISTS (SELECT 'x'
+		                       FROM LGCOM_CODE_TYPE_CODE_C lc
+		                          , LGCOM_COMMON_CODE_C    lcc
+		                      WHERE lc.code_type_code = lcc.code_type_code
+		                        AND lc.code_type_code = 'LGCOM_SUPER_USER_EXCLUDE_ROLE'
+		                        AND lc.use_flag = 'Y'
+		                        AND lcc.use_flag = 'Y'
+		                        AND lcc.common_code = rm.role_code
+		                        AND (lcc.apply_start_date IS NULL OR lcc.apply_start_date &lt; SYSDATE + 1)
+		                        AND (lcc.apply_end_date IS NULL OR lcc.apply_end_date &gt; SYSDATE - 1))
+		<if test="roleName != null and roleName != ''">
+			AND UPPER(rm.role_name) LIKE '%' || UPPER(#{roleName}) || '%'
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND UPPER(rum.description) LIKE '%' || UPPER(#{employeeName}) || '%'
+		</if>
+		<if test="systemCode != null and systemCode != ''">
+			AND rm.system_code = #{systemCode}
+		</if>
+		<if test="assignFlag eq 'Y'.toString()">
+			AND rum.employee_num IS NOT NULL
+			AND rum.team IS NOT NULL
+			AND rum.employee_num IS NOT NULL
+		</if>
+		<if test="assignFlag eq 'N'.toString()">
+			AND rum.employee_num IS NULL
+			AND rum.team IS NULL
+			AND rum.employee_num IS NULL
+		</if>
+		<if test="mailControl != null and mailControl != ''">
+			AND rum.attribute1 = #{mailControl}
+		</if>
+		ORDER BY rum.name NULLS LAST, rm.system_code, rm.role_name, rum.intf_flag
+	</select>
+
+	<!-- Reponsibility Super User List 수정 -->
+	<update id="updateResponsibilitySuperUserList" parameterType="java.util.HashMap">
+		MERGE INTO XXLGE_RESP_USER_MASTER a
+		     USING (
+		            SELECT #{applicationId}      AS application_id
+		                 , #{responsibilityId}   AS responsibility_id
+		                 , #{responsibilityKey}  AS responsibility_key
+		                 , #{responsibilityName} AS responsibility_name
+		                 , #{employeeName}       AS name
+		                 , #{employeeNum}        AS employee_num
+		                 , #{team}               AS team
+		                 , #{emailAddress}       AS email_address
+		                 , #{employeeDesc}       AS description
+		                 , #{section}            AS section
+		                 , #{domain}             AS domain
+		                 , #{org}                AS org
+		                 , #{txnFlag}            AS txn_flag
+		                 , #{intfFlag}           AS intf_flag
+		                 , #{mailSendFlag}       AS attribute1
+		                 , 'BizWeb'              AS attribute2
+		                 , #{respKorDesc}        AS attribute8
+		                 , #{respChnDesc}        AS attribute9
+		                 , #{respEngDesc}        AS attribute10
+		                 , #{sessionUserId}      AS user_id
+		              FROM DUAL
+		           ) b
+		        ON (a.responsibility_id = b.responsibility_id
+		       AND a.responsibility_key = b.responsibility_key
+		       AND a.section = b.section)
+		WHEN NOT MATCHED THEN
+		     INSERT(application_id,responsibility_id,responsibility_key,responsibility_name,name,
+		            employee_num,team,email_address,description,section,domain,
+		            org,txn_flag,intf_flag,attribute1,attribute2,attribute8,attribute9,
+		            attribute10,created_by,creation_date,last_updated_by,last_update_date)
+		     VALUES(b.application_id,b.responsibility_id,b.responsibility_key,b.responsibility_name,b.name,
+		            b.employee_num,b.team,b.email_address,b.description,b.section,b.domain,
+		            b.org,b.txn_flag,b.intf_flag,b.attribute1,b.attribute2,b.attribute8,b.attribute9,
+		            b.attribute10,b.user_id,SYSDATE,b.user_id,SYSDATE)
+		WHEN MATCHED THEN
+		     UPDATE SET responsibility_name = b.responsibility_name
+		              , name                = b.name
+		              , employee_num        = b.employee_num
+		              , team                = b.team
+		              , email_address       = b.email_address
+		              , description         = b.description
+		              , domain              = b.domain
+		              , attribute1          = b.attribute1
+		              , attribute8          = b.attribute8
+		              , attribute9          = b.attribute9
+		              , attribute10         = b.attribute10
+		              , last_update_date    = SYSDATE
+		              , last_updated_by     = b.user_id
+	</update>
+
+	<!-- Responsibility 별 Super User List 조회 -->
+	<select id="retrieveResponsibilitySuperUserDetailList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT rep_key
+		     , rep_name
+		     , TO_CHAR(user_start,'YYYY-MM-DD') AS user_start
+		     , TO_CHAR(user_end,'YYYY-MM-DD') AS user_end
+		     , user_name
+		     , description
+		     , email_address
+		  FROM LGCOM_RESP_USER_MASTER_V
+		 WHERE rep_key = #{responsibilityKey}
+	</select>
+
+	<!-- Responsibility Super User 메일 주소 조회 -->
+	<select id="retrieveRespSuperUserMailAddr" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT name
+		     , email_address
+		     , responsibility_name
+		  FROM XXLGE_RESP_USER_MASTER
+		 WHERE responsibility_key = #{responsibilityKey}
+	</select>
+
+	<!--  메일 전송 -->
+	<insert id="insertRespSuperUserMail" parameterType="java.util.HashMap">
+			INSERT INTO lgcom_mail_info
+			    (seq_id
+			    ,system_code
+			    ,module_code
+			    ,sender_email_addr
+			    ,receipt_email_addr
+			    ,cc_email_addr
+			    ,type_code
+			    ,subject_content
+			    ,mail_clob_data
+			    ,mail_clob_content
+			    ,file_name
+			    ,status_code
+			    ,error_reason_desc
+			    ,last_update_date
+			    ,last_updated_by
+			    ,creation_date
+			    ,created_by
+			    ,mail_id
+			    ,language_code)
+			VALUES
+			    ( lgcom_mail_info_seq.nextval
+			    ,#{systemCode}
+			    ,#{moduleCode}
+			    ,#{senderEmailAddr}
+			    ,#{receiptEmailAddr}
+			    ,#{ccEmailAddr}
+			    ,#{typeCode}
+			    ,#{subjectContent}
+			    ,#{mailClobData}
+			    ,#{mailClobContent}
+			    ,#{fileName}
+			    ,#{statusCode}
+			    ,#{errorReasonDesc}
+			    ,sysdate
+			    ,#{USER_SESSION.applicationUserId}
+			    ,sysdate
+			    ,#{USER_SESSION.applicationUserId}
+			    ,#{mailId}
+			    ,#{languageCode})
+	</insert>
+
+	<!-- 메일전송여부 수정 -->
+	<update id="updateMailSendFlag" parameterType="java.util.HashMap">
+		UPDATE XXLGE_RESP_USER_MASTER
+		   SET attribute1          = #{mailSendFlag}
+		     , last_update_date    = SYSDATE
+		     , last_updated_by     = #{USER_SESSION.applicationUserId}
+		 WHERE responsibility_id   = #{responsibilityId}
+		   AND responsibility_key  = #{responsibilityKey}
+		   AND responsibility_name = #{responsibilityName}
+		   AND section             = #{section}
+	</update>
+</mapper>

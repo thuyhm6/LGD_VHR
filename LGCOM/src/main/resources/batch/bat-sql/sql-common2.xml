@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="Common2">
+
+	<!-- ######################## -->
+	<!-- LGCOM-Framework Used SQL -->
+	<!-- i18n 다국어 메세지 처리            -->
+	<!-- ######################## -->
+	<select id="retrieveMenuList" resultType="java.util.HashMap">
+		SELECT /* Common.retrieveMenuList */
+			   lm.menu_id
+             , lm.menu_name
+             , lm.system_code
+             , lpm.module_code
+             , lpm.program_id
+             , lm.url_addr
+             , lm.display_flag
+             , (SELECT COUNT(1)
+                FROM   lgcom_program_service_n lps
+                WHERE  lps.program_id   = lm.program_id
+                AND    lps.control_flag = 'Y'
+                AND    ROWNUM           = 1) as "SERVICE_COUNT"
+        FROM   lgcom_menu_m lm
+           ,   lgcom_program_m lpm
+        WHERE  lm.program_id            = lpm.program_id
+	</select>
+	
+	<insert id="insertTestData" parameterType="java.util.HashMap">
+      INSERT /* Common.insertTestData */
+       INTO LGCOM_IMPORT_INFO
+       (  SESSION_ID,
+          SEQ_NO,
+          CREATED_BY,
+          ATTRIBUTE1,
+          ATTRIBUTE198,
+          CREATION_DATE  )
+       VALUES
+       ( 777777777,
+         #{seqNo},
+         74773,
+         #{item}
+         ,'TestBatch' 
+         , SYSDATE )
+    </insert>
+
+</mapper>

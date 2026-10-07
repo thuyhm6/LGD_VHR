@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSETC00070">
+	<!-- 레이블 목록 조회 -->
+	<select id="retrieveLabelList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /*LGSETC00070.retrieveLabelList*/
+		  		 label_type_code
+		       , NVL(language_code,'KO') AS language_code		  
+		       , label_id
+		       , label_name
+		       , use_column_name
+		    FROM LGCOM_SCREEN_LABEL_M
+		   WHERE 1 = 1
+		<if test="labelTypeCode != null and labelTypeCode != ''">
+			AND label_type_code = #{labelTypeCode}
+		</if>
+		<if test="languageCode != null and languageCode != ''">
+			AND language_code = #{languageCode}
+		</if>		
+		<if test="labelId != null and labelId != ''">
+			AND (UPPER(label_id) LIKE '%' || UPPER(#{labelId}) || '%')
+		</if>
+		<if test="labelName != null and labelName != ''">
+			AND (UPPER(label_name) LIKE '%' || UPPER(#{labelName}) || '%')
+		</if>
+		ORDER BY label_id, language_code											   
+	</select>
+	
+		<!-- 레이블 정보 등록 -->
+	<insert id="insertLabelList" parameterType="java.util.HashMap">
+	/*LGSETC00070.insertLabelList*/
+		INSERT INTO LGCOM_SCREEN_LABEL_M
+		( label_type_code
+		 ,language_code
+ 		 ,label_id
+ 		 ,label_name
+ 		 ,use_column_name
+ 		 ,created_by
+ 		 ,creation_date
+ 		 ,last_updated_by
+ 		 ,last_update_date
+		) values
+		( #{labelTypeCode}
+		 ,#{languageCode}
+		 ,#{labelId}
+		 ,#{labelName}
+		 ,#{useColumnName}
+		 ,#{sessionUserId}
+		 ,sysdate
+		 ,#{sessionUserId}
+		 ,sysdate
+		)
+	</insert>
+	
+		<!-- 레이블 정보 수정 -->
+	<update id="updateLabelList" parameterType="java.util.HashMap">
+	/*LGSETC00070.updateLabelList*/
+		UPDATE LGCOM_SCREEN_LABEL_M
+		   SET label_type_code     	  = #{labelTypeCode}	   
+		     , label_name   		  = #{labelName}
+		     , use_column_name 		  = #{useColumnName}
+		     , last_updated_by    	  = #{sessionUserId}
+		     , last_update_date    	  = SYSDATE
+		 WHERE label_id = #{labelId}
+		   AND language_code = #{languageCode}
+	</update>	
+
+	<!-- 레이블 정보 삭제 -->
+	<update id="deleteLabelList" parameterType="java.util.HashMap">
+	/*LGSETC00070.deleteLabelList*/
+		DELETE FROM LGCOM_SCREEN_LABEL_M
+		 WHERE label_id = #{labelId}
+		   AND language_code = #{languageCode}
+	</update>
+	
+	<!-- 레이블ID 목록 조회 -->
+	<select id="retrieveLabelIdList" parameterType="java.util.HashMap" resultType="LGCOMData">
+		  SELECT /*LGSETC00070.retrieveLabelIdList*/
+		  		 DISTINCT(label_id) AS label_id
+		    FROM LGCOM_SCREEN_LABEL_M
+			WHERE 1 = 1
+			  AND (UPPER(label_id) LIKE UPPER(#{labelId}) || '%')
+			  AND ROWNUM &lt; 11	
+		ORDER BY label_id											   
+	</select>
+	
+		<!-- 레이블ID 중복 체크 -->
+	<select id="retrieveLabelIdChk" parameterType="java.util.HashMap" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /*LGSETC00070.retrieveLabelIdChk*/
+		 	   COUNT(*) AS cnt
+		  FROM LGCOM_SCREEN_LABEL_M
+		 WHERE 1 = 1
+		   AND label_id = #{labelId}
+		   AND language_code = #{languageCode}
+		   AND label_type_code = #{labelTypeCode}
+	]]>			 					  
+	</select>		
+
+</mapper>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 30초마다 설정 파일의 변경을 확인한다. 파일이 변경되면 다시 로딩한다 -->
+<configuration scan="true" scanPeriod="30 seconds">
+	<property name="APP_HOME" value="G://logs003/jussvc01/spring"/>
+
+	<appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern> %d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+		</encoder>
+	</appender>
+
+	<!-- loggerKey는 WAS의 -D Option으로 설정한다. -->
+	<appender name="rollingFile" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${APP_HOME}/logs/LGVHR-webapp-${loggerKey}.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- 파일이 하루에 한개씩 생성된다 -->
+			<fileNamePattern>${APP_HOME}/logs/LGVHR-webapp.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<!-- maxHIstory 설정은 위 부분에 롤링 정책에 따라 적용되 된다고 보면된다. 위 설정데로 라면 30일이 지난 파일은 삭제가 된다.-->
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>%d{HH:mm:ss.SSS} %-4relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+		</encoder>
+	</appender>
+
+	<appender name="userSift" class="ch.qos.logback.classic.sift.SiftingAppender">
+		<discriminator>
+			<key>userKey</key>
+			<defaultValue>userDummy</defaultValue>
+		</discriminator>
+		<sift>
+			<appender name="${userKey}_appender"  class="ch.qos.logback.core.rolling.RollingFileAppender">
+				<file>${APP_HOME}/logs/debugging/${userKey}-${loggerKey}.log</file>
+				<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+					<!-- 파일이 하루에 한개씩 생성된다 -->
+					<fileNamePattern>${APP_HOME}/logs/debugging/${userKey}.%d{yyyy-MM-dd}.log</fileNamePattern>
+					<!-- maxHIstory 설정은 위 부분에 롤링 정책에 따라 적용되 된다고 보면된다. 위 설정데로 라면 30일이 지난 파일은 삭제가 된다.-->
+					<maxHistory>30</maxHistory>
+				</rollingPolicy>
+				<encoder>
+					<pattern>%d{HH:mm:ss.SSS} %-4relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+				</encoder>
+			</appender>
+		</sift>
+	</appender>
+
+	<appender name="programSift" class="ch.qos.logback.classic.sift.SiftingAppender">
+		<discriminator>
+			<key>programKey</key>
+			<defaultValue>programDummy</defaultValue>
+		</discriminator>
+		<sift>
+			<appender name="${programKey}_appender"  class="ch.qos.logback.core.rolling.RollingFileAppender">
+				<file>${APP_HOME}/logs/debugging/${programKey}-${loggerKey}.log</file>
+				<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+					<!-- 파일이 하루에 한개씩 생성된다 -->
+					<fileNamePattern>${APP_HOME}/logs/debugging/${programKey}.%d{yyyy-MM-dd}.log</fileNamePattern>
+					<!-- maxHIstory 설정은 위 부분에 롤링 정책에 따라 적용되 된다고 보면된다. 위 설정데로 라면 30일이 지난 파일은 삭제가 된다.-->
+					<maxHistory>30</maxHistory>
+				</rollingPolicy>
+				<encoder>
+					<pattern>%d{HH:mm:ss.SSS} %-4relative [%thread] %-5level %logger{35} - %msg%n</pattern>
+				</encoder>
+			</appender>
+		</sift>
+	</appender>
+
+	<logger name="com.lgd.lgcom" level="info">
+		<appender-ref ref="rollingFile"/>
+		<appender-ref ref="userSift"/>
+		<appender-ref ref="programSift"/>
+	</logger>
+	
+	<logger name="com.lgd.lgvhr" level="info">
+		<appender-ref ref="rollingFile"/>
+		<appender-ref ref="userSift"/>
+		<appender-ref ref="programSift"/>
+	</logger>
+
+	<logger name="org.springframework" level="info"/>
+	<logger name="devonframe" level="error"/>
+	<logger name="net.sf.ehcache" level="error"/>
+
+	<logger name="com.lgd.lgcom.common.scheduler" level="error"/>
+	<logger name="org.mybatis" level="debug"/>
+	<logger name="org.apache.ibatis" level="debug"/>
+	<logger name="org.quartz" level="error"/>
+
+	<logger name="net.sf.log4jdbc" level="error"/>
+	<logger name="log4jdbc.debug" level="error"/>
+	<!-- Query 관련 -->
+	<logger name="jdbc.audit" level="off"/>
+	<logger name="jdbc.connection" level="off"/>
+	<logger name="jdbc.sqlonly" level="off"/>
+	<logger name="jdbc.sqltiming" level="off"/>
+	<logger name="jdbc.resultset" level="off"/>
+	<logger name="jdbc.resultsettable" level="off"/>
+	<logger name="lgcom.jdbc.sql" level="info"/>
+
+	<!-- Apache http client -->
+	<logger name="org.apache.http.wire" level="info"/>
+	<logger name="org.apache.http.headers" level="info"/>
+	
+	
+	<root level="debug">
+		<appender-ref ref="rollingFile"/>
+		<appender-ref ref="console"/>
+	</root>
+</configuration>

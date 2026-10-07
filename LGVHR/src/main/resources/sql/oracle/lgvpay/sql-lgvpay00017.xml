@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00017">
+
+    <!-- User Define Table 조회 -->
+    <select id="retrieveUserDefineTableList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00017.retrieveUserDefineTableList */
+               udtm.table_seq_no                                      /* 테이블일련순서번호 */
+             , udtm.table_name                                        /* 테이블명 */
+             , udtm.data_type_code                                    /* 데이터유형코드 */
+             , udtm.detail_desc
+             , udtm.data_management_way_code
+             , udtm.data_validation_flag
+             ,(SELECT CASE WHEN COUNT(1) > 0 THEN 'Y' ELSE 'N' END
+               FROM   tb_pay_user_dfin_table_row_n udtr
+               WHERE  udtr.table_seq_no = udtm.table_seq_no
+              ) AS row_exists_flag /* UDT 테이블에 대한 row 데이터가 입력되었는지 여부. */
+        FROM   tb_pay_user_dfin_table_m udtm
+        WHERE  udtm.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* 해외법인코드 */
+        <choose>
+        <when test="srchTableSeqNo != null and srchTableSeqNo != ''">
+        AND    udtm.table_seq_no    = #{srchTableSeqNo, jdbcType=NUMERIC}
+        </when>
+        <otherwise>
+        AND    udtm.table_name      LIKE '%'||#{tableName}||'%'
+        </otherwise>
+        </choose>
+        ORDER BY udtm.table_name
+    </select>
+
+    <!-- User Define Table 저장 전 유효성 체크 -->
+    <select id="retireveValidateUserDefineTableData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00017.retireveValidateUserDefineTableData */
+                   table_seq_no
+                 , table_name
+            FROM   tb_pay_user_dfin_table_m
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            WHERE  table_seq_no NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                #{deleted[${idx}].tableSeqNo, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS table_seq_no
+                     , #{created[${idx}].tableName} AS table_name
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.table_seq_no
+                      , NVL(update_list.table_name, detail_list.table_name) AS table_name
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{updated[${idx}].tableSeqNo, jdbcType=NUMERIC} AS table_seq_no
+                                 , #{updated[${idx}].tableName} AS table_name
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.table_seq_no = update_list.table_seq_no(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.table_seq_no
+                      , detail_list.table_name
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.table_name, ',') WITHIN GROUP (ORDER BY rs.table_name) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.table_name
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 User Define Table Name */
+
+             <![CDATA[
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.tableName' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.tableName' AND lslm.language_code = #{USER_SESSION.languageCode}) AS name_empty_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- User Define Table 등록 -->
+    <insert id="insertUserDefineTable" parameterType="LGCOMData">
+        INSERT /* LGVPAY00017.insertUserDefineTable */
+        INTO   tb_pay_user_dfin_table_m(
+               table_seq_no                                      /* 테이블일련순서번호 */
+             , subsidiary_code                                   /* 해외법인코드 */
+             , table_name                                        /* 테이블명 */
+             , data_type_code                                    /* 데이터유형코드 */
+             , detail_desc                                       /* 상세설명 */
+             , data_management_way_code                          /* 데이터관리방식코드 */
+             , data_validation_flag                              /* 데이터검증여부 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_user_dfin_table_m.nextval              /* table_seq_no => 테이블일련순서번호 */
+             , #{LGVHR_PROJECT_SESSION.subsidiaryCode}          /* subsidiary_code => 해외법인코드 */
+             , #{tableName}                                     /* table_name => 테이블명 */
+             , #{dataTypeCode}                                  /* data_type_code => 데이터유형코드 */
+             , #{detailDesc}                                    /* detail_desc => 상세설명 */
+             , #{dataManagementWayCode}                         /* data_management_way_code => 데이터관리방식코드 */
+             , #{dataValidationFlag}                            /* data_validation_flag => 데이터검증여부 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- User Define Table 수정 -->
+    <update id="updateUserDefineTable" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00017.updateUserDefineTable */
+               tb_pay_user_dfin_table_m
+        SET    table_name                             = #{tableName}                                      /* 테이블명 */
+             , data_type_code                         = #{dataTypeCode}                                   /* 데이터유형코드 */
+             , detail_desc                            = #{detailDesc}                                     /* 상세설명 */
+             , data_management_way_code               = #{dataManagementWayCode}                          /* 데이터관리방식코드 */
+             , data_validation_flag                   = #{dataValidationFlag}                             /* 데이터검증여부 */
+        WHERE  table_seq_no                           = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+    </update>
+
+    <!-- User Define Table 삭제 -->
+    <delete id="deleteUserDefineTable" parameterType="LGCOMData">
+        DELETE /* LGVPAY00017.deleteUserDefineTable */
+        FROM   tb_pay_user_dfin_table_m
+        WHERE  table_seq_no                           = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+        AND    subsidiary_code                        = #{LGVHR_PROJECT_SESSION.subsidiaryCode}           /* 해외법인코드 */
+    </delete>
+
+    <!-- User Define Column 전체 삭제 -->
+    <delete id="deleteUserDefineColumnAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00017.deleteUserDefineColumnAll */
+        FROM   tb_pay_user_dfin_table_col_n
+        WHERE  table_seq_no                           = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+    </delete>
+
+    <!-- User Define Table Row 전체 삭제 -->
+    <delete id="deleteUserDefineRowAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00017.deleteUserDefineRowAll */
+        FROM   tb_pay_user_dfin_table_row_n
+        WHERE  table_seq_no                           = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+    </delete>
+
+    <!-- User Define Table Value 전체 삭제 -->
+    <delete id="deleteUserDefineValueAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00017.deleteUserDefineValueAll */
+        FROM   tb_pay_user_dfin_table_value_n
+        WHERE  row_no IN (SELECT row_no
+                          FROM   tb_pay_user_dfin_table_row_n
+                          WHERE  table_seq_no = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+                          )
+    </delete>
+
+    <!-- User Define Column 리스트 조회 -->
+    <select id="retrieveUserDefineColumnList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00017.retrieveUserDefineColumnList */
+               udtc.table_seq_no
+             , udtc.column_seq_no
+             , udtc.user_column_name
+             , udtc.detail_desc
+        FROM   tb_pay_user_dfin_table_m udtm
+             , tb_pay_user_dfin_table_col_n udtc
+        WHERE  udtm.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    udtm.table_seq_no    = #{tableSeqNo, jdbcType=NUMERIC}
+        AND    udtc.table_seq_no    = udtm.table_seq_no
+        ORDER BY udtc.user_column_name
+    </select>
+
+    <!-- User Define Column 저장 전 유효성 체크 -->
+    <select id="retireveValidateUserDefineColumnData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00017.retireveValidateUserDefineColumnData */
+                   table_seq_no
+                 , column_seq_no
+                 , user_column_name
+            FROM   tb_pay_user_dfin_table_col_n
+            WHERE  table_seq_no = #{parameter.tableSeqNo, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND   column_seq_no NOT IN
+            <foreach collection="deleted" index="idx" open="(" close=")" separator=",">
+                #{deleted[${idx}].columnSeqNo, jdbcType=NUMERIC}
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  -1 AS table_seq_no
+                     , #{created[${idx}].columnSeqNo} AS column_seq_no
+                     , #{created[${idx}].userColumnName} AS user_column_name
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  detail_list.table_seq_no
+                      , NVL(update_list.column_seq_no, detail_list.column_seq_no) AS column_seq_no
+                      , NVL(update_list.user_column_name, detail_list.user_column_name) AS user_column_name
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{parameter.tableSeqNo, jdbcType=NUMERIC} AS table_seq_no
+                                 , #{updated[${idx}].columnSeqNo} AS column_seq_no
+                                 , #{updated[${idx}].userColumnName} AS user_column_name
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.table_seq_no = update_list.table_seq_no(+)
+                AND     detail_list.column_seq_no = update_list.column_seq_no(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.table_seq_no
+                      , detail_list.column_seq_no
+                      , detail_list.user_column_name
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT
+              (SELECT DISTINCT
+                      listagg(rs.user_column_name, ',') WITHIN GROUP (ORDER BY rs.user_column_name) OVER (PARTITION BY 1) AS dup_names
+               FROM   rs
+               GROUP BY rs.user_column_name
+               HAVING COUNT(1) > 1               ) AS dup_names /* 중복된 User Define Column Name */
+
+             <![CDATA[
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.columnKey' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_names_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- User Define Column 등록 -->
+    <insert id="insertUserDefineColumn" parameterType="LGCOMData">
+        INSERT /* LGVPAY00017.insertUserDefineColumn */
+        INTO   tb_pay_user_dfin_table_col_n(
+               column_seq_no                                     /* 컬럼일련순서번호 */
+             , table_seq_no                                      /* 테이블일련순서번호 */
+             , user_column_name                                  /* 사용자컬럼명 */
+             , detail_desc                                       /* 상세설명 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_user_dfin_tab_col_n.nextval            /* column_seq_no => 컬럼일련순서번호 */
+             , #{tableSeqNo, jdbcType=NUMERIC}                  /* table_seq_no => 테이블일련순서번호 */
+             , #{userColumnName}                                /* user_column_name => 사용자컬럼명 */
+             , #{detailDesc}                                    /* detail_desc => 상세설명 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- User Define Column 수정 -->
+    <update id="updateUserDefineColumn" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00017.updateUserDefineColumn */
+               tb_pay_user_dfin_table_col_n
+        SET    user_column_name                       = #{userColumnName}                                 /* 사용자컬럼명 */
+             , detail_desc                            = #{detailDesc}                                     /* 상세설명 */
+        WHERE  column_seq_no                          = #{columnSeqNo, jdbcType=NUMERIC}                  /* 컬럼일련순서번호 */
+        AND    table_seq_no                           = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+    </update>
+
+    <!-- User Define Column 삭제 -->
+    <delete id="deleteUserDefineColumn" parameterType="LGCOMData">
+        DELETE /* LGVPAY00017.deleteUserDefineColumn */
+        FROM   tb_pay_user_dfin_table_col_n
+        WHERE  column_seq_no                          = #{columnSeqNo, jdbcType=NUMERIC}                  /* 컬럼일련순서번호 */
+        AND    table_seq_no                           = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+    </delete>
+
+    <!-- User Define Table Value 전체 삭제 -->
+    <delete id="deleteUserDefineColumnValueAll" parameterType="LGCOMData">
+        DELETE /* LGVPAY00017.deleteUserDefineColumnValueAll */
+        FROM   tb_pay_user_dfin_table_value_n
+        WHERE  row_no IN (SELECT row_no
+                          FROM   tb_pay_user_dfin_table_row_n
+                          WHERE  table_seq_no = #{tableSeqNo, jdbcType=NUMERIC}                   /* 테이블일련순서번호 */
+                          )
+        AND    column_seq_no                          = #{columnSeqNo, jdbcType=NUMERIC}                  /* 컬럼일련순서번호 */
+    </delete>
+
+</mapper>

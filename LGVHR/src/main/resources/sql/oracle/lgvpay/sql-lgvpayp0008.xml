@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0008">
+
+    <!-- Payroll Item Use List 조회 -->
+    <select id="retrievePayrollItemUseList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0008.retrievePayrollItemUseList */
+               ppiu.payroll_type_code AS payroll_type_code
+             , ppiu.payroll_type_code AS ori_payroll_type_code
+             , cccm.common_code_name  AS payroll_type_name
+             , TO_CHAR(TO_DATE(ppiu.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_start_yyyymmdd
+             , TO_CHAR(TO_DATE(ppiu.effective_end_yyyymmdd  , 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_end_yyyymmdd
+             , TO_CHAR(TO_DATE(ppiu.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS ori_effective_start_yyyymmdd /* 변경 전 시작일. 데이터 수정시 조건으로 사용함 */
+        FROM   tb_pay_payroll_item_use_n ppiu
+             , lgcom_common_code_c ccc
+             , lgcom_common_code_multi_lang_c cccm
+        WHERE  ppiu.payroll_item_id = #{payrollItemId, jdbcType=NUMERIC}
+        AND    ccc.code_type_code   = 'LGVHR_PAY_RUN_TYPE'
+        AND    cccm.code_type_code  = ccc.code_type_code
+        AND    cccm.common_code     = ccc.common_code
+        AND    ccc.common_code      = ppiu.payroll_type_code
+        AND    cccm.language_code   = #{USER_SESSION.languageCode}
+        ORDER BY ccc.sort_order_no
+    </select>
+
+    <!-- 저장 전 유효성 체크 -->
+    <select id="retireveValidateData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 Detail 항목 리스트 조회 */
+            SELECT /* LGVPAYP0008.retireveValidateData */
+                   ppiu.payroll_type_code
+                 , TO_CHAR(TO_DATE(ppiu.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY')  AS effective_start_yyyymmdd
+                 , TO_CHAR(TO_DATE(ppiu.effective_end_yyyymmdd  , 'YYYYMMDD'), 'DD/MM/YYYY')  AS effective_end_yyyymmdd
+            FROM   tb_pay_payroll_item_use_n ppiu
+            WHERE  ppiu.payroll_item_id    = #{parameter.payrollItemId, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND   (ppiu.payroll_type_code, ppiu.effective_start_yyyymmdd) NOT IN
+                    <foreach collection="deleted" index="idx" open="(" close=")" separator="UNION ALL">
+                        SELECT #{deleted[${idx}].payrollTypeCode}, #{deleted[${idx}].oriEffectiveStartYyyymmdd} FROM DUAL
+                    </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+               SELECT  #{created[${idx}].payrollTypeCode}           AS payroll_type_code
+                     , #{created[${idx}].effectiveStartYyyymmdd}    AS effective_start_yyyymmdd
+                     , #{created[${idx}].effectiveEndYyyymmdd}      AS effective_end_yyyymmdd
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  NVL(update_list.payroll_type_code       , detail_list.payroll_type_code)        AS payroll_type_code
+                      , NVL(update_list.effective_start_yyyymmdd, detail_list.effective_start_yyyymmdd) AS effective_start_yyyymmdd
+                      , NVL(update_list.effective_end_yyyymmdd  , detail_list.effective_end_yyyymmdd)   AS effective_end_yyyymmdd
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Use 항목 리스트와 outer join 하여 등록된 최종 Use 리스트를 조회한다 */
+                    <foreach collection="updated" item="item" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  #{updated[${idx}].payrollTypeCode}           AS payroll_type_code
+                                 , #{updated[${idx}].oriPayrollTypeCode}        AS ori_payroll_type_code
+                                 , #{updated[${idx}].effectiveStartYyyymmdd}    AS effective_start_yyyymmdd
+                                 , #{updated[${idx}].effectiveEndYyyymmdd}      AS effective_end_yyyymmdd
+                                 , #{updated[${idx}].oriEffectiveStartYyyymmdd} AS ori_effective_start_yyyymmdd
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.payroll_type_code = update_list.ori_payroll_type_code(+)
+                AND     detail_list.effective_start_yyyymmdd = update_list.ori_effective_start_yyyymmdd(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.payroll_type_code
+                      , detail_list.effective_start_yyyymmdd
+                      , detail_list.effective_end_yyyymmdd
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT /* payroll_type_code 중복인지 체크 */
+               DISTINCT
+               listagg(ccm.common_code_name, ', ') WITHIN GROUP (ORDER BY ccm.common_code_name) OVER (PARTITION BY 1) AS dup_payroll_type_names
+             <![CDATA[
+             ,(SELECT '<br>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.use' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_payroll_type_names_title
+             ]]>
+        FROM   rs
+             , lgcom_common_code_multi_lang_c ccm
+        WHERE  ccm.code_type_code = 'LGVHR_PAY_RUN_TYPE'
+        AND    ccm.common_code = rs.payroll_type_code
+        AND    ccm.language_code = #{USER_SESSION.languageCode}
+        AND    EXISTS (/* 날짜 중복인 property 조회 */
+                       SELECT 'x'
+                       FROM   rs rs0
+                       WHERE  rs0.payroll_type_code = rs.payroll_type_code
+                       /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                       AND   (rs0.effective_start_yyyymmdd BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd
+                       OR     rs0.effective_end_yyyymmdd   BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd)
+                       GROUP BY rs0.payroll_type_code
+                       HAVING COUNT(1) > 1
+                      )
+        GROUP BY rs.payroll_type_code, ccm.common_code_name
+    </select>
+
+    <!-- Detail 등록 -->
+    <insert id="insertPayrollItemUse" parameterType="LGCOMData">
+        INSERT /* LGVPAYP0008.insertPayrollItemUse */
+        INTO   tb_pay_payroll_item_use_n(
+               payroll_item_id                                   /* 급여항목아이디 */
+             , payroll_type_code                                 /* 급여유형코드 */
+             , effective_start_yyyymmdd                          /* 유효시작년월일 */
+             , effective_end_yyyymmdd                            /* 유효종료년월일 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+        ) VALUES (
+               #{payrollItemId, jdbcType=NUMERIC}               /* payroll_item_id => 급여항목아이디 */
+             , #{payrollTypeCode}                               /* payroll_type_code => 급여유형코드 */
+             , TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_start_yyyymmdd => 유효시작년월일 */
+             , TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_end_yyyymmdd => 유효종료년월일 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+        )
+    </insert>
+
+    <!-- Detail 수정 -->
+    <update id="updatePayrollItemUse" parameterType="LGCOMData">
+        UPDATE /* LGVPAYP0008.updatePayrollItemUse */
+               tb_pay_payroll_item_use_n
+        SET    payroll_type_code                      = #{payrollTypeCode}                               /* 급여유형코드 */
+             , effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효시작년월일 */
+             , effective_end_yyyymmdd                 = TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효종료년월일 */
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+        AND    payroll_type_code                      = #{oriPayrollTypeCode}                             /* 급여유형코드 */
+        AND    effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD')
+    </update>
+
+    <!-- Detail 삭제 -->
+    <delete id="deletePayrollItemUse" parameterType="LGCOMData">
+        DELETE /* LGVPAYP0008.deletePayrollItemUse */
+        FROM   tb_pay_payroll_item_use_n
+        WHERE  payroll_item_id                        = #{payrollItemId, jdbcType=NUMERIC}                /* 급여항목아이디 */
+        AND    payroll_type_code                      = #{oriPayrollTypeCode}                             /* 급여유형코드 */
+        AND    effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{oriEffectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD')
+    </delete>
+
+</mapper>

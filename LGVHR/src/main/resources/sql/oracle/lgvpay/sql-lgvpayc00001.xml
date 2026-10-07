@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYC00001">
+
+	<select id="executePayrollRun" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVPAYC00001.executeUserInterface */
+		       lgvpay_calculation_pkg.main_proc( #{empNo, mode=IN, jdbcType=VARCHAR}, 
+		                               #{assignmentSetId, mode=IN, jdbcType=NUMERIC}, 
+		                               #{periodId, mode=IN, jdbcType=NUMERIC},
+		                               #{runTypeName, mode=IN, jdbcType=VARCHAR},
+		                               #{userId, mode=IN, jdbcType=NUMERIC},
+		                               #{errbuf, mode=OUT, jdbcType=VARCHAR},
+		                               #{payrollCalculationExecId, mode=OUT, jdbcType=NUMERIC} ) }
+	</select>
+</mapper>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00011">
+    <!-- 명세서 오픈일 조회 -->
+    <select id="retrievePaySlipOpenDateMngList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00011.retrievePaySlipOpenDateMngList */
+                a.payroll_calculation_exec_id
+              , to_char(to_date(b.payroll_calc_period_value,'yyyymm'),'mm/yyyy') pay_months
+              , c.common_code_name as pay_type_name
+              , ( SELECT sum(s.bank_transfer_amount) FROM  tb_pay_result_s s WHERE s.payroll_calculation_exec_id = a.payroll_calculation_exec_id) as net_take_amount
+              , ( SELECT COUNT(*) FROM  tb_pay_result_s s WHERE s.payroll_calculation_exec_id = a.payroll_calculation_exec_id) as total_count
+              , a.soe_open_date
+              , to_char( a.soe_open_date,'dd/mm/yyyy') as pay_slip_open_date
+              , to_char( a.soe_open_date,'hh24') as hour
+              , to_char( a.soe_open_date,'mi') as minutes
+        FROM    tb_pay_calc_exec_n a
+              , tb_pay_calc_period_basis_n b
+              , lgcom_common_code_multi_lang_c c
+        WHERE   a.basis_date BETWEEN to_Date(b.start_yyyymmdd,'yyyymmdd') AND to_date(b.end_yyyymmdd,'yyyymmdd')
+        AND     b.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND     a.confirm_flag = 'Y'
+        AND     c.code_type_code = 'LGVHR_PAY_RUN_TYPE'
+        AND     c.common_code = a.payroll_type_code
+        AND     c.language_code = #{USER_SESSION.languageCode}
+        AND     b.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+        AND     a.payroll_type_code = #{payrollTypeCode}
+        <if test="calculationSetId != null and calculationSetId != ''">
+        AND     a.payroll_calculation_set_id = #{calculationSetId}
+        </if>
+    </select>
+
+    <!-- 명세서 오픈일 수정 -->
+    <update id="updatePaySlipOpenDateMng" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00011.updatePaySlipOpenDateMng */
+                tb_pay_calc_exec_n
+        SET     soe_open_date = to_date(#{soeOpenDate}, 'yyyy-mm-dd HH24:MI')
+        WHERE   payroll_calculation_exec_id = #{payrollCalculationExecId}
+    </update>
+</mapper>

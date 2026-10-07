@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVINFC0010">
+	
+	<select id="executeUserRoleInterface" parameterType="LGCOMData" statementType="CALLABLE">
+		{ call /* LGVINFC0010.executeUserRoleInterface */
+		       lgvinf_if_batch_pkg.user_role_proc( #{errorCode, mode=OUT, jdbcType=VARCHAR}, 
+		                                           #{errorBuf, mode=OUT, jdbcType=VARCHAR}, 
+		                                           #{USER_SESSION.applicationUserId, mode=IN, jdbcType=VARCHAR} ) }
+	</select>
+	
+</mapper>

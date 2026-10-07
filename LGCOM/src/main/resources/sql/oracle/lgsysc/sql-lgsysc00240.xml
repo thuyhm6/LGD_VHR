@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGSYSC00240">
+	<!-- 검토자 등록 -->
+	<insert id="insertRequestReviewers" parameterType="java.util.HashMap" statementType="CALLABLE">
+		{ call /* LGSYSC00240.insertRequestReviewers */
+		       LGCOM_BIZWEB_APPROVAL_PKG.PREVIEW_REQUEST_PROC(#{requestMasterId, mode=IN, jdbcType=NUMERIC}
+		                                                     ,#{orgId, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{requestCode, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{employeeNo, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{sessUserName, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{inspectionComment, mode=IN, jdbcType=VARCHAR}
+		                                                     ,'N'
+		                                                     ,#{useFlag, mode=IN, jdbcType=VARCHAR}
+		                                                     ,'Y'
+		                                                     ,'Y'
+		                                                     ,#{errorCode, mode=OUT, jdbcType=VARCHAR}
+		                                                     ,#{errorMsg, mode=OUT, jdbcType=VARCHAR})
+		}
+	</insert>
+
+	<!-- 검토의견 조회 -->
+	<select id="retrieveReviewRequestData" parameterType="java.util.HashMap" resultType="LGCOMData">
+		SELECT /* LGSYSC00240.retrieveReviewRequestData */
+		       request_master_id
+		     , request_code
+		     , approval_seqs
+		     , user_no
+		     , inspection_comment
+		     , approval_comment
+		     , NVL(share_flag,'N') AS use_flag
+		     , mandator_employee_no AS approver_user_no
+		     , approval_line_id AS attach_file_id
+		  FROM LGCOM_APPROVAL_STATUS_N lasn
+		 WHERE request_master_id    = #{requestId}
+		   AND request_code         = #{requestCode}
+		   AND user_no              = #{USER_SESSION.userName}
+		   AND approval_action_code = 'PREVIEW'
+		   AND approval_status_code = '2'
+		   AND mandator_employee_no = (SELECT b.user_no
+		                                 FROM LGCOM_APPROVAL_REQUEST_N a
+		                                    , LGCOM_APPROVAL_STATUS_N  b
+		                                WHERE a.request_master_id   = b.request_master_id
+		                                  AND a.request_code        = b.request_code
+		                                  AND a.process_status_code = b.process_seq_no
+		                                  AND a.request_master_id   = lasn.request_master_id
+		                                  AND a.request_code        = lasn.request_code)
+		   /* 여러번 검토지정을 받았으면 선입선출로 처리한다. */
+		   AND approval_seqs        = (SELECT min(approval_seqs)
+		                                 FROM LGCOM_APPROVAL_STATUS_N asn
+		                                WHERE request_master_id    = lasn.request_master_id
+		                                  AND request_code         = lasn.request_code
+		                                  AND user_no              = lasn.user_no
+		                                  AND approval_action_code = lasn.approval_action_code
+		                                  AND approval_status_code = lasn.approval_status_code
+		                                  AND mandator_employee_no = lasn.mandator_employee_no)
+	</select>
+
+	<!-- 검토자 의견 저장 -->
+	<update id="updateRequestReviewData" parameterType="java.util.HashMap" statementType="CALLABLE">
+		{ call /* LGSYSC00240.updateRequestReviewData */
+		       LGCOM_BIZWEB_APPROVAL_PKG.PREVIEW_UPDATE_PROC(#{requestId, mode=IN, jdbcType=NUMERIC}
+		                                                     ,#{orgId, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{requestCode, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{approvalSeqs, mode=IN, jdbcType=NUMERIC}
+		                                                     ,#{previewComment, mode=IN, jdbcType=VARCHAR}
+		                                                     ,#{attachFileId, mode=IN, jdbcType=NUMERIC}
+		                                                     ,#{errorCode, mode=OUT, jdbcType=VARCHAR}
+		                                                     ,#{errorMsg, mode=OUT, jdbcType=VARCHAR})
+		}
+	</update>
+</mapper>

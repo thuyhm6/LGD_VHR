@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0021">
+
+    <!-- Payroll Run별 대상자 리스트 조회 -->
+    <select id="retrievePayrollRunEmpList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0021.retrievePayrollRunEmpList */
+               pcee.employee_no                              AS employee_no
+             , em.full_name_local                            AS employee_name
+             , em.org_name_local                             AS organization_name
+             , TO_CHAR(em.date_hire_subsidiary,'dd/mm/yyyy') AS hire_date
+             , TO_CHAR(em.date_retire,'dd/mm/yyyy')          AS resignation_date
+
+        FROM   tb_pay_calc_emp_exec_n pcee
+             , emp_master em
+
+        <choose>
+        <when test="payrollCalculationExecIdList != null">
+        WHERE  pcee.payroll_calculation_exec_id IN
+        <foreach collection="payrollCalculationExecIdList" index="idx" open="(" close=")" separator=",">
+               #{payrollCalculationExecIdList[${idx}], jdbcType=NUMERIC}
+        </foreach>
+        </when>
+        <otherwise>
+        WHERE  1=2
+        </otherwise>
+        </choose>
+        <if test="employeeNo != null and employeeNo != ''">
+        AND    pcee.employee_no = #{employeeNo}
+        </if>
+        AND    NVL(pcee.error_flag, 'N') = 'N' /* 정상건만 조회 */
+        AND    em.employee_number = pcee.employee_no
+        <if test="organizationId != null and organizationId.toString() != ''">
+        AND    em.organization_id = #{organizationId, jdbcType=NUMERIC}
+        </if>
+
+        GROUP BY pcee.employee_no
+               , em.full_name_local
+               , em.org_name_local
+               , TO_CHAR(em.date_hire_subsidiary,'dd/mm/yyyy')
+               , TO_CHAR(em.date_retire,'dd/mm/yyyy')
+
+        ORDER BY pcee.employee_no
+    </select>
+
+</mapper>

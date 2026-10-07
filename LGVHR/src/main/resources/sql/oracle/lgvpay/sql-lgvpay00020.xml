@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00020">
+
+    <!-- 날짜별 User Define Table Value 조회 -->
+    <select id="retrieveUserDefineTableValueSummaryList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00020.retrieveUserDefineTableValueSummaryList */
+               udtm.table_seq_no
+             , udtm.table_name
+
+             , udtr.row_no
+             , udtr.sort_order_no
+             , udtr.lower_limit_critical_value
+             , udtr.upper_limit_critical_value
+             , udtr.effective_start_yyyymmdd AS row_start_date
+             , udtr.effective_end_yyyymmdd AS row_end_date
+
+             , udtv.column_seq_no
+             , udtc.user_column_name
+             , udtv.table_cell_id
+             , udtv.table_cell_value
+             , TO_CHAR(TO_DATE(udtv.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_start_yyyymmdd
+             , TO_CHAR(TO_DATE(udtv.effective_end_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_end_yyyymmdd
+        FROM   tb_pay_user_dfin_table_m udtm
+             , tb_pay_user_dfin_table_col_n udtc
+             , tb_pay_user_dfin_table_row_n udtr
+             , tb_pay_user_dfin_table_value_n udtv
+        WHERE  udtm.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    udtm.table_seq_no    = #{tableSeqNo, jdbcType=NUMERIC}
+        AND    udtc.table_seq_no    = udtm.table_seq_no
+        AND    udtr.table_seq_no    = udtm.table_seq_no
+        AND    TO_CHAR(TO_DATE(#{effectiveDate}, 'DD/MM/YYYY'), 'YYYYMMDD') BETWEEN udtr.effective_start_yyyymmdd AND udtr.effective_end_yyyymmdd
+        AND    udtv.column_seq_no   = #{columnSeqNo, jdbcType=NUMERIC}
+        AND    udtv.row_no          = udtr.row_no
+        AND    udtv.column_seq_no   = udtc.column_seq_no
+        AND    TO_CHAR(TO_DATE(#{effectiveDate}, 'DD/MM/YYYY'), 'YYYYMMDD') BETWEEN udtv.effective_start_yyyymmdd AND udtv.effective_end_yyyymmdd
+        ORDER BY udtm.table_name, udtr.sort_order_no, udtr.effective_start_yyyymmdd, udtv.column_seq_no, udtv.table_cell_value
+    </select>
+
+</mapper>

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVATT00013">
+	<!-- Search OS KPI Standard -->
+	<select id="retrieveOsKpiStandard" parameterType="LGCOMData" resultType="LGCOMData">
+		  	SELECT /*LGVATT00013.retrieveOsKpiStandard*/
+				   kos.kpi_os_standard_no	
+		          ,kos.ITEM_NO
+                  ,kos.ITEM_NAME
+                  ,kos.PERFECT_TARGET
+                  ,kos.PERFECT_POINT
+                  ,kos.ACTUAL_TARGET
+                  ,kos.ACTUAL_POINT
+                  ,kos.CRITERIA
+		          ,(select local_language_full_name from lgcom_user_m where application_user_id = kos.creation_user_id) as creation_user_id /* 등록자ID */
+		          ,TO_CHAR(kos.creation_date, 'DD/MM/YYYY') as creation_date	/* 등록일자 */
+		    FROM TB_PAY_KPI_OS_STANDARD kos
+		    WHERE 1 = 1
+		    <if test="itemName != null and itemName != ''">
+	          AND (UPPER(kos.item_name) LIKE '%' || UPPER(#{itemName}) || '%')
+	        </if>
+			ORDER BY kos.kpi_os_standard_no, kos.ITEM_NO asc
+	</select>
+	
+	<!-- 휴일 등록 -->
+	<insert id="insertOsKpiStandard" parameterType="java.util.HashMap">
+		INSERT /*LGVATT00013.insertOsKpiStandard*/ INTO TB_PAY_KPI_OS_STANDARD
+		( kpi_os_standard_no
+		 ,item_no
+		 ,item_name
+         ,perfect_target
+         ,perfect_point
+         ,actual_target
+         ,actual_point		
+         ,criteria	
+		 ,creation_user_id 					/* 사용자ID */
+		 ,creation_date 					/* 등록일자 */
+		 ,last_update_user_id 				/* 최종수정자ID */
+		 ,last_update_date 					/* 수정일자 */
+		) values
+		( SQ_TB_PAY_KPI_OS_STANDARD.NEXTVAL
+		 ,#{itemNo}
+		 ,#{itemName}
+         ,#{perfectTarget}
+         ,#{perfectPoint}
+         ,#{actualTarget}
+         ,#{actualPoint}
+         ,#{criteria}
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		 ,#{applicationUserId}
+		 ,trunc(sysdate)
+		)
+	</insert>
+	
+	<!-- 휴일 수정 -->
+    <update id="updateOsKpiStandard" parameterType="LGCOMData">
+        UPDATE /*LGVATT00013.updateOsKpiStandard*/
+               TB_PAY_KPI_OS_STANDARD 
+        SET    item_no                          = #{itemNo}             
+             , item_name                        = #{itemName}
+             , perfect_target                   = #{perfectTarget}                 
+             , perfect_point                    = #{perfectPoint}
+             , actual_target                    = #{actualTarget}
+             , actual_point                     = #{actualPoint}
+             , criteria                         = #{criteria}
+             , last_update_user_id              = #{applicationUserId}            							/* 최종수정사용자아이디 */
+             , last_update_date                 = trunc(sysdate)                 							/* 최종수정일자 */
+        WHERE  kpi_os_standard_no               = #{kpiOsStandardNo}              
+    </update>
+    
+    <!-- 휴일 삭제 -->
+	<delete id="deleteOsKpiStandard" parameterType="LGCOMData">
+		 DELETE FROM TB_PAY_KPI_OS_STANDARD
+		 WHERE kpi_os_standard_no = #{kpiOsStandardNo}
+	</delete>
+    
+</mapper>

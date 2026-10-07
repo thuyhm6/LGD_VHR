@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00026">
+
+    <!-- Payroll Run 리스트 조회 -->
+    <select id="retrievePayrollRunList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00026.retrievePayrollRunList */
+               pce.payroll_calculation_exec_id
+             , pce.payroll_calculation_set_id
+             , pacs.payroll_calculation_set_name
+             , pcpb.payroll_calc_period_value                                       AS pay_month
+             , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')  AS payroll_calc_period_value
+             , pce.payroll_type_code                                                AS payroll_type_code
+             , lgvhr_common_pkg.decode_lookup('LGVHR_PAY_RUN_TYPE' ,pce.payroll_type_code ,NULL ,#{USER_SESSION.languageCode})           AS payroll_type_name
+             , TO_CHAR(pce.basis_date,'dd/mm/yyyy')                                 AS basis_date
+             , (SELECT count(1) FROM tb_pay_calc_emp_exec_n pcee where pcee.payroll_calculation_exec_id = pce.payroll_calculation_exec_id and nvl(pcee.error_flag,'N') = 'N')   AS normal_count
+             , (SELECT count(1) FROM tb_pay_slip_send_n  peie, tb_pay_calc_emp_exec_n pcee
+                  WHERE pcee.payroll_calculation_exec_id = pce.payroll_calculation_exec_id and nvl(pcee.error_flag,'N') = 'N'
+                  AND  pcee.employee_no = peie.employee_no and pcpb.payroll_calc_period_value = peie.payment_yyyymm )                               AS email_count
+             , (SELECT count(1) FROM tb_pay_slip_send_n  peie, tb_pay_calc_emp_exec_n pcee
+                  WHERE pcee.payroll_calculation_exec_id = pce.payroll_calculation_exec_id and nvl(pcee.error_flag,'N') = 'N'
+                  AND pcee.employee_no = peie.employee_no and pcpb.payroll_calc_period_value = peie.payment_yyyymm and peie.slip_creation_flag = 'Y')   AS create_payslip_count
+             , (SELECT count(1) FROM tb_pay_slip_send_n  peie, tb_pay_calc_emp_exec_n pcee
+                  WHERE pcee.payroll_calculation_exec_id = pce.payroll_calculation_exec_id and nvl(pcee.error_flag,'N') = 'N'
+                  AND  pcee.employee_no = peie.employee_no and pcpb.payroll_calc_period_value = peie.payment_yyyymm and peie.transfer_flag  = 'Y')     AS send_email_count
+             , TO_CHAR(pce.creation_date,'dd/mm/yyyy hh24:mi:ss')              AS creation_date
+             ,(SELECT um.user_name FROM lgcom_user_m um WHERE TO_CHAR(um.application_user_id) = pce.creation_user_id) AS created_by
+    FROM   tb_pay_calc_period_basis_n    pcpb
+         , tb_pay_calc_exec_n            pce
+         , tb_pay_calc_set_n             pacs
+    WHERE  pcpb.payroll_calc_period_value = TO_CHAR(TO_DATE(#{payrollCalcPeriodValue},'mm/yyyy'),'yyyymm')
+    AND    pcpb.subsidiary_Code                = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+    AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd, 'yyyymmdd') AND to_date(pcpb.end_yyyymmdd, 'yyyymmdd')
+    AND    NVL(pce.confirm_flag, 'N') = 'Y' /* 확정 건 */
+    AND    pacs.payroll_calculation_set_id     = pce.payroll_calculation_set_id
+    </select>
+    
+    <!-- retrievePaySlipAttendanceList -->
+    <select id="retrievePaySlipAttendanceList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00026.retrievePaySlipAttendanceList */
+             to_char(ar.time_and_attendance_date, 'dd/mm') AS attendance_ymd
+            ,ar.a_day_of_the_week_code                    AS screen_week_name
+            ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_DAY_OF_WEEK', ar.a_day_of_the_week_code, NULL, 'cn') FROM DUAL) VIET_WEEK_NAME
+            ,em.organization_id                           AS employee_org
+            ,ar.employee_no                               AS employee_no
+            ,em.full_name_local                           AS employee_name
+            ,em.grade_title                               AS employee_grade
+            ,ac.time_and_attendance_type_code             AS actual_attendance_type
+            ,ar.time_and_attendance_code                  AS actual_attendance_detail
+            ,(SELECT NVL(lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_ACTUAL_CODE', ar.time_and_attendance_code, NULL, 'cn'), ' ') FROM DUAL)   AS  ATTENDANCE_NAME
+            ,ar.time_attend_detail_code                   AS actual_attend_detail_reason   
+            ,(SELECT NVL(lgvhr_common_pkg.decode_lookup('LGVHR_ATTENDANCE_DETAIL_CODE', ar.time_attend_detail_code, NULL, 'cn'), ' ') FROM DUAL)        AS  ATTENDANCE_DETAIL_NAME                
+            ,ar.shift_type_code                           AS actual_shift_code
+            ,ar.night_shift_flag                          AS actual_day_night
+            ,ar.evening_meal_flag                         AS actual_dinner_chk
+            ,ar.work_start_time                           AS actual_start_tm
+            ,NVL(ar.overtime_sum_hours, 0)                AS actual_o_t
+            ,NVL(ar.weekday_overtime_hours, 0)            AS weekday
+            ,NVL(ar.holiday_overtime_hours, 0)            AS weekday_holiday
+            ,NVL(ar.public_holiday_overtime_hours, 0)     AS public_holiday
+            ,NVL(ar.weekday_night_overtime_hours, 0)      AS at_night_weekday
+            ,NVL(ar.weekday_ot_af_night_work_hours, 0)    AS at_night_weekday_after_o_t
+            ,NVL(ar.holiday_night_overtime_hours, 0)      AS at_night_weekday_holiday 
+            ,NVL(ar.public_holiday_night_ot_hours, 0)     AS at_night_public_holiday
+            
+            ,NVL(ar.weekday_overtime_hours, 0)  
+			      +NVL(ar.holiday_overtime_hours, 0) 
+            +NVL(ar.public_holiday_overtime_hours, 0)  
+            +NVL(ar.weekday_night_overtime_hours, 0)   
+            +NVL(ar.weekday_ot_af_night_work_hours, 0) 
+            +NVL(ar.holiday_night_overtime_hours, 0) 
+            +NVL(ar.public_holiday_night_ot_hours, 0)
+            +NVL(so.overtime_sum_hours, 0)                 AS total_ot
+            
+            ,NVL(ar.normal_night_overtime_hours, 0)       AS night_normal
+            ,NVL(ar.tardy_hours, 0)                       AS deduction_lateness
+            ,NVL(ar.early_leave_hours, 0)                 AS deduction_leaving_early
+            ,NVL(ar.going_out_hours, 0)                   AS deduction_going_out
+            , NVL(ar.tardy_hours, 0)
+             +NVL(ar.early_leave_hours, 0)
+             +NVL(ar.going_out_hours, 0)                  AS deduction_sub_total
+            ,NVL(so.overtime_sum_hours, 0)                AS special_o_t
+            ,ar.base_time_attend_apply_flag               AS base_att_flag
+        FROM tb_att_result_n            ar
+            ,emp_master                 em
+            ,tb_att_special_ot_result_n so
+            ,tb_att_code_c              ac
+       WHERE ar.employee_no = em.employee_number
+         AND ar.employee_no = so.employee_no(+)
+         AND ar.time_and_attendance_date = so.time_and_attendance_date(+)
+         AND ar.time_and_attendance_code = ac.time_and_attendance_code
+         AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+         AND ar.time_and_attendance_yyyymm  = #{payMonth}
+         AND 'Y' = so.confirm_flag(+) 
+         AND ar.employee_no = #{employeeNo} 
+         ORDER BY ar.employee_no, ar.time_and_attendance_date ASC 
+    </select>
+    
+    <!-- retrievePaySlipAttendanceTottalList -->
+    <select id="retrievePaySlipAttendanceTottalList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00026.retrievePaySlipAttendanceTottalList */
+             SUM(NVL(ar.weekday_overtime_hours, 0))            AS weekday
+            ,SUM(NVL(ar.holiday_overtime_hours, 0))            AS weekday_holiday
+            ,SUM(NVL(ar.public_holiday_overtime_hours, 0))     AS public_holiday
+            ,SUM(NVL(ar.weekday_night_overtime_hours, 0))      AS at_night_weekday
+            ,SUM(NVL(ar.weekday_ot_af_night_work_hours, 0))    AS at_night_weekday_after_o_t
+            ,SUM(NVL(ar.holiday_night_overtime_hours, 0))      AS at_night_weekday_holiday 
+            ,SUM(NVL(ar.public_holiday_night_ot_hours, 0))     AS at_night_public_holiday
+            
+            ,SUM(NVL(ar.weekday_overtime_hours, 0)  
+            +NVL(ar.holiday_overtime_hours, 0) 
+            +NVL(ar.public_holiday_overtime_hours, 0)  
+            +NVL(ar.weekday_night_overtime_hours, 0)   
+            +NVL(ar.weekday_ot_af_night_work_hours, 0) 
+            +NVL(ar.holiday_night_overtime_hours, 0) 
+            +NVL(ar.public_holiday_night_ot_hours, 0)
+            +NVL(so.overtime_sum_hours, 0))                    AS total_ot
+            
+            ,SUM(NVL(ar.normal_night_overtime_hours, 0))       AS night_normal
+            ,SUM(NVL(ar.tardy_hours, 0))                       AS deduction_lateness
+            ,SUM(NVL(ar.early_leave_hours, 0))                 AS deduction_leaving_early
+            ,SUM(NVL(ar.going_out_hours, 0))                   AS deduction_going_out
+            ,SUM(NVL(ar.tardy_hours, 0)
+             +NVL(ar.early_leave_hours, 0)
+             +NVL(ar.going_out_hours, 0))                      AS deduction_sub_total
+            ,SUM(NVL(so.overtime_sum_hours, 0))                AS special_o_t
+            , lgvatt_ot_calculation_pkg.get_ot_total(max(ar.subsidiary_code),max(ar.employee_no),
+                               to_date(max(ar.time_and_attendance_yyyymm), 'YYYYMM'), LAST_DAY(to_date(max(ar.time_and_attendance_yyyymm), 'YYYYMM')),'year_total_ot_result') AS year_ot_total
+        FROM tb_att_result_n            ar
+            ,emp_master                 em
+            ,tb_att_special_ot_result_n so
+            ,tb_att_code_c              ac
+       WHERE ar.employee_no = em.employee_number
+         AND ar.employee_no = so.employee_no(+)
+         AND ar.time_and_attendance_date = so.time_and_attendance_date(+)
+         AND ar.time_and_attendance_code = ac.time_and_attendance_code
+         AND ar.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+         AND ar.time_and_attendance_yyyymm  = #{payMonth}
+         AND 'Y' = so.confirm_flag(+) 
+         AND ar.employee_no = #{employeeNo} 
+         ORDER BY ar.employee_no, ar.time_and_attendance_date ASC 
+    </select>
+    
+    <!-- Excel Upload 후속 처리 -->
+    <select id="updateEmailEmpPKG" statementType="CALLABLE" parameterType="LGCOMData">
+        {call lgvpay_upload_pkg.update_payroll_employee_email(#{errorCode, mode=OUT, jdbcType=VARCHAR, javaType=string},                      /* p_errcode */
+                                                          #{errorMsg , mode=OUT, jdbcType=VARCHAR, javaType=string},                    /* p_errbuf */
+                                                          #{payrollCalculationExecId, mode=IN , jdbcType=NUMERIC, javaType=string},
+                                                          #{payFlag , mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                          #{payError , mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                          #{payType , mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                          #{payMonth , mode=IN, jdbcType=VARCHAR, javaType=string},
+                                                          #{employeeNo , mode=IN, jdbcType=VARCHAR, javaType=string},                    /* p_pay_month */
+                                                          #{USER_SESSION.applicationUserId, mode=IN , jdbcType=VARCHAR, javaType=string}             /* p_application_user_id */
+                                                         )}
+    </select>
+    
+    <update id="updateEmailEmpSendError" parameterType="LGCOMData">
+        UPDATE /*LGVPAY00026.updateEmailEmpSendError*/
+               tb_pay_slip_send_n 
+        SET    payroll_calculation_exec_id     = #{payrollCalculationExecId}             
+             , transfer_flag                       = #{sendFlag}
+             , mail_send_error_content                      = #{createError}
+             , last_update_user_id             = #{USER_SESSION.applicationUserId}            		/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  employee_no                     = #{employeeNo}
+         AND   payment_yyyymm                       = #{payMonth}
+    </update>
+    <update id="updatePaySlipEmpCreateError" parameterType="LGCOMData">
+        UPDATE /*LGVPAY00026.updateEmailEmpSendError*/
+               tb_pay_slip_send_n 
+        SET    payroll_calculation_exec_id     = #{payrollCalculationExecId}             
+             , slip_creation_flag             = #{createPayslipFlag}
+             , error_message_content            = #{createpayslipError}
+             , last_update_user_id             = #{USER_SESSION.applicationUserId}            		/* 최종수정사용자아이디 */
+             , last_update_date                = sysdate                 							/* 최종수정일자 */
+        WHERE  employee_no                     = #{employeeNo}
+         AND   payment_yyyymm                       = #{payMonth}              
+    </update>
+    
+    <!-- salary detail -->
+    <select id="retrieveSalaryDetailDataSend" parameterType="LGCOMData" resultType="LGCOMData">
+        select /* LGVPAY00026.retrieveSalaryDetailData */
+			 TO_CHAR(NVL(SUM(NIGHT_HOURS),0), 'FM9990.0')  AS  NIGHT_HOURS
+			,TO_CHAR(NVL(SUM(OT_HOURS),0), 'FM9990.0')  AS  OT_HOURS
+			,TO_CHAR(NVL(SUM(OTNT_HOURS),0), 'FM9990.0')  AS  OTNT_HOURS
+			,TO_CHAR(NVL(SUM(LATENESS_HOURS),0), 'FM9990.0')  AS  LATENESS_HOURS
+			,TO_CHAR(NVL(SUM(LEAVING_EARLY_HOURS),0), 'FM9990.0')  AS  LEAVING_EARLY_HOURS
+			,TO_CHAR(NVL(SUM(GOOUT_HOURS),0), 'FM9990.0')  AS  GOOUT_HOURS
+			,TO_CHAR(NVL(SUM(HELPCALL_SUPPORT_HOURS),0), 'FM9990.0')  AS  HELPCALL_SUPPORT_HOURS
+			,TO_CHAR(NVL(SUM(ACT_WORKING_DAYS),0), 'FM9990')  AS  ACT_WORKING_DAYS
+			,TO_CHAR(NVL(SUM(ABSENCE_LEAVE_DAYS),0), 'FM9990')  AS  ABSENCE_LEAVE_DAYS
+			,TO_CHAR(NVL(SUM(PAID_LEAVE_DAYS),0), 'FM9990')  AS  PAID_LEAVE_DAYS
+			,TO_CHAR(NVL(SUM(UNPAID_LEAVE_DAYS),0), 'FM9990')  AS  UNPAID_LEAVE_DAYS
+			,TO_CHAR(NVL(SUM(SUSPENSION_LEAVE_DAYS),0), 'FM9990')  AS  SUSPENSION_LEAVE_DAYS
+			,TO_CHAR(NVL(SUM(INCOME_TIME_N_AMOUNT),0), 'FM999,999,999,999,990')  AS  INCOME_TIME_N_AMOUNT
+			,TO_CHAR(NVL(SUM(INCOME_TIME_Y_AMOUNT),0), 'FM999,999,999,999,990')  AS  INCOME_TIME_Y_AMOUNT
+			,TO_CHAR(NVL(SUM(DEDUCTION_AMOUNT),0), 'FM999,999,999,999,990')  AS  DEDUCTION_AMOUNT
+			,MAX(BANK_NAME)  AS  BANK_NAME
+			,MAX(BANK_ACCOUNT_NO)  AS  BANK_ACCOUNT_NO
+			,TO_CHAR(NVL(SUM(SALARY_TOTAL_AMOUNT),0), 'FM999,999,999,999,990')  AS  SALARY_TOTAL_AMOUNT
+			,TO_CHAR(NVL(SUM(DEDUCTION_TOTAL_AMOUNT),0), 'FM999,999,999,999,990')  AS  DEDUCTION_TOTAL_AMOUNT
+			,TO_CHAR(NVL(SUM(BANK_TRANSFER_AMOUNT),0), 'FM999,999,999,999,990')  AS  BANK_TRANSFER_AMOUNT
+			
+			 from (SELECT 
+			 <![CDATA[
+               NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'NT'   THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS night_hours
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'OT'   THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS ot_hours
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'OTNT' THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS otnt_hours
+
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'ATT_DED' AND NVL(ccc.common_code, 'x') = 'LATENESS'      THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS lateness_hours
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'ATT_DED' AND NVL(ccc.common_code, 'x') = 'LEAVING_EARLY' THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS leaving_early_hours
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') <> 'PAY_VALUE' AND NVL(ccc1.common_code, 'x') = 'ATT_DED' AND NVL(ccc.common_code, 'x') = 'GOOUT'         THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS goout_hours
+             , NVL(prs.helpcall_support_hours, 0)  AS helpcall_support_hours /* special ot */
+             ]]>
+             , NVL(prs.working_days,              0)  AS act_working_days
+             , NVL(prs.absence_days,              0)  AS absence_leave_days
+             , NVL(prs.paid_vacation_days,        0)  AS paid_leave_days
+             , NVL(prs.unpaid_vacation_days,      0)  AS unpaid_leave_days
+             , NVL(prs.unpaid_absence_leave_days, 0) + NVL(prs.paid_absence_leave_days, 0) AS suspension_leave_days
+             <![CDATA[
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') = 'PAY_VALUE' AND NVL(ccc1.code_data1_value, 'x') = 'INCOME' AND NVL(ccc1.code_data2_value, 'x') = 'TIME_N' THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS income_time_n_amount
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') = 'PAY_VALUE' AND NVL(ccc1.code_data1_value, 'x') = 'INCOME' AND NVL(ccc1.code_data2_value, 'x') = 'TIME_Y' THEN to_number(pcr.result_value) ELSE 0 END), 0)  AS income_time_y_amount
+             , NVL(SUM(CASE WHEN NVL(pid.additional_input_value, 'x') = 'PAY_VALUE' AND NVL(ccc1.code_data1_value, 'x') = 'DEDUCTION'                                             THEN
+                                         /* deduction의 attendance 만 abs처리 하고 그외는 원래 값으로 계산 함 */
+                                         CASE WHEN NVL(ccc1.common_code, 'x') = 'ATT_DED' THEN ABS(to_number(pcr.result_value))
+                                              ELSE to_number(pcr.result_value)
+                                         END
+                                    ELSE 0
+                               END), 0)  AS deduction_amount /* deduction의 attendance항목 금액이 (-)이므로 abs처리 함 */
+              ]]>
+             , prs.bank_name                AS bank_name
+             , prs.payment_bank_account_no  AS bank_account_no
+             , NVL(prs.salary_total_amount   , 0) AS salary_total_amount    /* gross salary */
+             , NVL(prs.deduction_total_amount, 0) AS deduction_total_amount /* deduction */
+             , NVL(prs.bank_transfer_amount  , 0) AS bank_transfer_amount   /* net salary */
+        FROM   tb_pay_calc_exec_n    pce
+             , tb_pay_calc_result_n  pcr
+             , tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi2
+             , lgcom_common_code_c   ccc
+             , lgcom_common_code_c   ccc1
+             , tb_pay_result_s       prs
+        WHERE pcr.payroll_calculation_exec_id   = pce.payroll_calculation_exec_id
+        AND   ppi.payroll_item_id               = pcr.payroll_item_id
+        AND   pid.payroll_item_id               = ppi.payroll_item_id
+        AND   pcr.payroll_item_detail_detail_id = pid.payroll_item_detail_detail_id
+        AND   ppi2.payroll_item_id              = NVL(ppi.parent_payroll_item_id, ppi.payroll_item_id)
+        <choose>
+        <when test="payrollCalculationExecIdList != null">
+        AND  pcr.payroll_calculation_exec_id  IN
+        <foreach collection="payrollCalculationExecIdList" index="idx" open="(" close=")" separator=",">
+               #{payrollCalculationExecIdList[${idx}], jdbcType=NUMERIC}
+        </foreach>
+        </when>
+        <otherwise>
+        AND  1=2
+        </otherwise>
+        </choose>
+        AND   pcr.employee_no                   = #{employeeNo}
+        AND   ccc.code_type_code                = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND   ccc.common_code                   = ppi.payroll_item_inq_class_code
+        AND   ccc1.code_type_code               = ccc.parent_code_type_code  --'LGDVH_PAY_SLIP_INQ_1ST_TYPE_CODE'
+        AND   ccc1.common_code                  = ccc.parent_common_code
+        AND   prs.payroll_calculation_exec_id   = pcr.payroll_calculation_exec_id
+        AND   prs.employee_no                   = pcr.employee_no
+
+        GROUP BY NVL(prs.helpcall_support_hours, 0)
+               , NVL(prs.working_days,              0)
+               , NVL(prs.absence_days,              0)
+               , NVL(prs.paid_vacation_days,        0)
+               , NVL(prs.unpaid_vacation_days,      0)
+               , NVL(prs.unpaid_absence_leave_days, 0) + NVL(prs.paid_absence_leave_days, 0)
+               , prs.bank_name
+               , prs.payment_bank_account_no
+               , NVL(prs.salary_total_amount   , 0)
+               , NVL(prs.deduction_total_amount, 0)
+               , NVL(prs.bank_transfer_amount  , 0)
+               ) n
+    </select>
+    
+    <!-- salary detail (income, deduction별 조회) -->
+    <select id="retrieveSalaryDetailListSend" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00026.retrieveSalaryDetailListSend */
+               cccm1.common_code_name AS code_name1 /*1차분류*/
+             , cccm.common_code_name  AS code_name2 /*2차분류*/
+
+             , TO_CHAR(SUM(CASE WHEN pid.additional_input_value = 'PAY_VALUE' THEN
+                                     /* deduction의 attendance 만 abs 처리하고, 그외는 그냥 보여줌 */
+                                     CASE WHEN ccc1.code_data1_value = 'DEDUCTION' AND ccc1.common_code = 'ATT_DED' THEN ABS(NVL(to_number(pcr.result_value), 0))
+                                          ELSE NVL(to_number(pcr.result_value), 0)
+                                     END
+                           END), 'FM999,999,999,999,990') AS item_amount /* 금액 */
+             , TO_CHAR(SUM(CASE WHEN pid.additional_input_value = 'PAY_VALUE' THEN NULL
+                                ELSE
+                                     CASE WHEN ccc1.code_data2_value = 'TIME_N' THEN NULL
+                                          /* Non Working인 경우  DEDUCTION_DAYS만 가져오기 위한 조건 */
+                                          WHEN ccc1.code_data2_value = 'TIME_Y' AND ccc1.common_code = 'ATT_DED' AND ccc.common_code = 'NON_WORKING' THEN DECODE( pid.additional_input_value, 'DEDUCTION_DAYS', pcr.result_value)
+                                          ELSE pcr.result_value END
+                           END), DECODE(ccc.code_data1_value, 'D', 'FM9990', 'FM9990.0'))   AS item_hours /* 시간/기타정보. TIME_Y인 경우만 값 조회되도록 함. */
+
+             , dense_rank() OVER (PARTITION BY ccc1.common_code ORDER BY ccc1.sort_order_no, DECODE( #{incomeDeductionCode}||'_'||#{incomeDeductionTimeCode}, 'INCOME_TIME_Y', 1, SIGN(ABS(SUM(decode(pid.additional_input_value, 'PAY_VALUE', NVL(pcr.result_value, 0))))) ) DESC, ccc.sort_order_no) AS rank1 /* 2차분류 순서 */
+             , COUNT(1) OVER (PARTITION BY ccc1.common_code) AS rowspan_cnt1 /* 1차분류 병합 행수 */
+             , ccc1.code_data2_value AS time_display_code /* 시간 보여줄지 여부. TIME_Y:보여줌, TIME_N:안보여줌 */
+             , ccc.code_data1_value  AS day_hour_code /* 일자(D), 시간(H) 구분코드 */
+             , ccc1.common_code      AS code1 /*1차분류코드*/
+             , ccc.common_code       AS code2 /*2차분류코드*/
+        FROM   tb_pay_calc_exec_n    pce
+             , tb_pay_calc_result_n  pcr
+             , tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi2
+             , lgcom_common_code_c   ccc
+             , lgcom_common_code_c   ccc1
+             , lgcom_common_code_multi_lang_c cccm
+             , lgcom_common_code_multi_lang_c cccm1
+             , tb_pay_result_s       prs /* pay result 있는 경우만 데이터 조회되도록 join 추가 */
+        WHERE pcr.payroll_calculation_exec_id   = pce.payroll_calculation_exec_id
+        AND   ppi.payroll_item_id               = pcr.payroll_item_id
+        AND   pid.payroll_item_id               = ppi.payroll_item_id
+        AND   pcr.payroll_item_detail_detail_id = pid.payroll_item_detail_detail_id
+        AND   ppi2.payroll_item_id              = NVL(ppi.parent_payroll_item_id, ppi.payroll_item_id)
+        <choose>
+        <when test="payrollCalculationExecIdList != null">
+        AND  pcr.payroll_calculation_exec_id  IN
+        <foreach collection="payrollCalculationExecIdList" index="idx" open="(" close=")" separator=",">
+               #{payrollCalculationExecIdList[${idx}], jdbcType=NUMERIC}
+        </foreach>
+        </when>
+        <otherwise>
+        AND  1=2
+        </otherwise>
+        </choose>
+        AND   pcr.employee_no                   = #{employeeNo}
+        AND   ccc.code_type_code                = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND   ccc.common_code                   = ppi.payroll_item_inq_class_code
+        AND   ccc1.code_type_code               = ccc.parent_code_type_code  --'LGDVH_PAY_SLIP_INQ_1ST_TYPE_CODE'
+        AND   ccc1.common_code                  = ccc.parent_common_code
+        AND   cccm1.code_type_code              = ccc1.code_type_code
+        AND   cccm1.common_code                 = ccc1.common_code
+        AND   cccm.code_type_code               = ccc.code_type_code
+        AND   cccm.common_code                  = ccc.common_code
+        AND   cccm1.language_code               = #{USER_SESSION.languageCode}
+        AND   cccm.language_code                = #{USER_SESSION.languageCode}
+        AND   ccc1.code_data1_value             = #{incomeDeductionCode} /* INCOME, DEDUCTION 구분 */
+        <if test="incomeDeductionTimeCode != null and incomeDeductionTimeCode != ''">
+        AND   ccc1.code_data2_value             = #{incomeDeductionTimeCode} /* TIME_N, TIME_Y 구분 */
+        </if>
+        AND   prs.payroll_calculation_exec_id   = pcr.payroll_calculation_exec_id
+        AND   prs.employee_no                   = pcr.employee_no
+
+        GROUP BY  cccm1.common_code_name
+                , cccm.common_code_name
+                , ccc.sort_order_no
+                , ccc1.sort_order_no
+                , ccc1.common_code
+                , ccc1.code_data2_value
+                , ccc.code_data1_value
+                , ccc1.common_code
+                , ccc.common_code
+
+        ORDER BY ccc1.sort_order_no
+               , DECODE( #{incomeDeductionCode}||'_'||#{incomeDeductionTimeCode}, 'INCOME_TIME_Y', 1, SIGN(ABS(SUM(decode(pid.additional_input_value, 'PAY_VALUE', NVL(pcr.result_value, 0))))) ) DESC /* 금액이 있는 건을 우선 보여준다. 단, OT는 항목순서대로 */
+               , ccc.sort_order_no
+    </select>
+    
+    <select id="retrieveAdjustmentListSend" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00026.retrieveAdjustmentListSend */
+               ppi.payroll_item_name  AS element_code
+             , ppi.inquiry_name       AS element_name
+             , TO_CHAR(SUM(decode(pid.additional_input_value, 'PAY_VALUE', NVL(pcr.result_value, 0))), 'FM999,999,999,999,990') AS element_amount
+        FROM   tb_pay_calc_exec_n    pce
+             , tb_pay_calc_result_n  pcr
+             , tb_pay_payroll_item_m ppi
+             , tb_pay_item_detail_n  pid
+             , tb_pay_payroll_item_m ppi2
+             , lgcom_common_code_c ccc
+        WHERE pcr.payroll_calculation_exec_id   = pce.payroll_calculation_exec_id
+        AND   ppi.payroll_item_id               = pcr.payroll_item_id
+        AND   pid.payroll_item_id               = ppi.payroll_item_id
+        AND   pcr.payroll_item_detail_detail_id = pid.payroll_item_detail_detail_id
+        AND   ppi2.payroll_item_id              = NVL(ppi.parent_payroll_item_id, ppi.payroll_item_id)
+        <choose>
+        <when test="payrollCalculationExecIdList != null">
+        AND  pcr.payroll_calculation_exec_id  IN
+        <foreach collection="payrollCalculationExecIdList" index="idx" open="(" close=")" separator=",">
+               #{payrollCalculationExecIdList[${idx}], jdbcType=NUMERIC}
+        </foreach>
+        </when>
+        <otherwise>
+        AND  1=2
+        </otherwise>
+        </choose>
+        AND   pcr.employee_no                   = #{employeeNo}
+        AND   ccc.code_type_code                = 'LGDVH_PAY_SLIP_INQ_2ND_TYPE_CODE'
+        AND   ccc.common_code                   = ppi.payroll_item_inq_class_code
+        AND   ccc.common_code                   = 'ADJ_INCOME'
+
+        GROUP BY  ppi.payroll_item_name, ppi.inquiry_name
+    </select>
+    
+    <!-- Other Income-->
+    <select id="retrieveOtherIncomeInputList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /* LGVPAY00026.retrieveOtherIncomeInputList */
+		    TO_CHAR(peo.payment, 'FM999,999,999,999,990') AS payment
+          , NVL(peo.remark,' ')                AS remark
+          , NVL(peo.ap_number,' ')             AS ap_number
+          , NVL(peo.pic_id,' ')                AS pic_id
+          , NVL(peo.pic_name,' ')              AS pic_name
+          , 1 AS SORT_ORDER
+		FROM tb_pay_emp_other_income_n peo
+		WHERE peo.employee_no = #{employeeNo}
+		  AND peo.payment_yyyymm = #{payMonth}
+		UNION ALL
+      SELECT /* LGVPAY00026.retrieveOtherIncomeInputList */
+		    NVL(TO_CHAR(SUM(peo.payment), 'FM999,999,999,999,990'), ' ') AS payment
+          , 'Tổng'                AS remark
+          , ' '             AS ap_number
+          , ' '                AS pic_id
+          , ' '              AS pic_name
+          , 2 AS SORT_ORDER
+		FROM tb_pay_emp_other_income_n peo
+		WHERE peo.employee_no = #{employeeNo}
+		  AND peo.payment_yyyymm = #{payMonth}
+      
+      ORDER BY SORT_ORDER ASC
+    </select>
+
+</mapper>

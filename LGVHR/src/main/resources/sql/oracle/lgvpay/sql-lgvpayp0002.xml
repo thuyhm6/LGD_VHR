@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAYP0002">
+
+    <!-- Execution List 조회 -->
+    <select id="retrieveExecutionList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0002.retrieveExecutionList */
+               pce.payroll_calculation_exec_id 
+             , ccmc.common_code_name                                                AS pay_type_name
+             , TO_CHAR(TO_DATE(pcp.payroll_calc_period_value, 'YYYYMM'), 'MM/YYYY') AS pay_month_name
+             , pcs.payroll_calculation_set_name
+             ,( SELECT COUNT(*) FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS employee_count
+             ,( SELECT TO_CHAR(MIN(creation_date), 'DD/MM/YYYY HH24:MI:SS') FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS execution_start_date
+             ,( SELECT TO_CHAR(MAX(creation_date), 'DD/MM/YYYY HH24:MI:SS') FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS execution_end_date
+             , pce.confirm_flag
+             , NVL(pce.retroactive_flag, 'N') AS retroactive_flag
+        FROM   tb_pay_calc_period_basis_n pcp
+              ,tb_pay_calc_exec_n  pce
+              ,lgcom_common_code_multi_lang_c ccmc
+              ,tb_pay_calc_set_n pcs
+        WHERE  pcp.payroll_calc_period_value  = TO_CHAR(TO_DATE(REPLACE(#{payrollCalcPeriodValue}, '/', ''), 'MMYYYY'), 'YYYYMM')
+        AND    pcp.subsidiary_code            = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    pce.basis_date BETWEEN TO_DATE(pcp.start_yyyymmdd, 'YYYYMMDD') AND TO_DATE(pcp.end_yyyymmdd, 'YYYYMMDD')
+        AND    ccmc.code_type_code            = 'LGVHR_PAY_RUN_TYPE'
+        AND    ccmc.common_code               = pce.payroll_type_code
+        AND    ccmc.language_code             = #{USER_SESSION.languageCode}
+        AND    pcs.payroll_calculation_set_id = pce.payroll_calculation_set_id
+        AND    pce.payroll_type_code          = #{payrollTypeCode}
+        ORDER BY pce.payroll_calculation_exec_id DESC
+    </select>
+
+    <!-- payrollCalculationExecId로 데이터 조회 -->
+    <select id="retrievePayrollCalculationExecIdData" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAYP0002.retrievePayrollCalculationExecIdData */
+               pce.payroll_calculation_exec_id
+             , ccmc.common_code_name                                                AS pay_type_name
+             , TO_CHAR(TO_DATE(pcp.payroll_calc_period_value, 'YYYYMM'), 'MM/YYYY') AS pay_month_name
+             , pcs.payroll_calculation_set_name
+             ,( SELECT COUNT(*) FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS employee_count
+             ,( SELECT TO_CHAR(MIN(creation_date), 'DD/MM/YYYY HH24:MI:SS') FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS execution_start_date
+             ,( SELECT TO_CHAR(MAX(creation_date), 'DD/MM/YYYY HH24:MI:SS') FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS execution_end_date
+             , pce.confirm_flag
+             , NVL(pce.retroactive_flag, 'N') AS retroactive_flag
+        FROM   tb_pay_calc_period_basis_n pcp
+              ,tb_pay_calc_exec_n  pce
+              ,lgcom_common_code_multi_lang_c ccmc
+              ,tb_pay_calc_set_n pcs
+        WHERE  pce.payroll_calculation_exec_id = #{payrollCalculationExecId, jdbcType=NUMERIC}
+        AND    pcp.subsidiary_code             = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    pce.basis_date BETWEEN TO_DATE(pcp.start_yyyymmdd, 'YYYYMMDD') AND TO_DATE(pcp.end_yyyymmdd, 'YYYYMMDD')
+        AND    ccmc.code_type_code             = 'LGVHR_PAY_RUN_TYPE'
+        AND    ccmc.common_code                = pce.payroll_type_code
+        AND    ccmc.language_code              = #{USER_SESSION.languageCode}
+        AND    pcs.payroll_calculation_set_id  = pce.payroll_calculation_set_id
+    </select>
+
+</mapper>

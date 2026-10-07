@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="LGVPAY00019">
+
+    <!-- User Define Table Value 조회 -->
+    <select id="retrieveUserDefineTableValueList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00019.retrieveUserDefineTableValueList */
+               udtm.table_seq_no
+             , udtm.table_name
+
+             , udtr.row_no
+             , udtr.sort_order_no
+             , udtr.lower_limit_critical_value
+             , udtr.upper_limit_critical_value
+             , udtr.effective_start_yyyymmdd AS row_start_date
+             , udtr.effective_end_yyyymmdd AS row_end_date
+
+             , udtv.column_seq_no
+             , udtc.user_column_name
+             , udtv.table_cell_id
+             , udtv.table_cell_value
+             , TO_CHAR(TO_DATE(udtv.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_start_yyyymmdd
+             , TO_CHAR(TO_DATE(udtv.effective_end_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY') AS effective_end_yyyymmdd
+        FROM   tb_pay_user_dfin_table_m udtm
+             , tb_pay_user_dfin_table_col_n udtc
+             , tb_pay_user_dfin_table_row_n udtr
+             , tb_pay_user_dfin_table_value_n udtv
+        WHERE  udtm.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        AND    udtm.table_seq_no    = #{tableSeqNo, jdbcType=NUMERIC}
+        AND    udtr.row_no          = #{rowNo, jdbcType=NUMERIC}
+        AND    udtc.table_seq_no    = udtm.table_seq_no
+        <if test="sortOrderNo != null and sortOrderNo != ''">
+        AND    udtr.sort_order_no   = #{sortOrderNo, jdbcType=NUMERIC}
+        </if>
+        AND    udtr.table_seq_no    = udtm.table_seq_no
+        AND    udtv.column_seq_no   = #{columnSeqNo, jdbcType=NUMERIC}
+        AND    udtv.row_no          = udtr.row_no
+        AND    udtv.column_seq_no   = udtc.column_seq_no
+        ORDER BY udtm.table_name, udtr.sort_order_no, udtr.effective_start_yyyymmdd, udtv.column_seq_no, udtv.table_cell_value
+    </select>
+
+    <!-- User Define Table Value 저장 전 유효성 체크 -->
+    <select id="retireveValidateUserDefineTableValueData" parameterType="LGCOMData" resultType="LGCOMData">
+        WITH detail_list AS (
+            /* 삭제 건 제외한 리스트 조회 */
+            SELECT /* LGVPAY00019.retireveValidateUserDefineTableValueData */
+                   row_no
+                 , column_seq_no
+                 , table_cell_id
+                 , table_cell_value
+                 , effective_start_yyyymmdd
+                 , effective_end_yyyymmdd
+            FROM   tb_pay_user_dfin_table_value_n
+            WHERE  row_no        = #{parameter.rowNo, jdbcType=NUMERIC}
+            AND    column_seq_no = #{parameter.columnSeqNo, jdbcType=NUMERIC}
+            <if test="deleted != null and deleted.size != 0">
+            /* 삭제건이 있는 경우 제외 처리 */
+            AND    table_cell_id NOT IN
+            <foreach collection="deleted" item="deleteItem" open="(" close=")" separator="UNION ALL">
+                SELECT #{deleteItem.tableCellId, jdbcType=NUMERIC} AS table_cell_id
+                FROM dual
+
+            </foreach>
+            </if>
+        )
+        , rs AS (
+        <if test="created != null and created.size != 0">
+        <foreach collection="created" item="createItem" open="(" close=")" separator="UNION ALL">
+               SELECT  TO_NUMBER(#{parameter.rowNo})        AS row_no
+                     , TO_NUMBER(#{parameter.columnSeqNo})  AS column_seq_no
+                     , TO_NUMBER(#{createItem.tableCellId}) AS table_cell_id
+                     , #{createItem.tableCellValue}         AS table_cell_value
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                     , TO_CHAR(TO_DATE(#{createItem.effectiveEndYyyymmdd}  , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+               FROM   dual
+        </foreach>
+                UNION ALL /* 신규건이 있는 경우 기존데이터와 union하기 위해 union 함 */
+        </if>
+        <choose>
+            <when test="updated != null and updated.size != 0">
+                SELECT  NVL(update_list.row_no                  , detail_list.row_no                  ) AS row_no
+                      , NVL(update_list.column_seq_no           , detail_list.column_seq_no           ) AS column_seq_no
+                      , NVL(update_list.table_cell_id           , detail_list.table_cell_id           ) AS table_cell_id
+                      , NVL(update_list.table_cell_value        , detail_list.table_cell_value        ) AS table_cell_value
+                      , NVL(update_list.effective_start_yyyymmdd, detail_list.effective_start_yyyymmdd) AS effective_start_yyyymmdd
+                      , NVL(update_list.effective_end_yyyymmdd  , detail_list.effective_end_yyyymmdd  ) AS effective_end_yyyymmdd
+                FROM    detail_list
+                      , (
+                            /* 수정건이 있는 경우 Detail 항목 리스트와 outer join 하여 등록된 최종 Detail 리스트를 조회한다 */
+                    <foreach collection="updated" index="idx" open="(" close=")" separator="UNION ALL">
+                           SELECT  TO_NUMBER(#{parameter.rowNo})                        AS row_no
+                                 , TO_NUMBER(#{parameter.columnSeqNo})                  AS column_seq_no
+                                 , #{updated[${idx}].tableCellId}                       AS table_cell_id
+                                 , #{updated[${idx}].tableCellValue}                    AS table_cell_value
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveStartYyyymmdd}   , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_start_yyyymmdd
+                                 , TO_CHAR(TO_DATE(#{updated[${idx}].effectiveEndYyyymmdd}     , 'DD/MM/YYYY'), 'YYYYMMDD') AS effective_end_yyyymmdd
+                            FROM   dual
+                    </foreach>
+                        ) update_list
+                WHERE   detail_list.row_no        = update_list.row_no(+)
+                AND     detail_list.column_seq_no = update_list.column_seq_no(+)
+                AND     detail_list.table_cell_id = update_list.table_cell_id(+)
+            </when>
+            <otherwise>
+                SELECT  detail_list.row_no
+                      , detail_list.column_seq_no
+                      , detail_list.table_cell_id
+                      , detail_list.table_cell_value
+                      , detail_list.effective_start_yyyymmdd
+                      , detail_list.effective_end_yyyymmdd
+                FROM    detail_list
+            </otherwise>
+        </choose>
+        )
+        SELECT (SELECT DISTINCT
+                       listagg(TO_CHAR(TO_DATE(rs.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY'), ', ') WITHIN GROUP (ORDER BY rs.effective_start_yyyymmdd) OVER (PARTITION BY 1)
+                FROM   rs
+                     , tb_pay_user_dfin_table_row_n udtr
+                WHERE  EXISTS (SELECT 'x'
+                               FROM   rs rs0
+                               WHERE  rs0.row_no = rs.row_no
+                               AND    rs0.column_seq_no = rs.column_seq_no
+                               AND    rs0.effective_start_yyyymmdd = rs.effective_start_yyyymmdd
+                               GROUP BY rs0.effective_start_yyyymmdd
+                               HAVING COUNT(1) > 1
+                              )
+                AND    udtr.row_no       = rs.row_no
+                GROUP BY rs.effective_start_yyyymmdd) AS dup_start_date /* Effective Start Date 중복 */
+
+              ,(SELECT DISTINCT
+                       listagg(TO_CHAR(TO_DATE(rs.effective_start_yyyymmdd, 'YYYYMMDD'), 'DD/MM/YYYY'), ', ') WITHIN GROUP (ORDER BY rs.effective_start_yyyymmdd) OVER (PARTITION BY 1)
+                FROM   rs
+                WHERE  EXISTS (SELECT 'x'
+                               FROM   rs rs0
+                               WHERE  rs0.row_no = rs.row_no
+                               AND    rs0.column_seq_no = rs.column_seq_no
+                               /* 시작일 또는 종료일이 기간내에 포함된 경우 */
+                               AND   (rs0.effective_start_yyyymmdd BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd
+                               OR     rs0.effective_end_yyyymmdd   BETWEEN rs.effective_start_yyyymmdd AND rs.effective_end_yyyymmdd)
+                               GROUP BY rs0.row_no, rs0.column_seq_no
+                               HAVING COUNT(1) > 1
+                              )
+                GROUP BY rs.effective_start_yyyymmdd) AS dup_period /* Effective Start Date, Effective End Date 기간 중복 */
+
+             <![CDATA[
+             ,(SELECT '<br/>'||lslm.label_name||'=' FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'EffectiveStartDate' AND lslm.language_code = #{USER_SESSION.languageCode}) AS dup_start_date_title
+             ]]>
+        FROM   dual
+    </select>
+
+    <!-- User Define Table Value 등록 -->
+    <insert id="insertUserDefineTableValue" parameterType="LGCOMData">
+        INSERT /* LGVPAY00019.insertUserDefineTableValue */
+        INTO   tb_pay_user_dfin_table_value_n(
+               table_cell_id                                     /* 테이블셀아이디 */
+             , row_no                                            /* 로우번호 */
+             , column_seq_no                                     /* 컬럼일련순서번호 */
+             , table_cell_value                                  /* 테이블셀문자값 */
+             , effective_start_yyyymmdd                          /* 유효시작년월일 */
+             , effective_end_yyyymmdd                            /* 유효종료년월일 */
+             , creation_date                                     /* 생성일자 */
+             , creation_user_id                                  /* 생성사용자아이디 */
+             , last_update_date                                  /* 최종수정일자 */
+             , last_update_user_id                               /* 최종수정사용자아이디 */
+        ) VALUES (
+               sq_tb_pay_user_df_tab_value_n.nextval /* table_cell_id => 테이블셀아이디 */
+             , #{rowNo, jdbcType=NUMERIC}                       /* row_no => 로우번호 */
+             , #{columnSeqNo, jdbcType=NUMERIC}                 /* column_seq_no => 컬럼일련순서번호 */
+             , #{tableCellValue}                                /* table_cell_value => 테이블셀문자값 */
+             , TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_start_yyyymmdd => 유효시작년월일 */
+             , TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* effective_end_yyyymmdd => 유효종료년월일 */
+             , SYSDATE                                          /* creation_date => 생성일자 */
+             , #{USER_SESSION.applicationUserId}                /* creation_user_id => 생성사용자아이디 */
+             , SYSDATE                                          /* last_update_date => 최종수정일자 */
+             , #{USER_SESSION.applicationUserId}                /* last_update_user_id => 최종수정사용자아이디 */
+        )
+    </insert>
+
+    <!-- User Define Table Value 수정 -->
+    <update id="updateUserDefineTableValue" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00019.updateUserDefineTableValue */
+               tb_pay_user_dfin_table_value_n
+        SET    table_cell_value                       = #{tableCellValue}                                 /* 테이블셀문자값 */
+             , effective_start_yyyymmdd               = TO_CHAR(TO_DATE(#{effectiveStartYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효시작년월일 */
+             , effective_end_yyyymmdd                 = TO_CHAR(TO_DATE(#{effectiveEndYyyymmdd}, 'DD/MM/YYYY'), 'YYYYMMDD') /* 유효종료년월일 */
+             , last_update_date                       = SYSDATE                                           /* 최종수정일자 */
+             , last_update_user_id                    = #{USER_SESSION.applicationUserId}                 /* 최종수정사용자아이디 */
+        WHERE  table_cell_id                          = #{tableCellId, jdbcType=NUMERIC}                  /* 테이블셀아이디 */
+    </update>
+
+    <!-- User Define Table Value 삭제 -->
+    <delete id="deleteUserDefineTableValue" parameterType="LGCOMData">
+        DELETE /* LGVPAY00019.deleteUserDefineTableValue */
+        FROM   tb_pay_user_dfin_table_value_n
+        WHERE  table_cell_id                          = #{tableCellId, jdbcType=NUMERIC}                  /* 테이블셀아이디 */
+    </delete>
+
+</mapper>

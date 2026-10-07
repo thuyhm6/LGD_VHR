@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jeus-web-dd xmlns="http://www.tmaxsoft.com/xml/ns/jeus">
+	<context-path>/lgvhr</context-path>
+	<enable-jsp>true</enable-jsp>
+	<auto-reload>
+		<enable-reload>true</enable-reload>
+		<check-on-demand>true</check-on-demand>
+	</auto-reload>
+	<webinf-first>false</webinf-first>
+
+	<websocket> <distributed-session enabled="true"/> </websocket>
+
+</jeus-web-dd>
+
