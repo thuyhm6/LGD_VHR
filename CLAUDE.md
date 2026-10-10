@@ -7,7 +7,9 @@ Dự án mẫu lấy từ hệ thống nhân sự thực tế của LG Display V
 ```
 LGD_VHR/
 ├── LGCOM/   Portal & nền tảng chung: login/SSO, menu, phân quyền, mã chung, phê duyệt, batch, mail, file
-└── LGVHR/   Nghiệp vụ HR Việt Nam: lgvatt (chấm công), lgvpay (lương), lgvinf (interface), lgvcom (request/approval)
+├── LGVHR/   Nghiệp vụ HR Việt Nam: lgvatt (chấm công), lgvpay (lương), lgvinf (interface), lgvcom (request/approval)
+├── LGD_VHR table.sql   DDL toàn bộ bảng (250 bảng, schema VHR_MGR) – chỉ để tham khảo, không phải script migration
+└── LGD_VHR Package/    Source PL/SQL package (spec + body, file .pck) trên DB
 ```
 
 ## Công nghệ
@@ -90,9 +92,57 @@ Tham khảo: `lgvatt/lgvatt20030/.../LGVATT20030ServiceImpl.java`.
 - **lgvinf**: các batch nhận I/F gồm mã, tổ chức, nhân sự, HR master, bổ nhiệm, gia đình, bằng cấp, hợp đồng, bậc lương, quyền mặc định, thuế từ ERP.
 - **lgvcom**: My Request / My Approval (phê duyệt), popup tìm nhân viên (`M_LGVCOM_1010`), mail chung, mã hóa AES256.
 
+## Database (Oracle, schema `VHR_MGR`)
+
+### Bảng – `LGD_VHR table.sql`
+
+File chỉ có `CREATE TABLE` + PK constraint (không có comment cột, index, sequence, view). Tra cứu cột: `grep -A60 'CREATE TABLE "TÊN_BẢNG"' "LGD_VHR table.sql"`.
+
+Hậu tố tên bảng: `_M` master, `_N` dữ liệu nghiệp vụ, `_C` mã, `_I` interface nhận về, `_T` bảng tạm, `_S` summary/snapshot, `_H` lịch sử. Cột audit chuẩn: `CREATION_USER_ID`, `CREATION_DATE`, `LAST_UPDATE_USER_ID`, `LAST_UPDATE_DATE`. Hầu hết bảng nghiệp vụ có `SUBSIDIARY_CODE`.
+
+| Nhóm | Prefix | Bảng chính |
+|---|---|---|
+| Chấm công | `TB_ATT_*` | `TB_ATT_PLAN_N` (kế hoạch), `TB_ATT_RESULT_N` / `_H` (kết quả), `TB_ATT_UPDATE_REQ_N` (yêu cầu sửa), `TB_ATT_CODE_C`, `TB_ATT_CALENDAR_N`, `TB_ATT_CLOSE_N`, `TB_ATT_BASE_BAS_N`, `TB_ATT_CONTRACT_N`, `TB_ATT_ANNUAL_LEAVE_N`, `TB_ATT_EMP_ANNUAL_M`, `TB_ATT_IDCARD_ACS_TIME_N`, `TB_ATT_EMP_IDCARD_M`, `TB_ATT_OT_LEVEL*`, `TB_ATT_OT_VALIDATION_N`, `TB_ATT_SPECIAL_OT_RESULT_N`, `TB_ATT_SWAP_HOLIDAY_REQUEST_N`, `TB_ATT_LT_TIME_ATTEND_PLAN_N`, `TB_ATT_HOLIDAY_INFO_N`, `TB_ATT_DAILY_REPORT_S` |
+| Lương | `TB_PAY_*`, `TB_RETRO_*` | `TB_PAY_PAYROLL_ITEM_M`, `TB_PAY_ITEM_*` (detail, aggregate, payment plan), `TB_PAY_CALC_*` (set, formula, var, period, exec, result, error), `TB_PAY_RESULT_S`, `TB_PAY_USER_DFIN_TABLE_*` (UDT), `TB_PAY_EMP_*` (hợp đồng, gia đình, bậc, chứng chỉ, thu nhập khác), `TB_PAY_PAID_LEAVE_*`, `TB_PAY_SEVERANCE_ALLOWANCE`, `TB_PAY_SLIP_SEND_N`, `TB_PAY_KPI_*OS*` (outsourcing), `TB_RETRO_*` (truy lĩnh) |
+| Nhân sự / tổ chức (nhận I/F) | — | `EMP_MASTER`, `EMP_ASSIG`, `EMP_INFO`, `ORG_MASTER`, `SHIFT_CODE`, `CURRENCY`, `INSURANCE`, `LGCOM_ORGANIZATION_M`, `LGCOM_EHR_R_EMPLOYEE` |
+| Interface staging | `TB_INTF_*`, `TB_IFR_*`, `XVH_*_IF`, `XXHR_*` | dữ liệu thô nhận từ EAI/ERP trước khi batch `lgvinf` đổ vào bảng chính |
+| Nền tảng LGCOM | `LGCOM_*` | user/role/menu/program (`LGCOM_USER_M`, `LGCOM_ROLE_M`, `LGCOM_MENU_M`, `LGCOM_PROGRAM_M`, `*_N` quan hệ), mã chung (`LGCOM_CODE_TYPE_CODE_C`, `LGCOM_COMMON_CODE_C`, `_MULTI_LANG_C`), phê duyệt (`LGCOM_APPROVAL_*`, `TB_ACPT_*`), batch, mail, board, log, message/label đa ngôn ngữ |
+| Dynamic Query | `XXLGE_QUERY*`, `XXLGE_DQ_USE_T` | dùng cho màn hình hậu tố `Q` |
+
+Không dùng làm mẫu: bảng backup/tạm (`*_BK_0618`, `*_ORG_0612`, `*_BAK`, `*_TMP`, `TOAD_PLAN_TABLE`) và các bảng legacy không còn được SQL/package nào tham chiếu (`ACCOUNT*`, `APPLICATION*`, `ATT_*` không có prefix `TB_`, `PAY_INVOICE*`, `WAGE_MASTER`, `TB_DEPARTMENT`, `TB_DIVISION*`…).
+
+### Package PL/SQL – `LGD_VHR Package/`
+
+| Package | Vai trò | Hàm hay được gọi từ SQL mapper |
+|---|---|---|
+| `lgvhr_common_pkg` | Tiện ích chung HR | `decode_lookup` (giải mã code → tên, dùng nhiều nhất), `decode_message`, `get_shift_type_code_func`, `get_org_resp_flag_func`, `get_emp_master_rec`, `get_organization_name_func` |
+| `lgvhr_transaction_pkg` | Gửi mail | `send_mail`, `send_mail_clob` |
+| `lgvatt_common_pkg` | Tra cứu chấm công | `get_idcard_inout_time`, `get_approval_status`, `get_att_close_time`, `get_holiday_flag`, `get_input_date`, `get_att_code_info`, `get_shift_inout_time`, `get_curr_att_yyyymm`, `get_unit_requestor`, `get_*_rec` |
+| `lgvatt_transaction_pkg` | Ghi dữ liệu chấm công, xử lý sau phê duyệt | `apply_att_*_record`, `apply_att_result_approval`, `apply_att_update_req_approval`, `apply_att_swap_wh_approval`, `apply_att_result_ot_calc` |
+| `lgvatt_batch_pkg` | Batch chấm công | `create_att_calendar/base/plan/result/close/annual_leave/ot_level`, `apply_att_result_fr_plan`, `daily_att_count` |
+| `lgvatt_ot_calculation_pkg` | Tính giờ OT theo loại ca | `get_item_ot_total`, `get_ot_total`, `calculate_ot`, `set_*_shift_ot`, `validate_calculation` |
+| `lgvatt_ot_level_pkg` | OT level | `get_ot_level`, `apply_att_ot_level_calc` |
+| `lgvatt_idcard_pkg` | Nhận dữ liệu quẹt thẻ | `idcard_interface`, `inout_time` |
+| `lgvatt_resignation_pkg` | Quyết toán phép khi nghỉ việc | `apply_att_annual_lv_corr_retir` |
+| `lgvpay_calculation_pkg` | Engine tính lương (lớn nhất) | `main_proc`, `calc_proc`, `calculation_*` (từng khoản: base pay, OT, phụ cấp, BHXH, PIT…) |
+| `lgvpay_payroll_run_pkg` / `lgvpay_retro_payroll_run_pkg` | Payroll Run / Retro Run (`lgvpayc0013/14`) | `run_proc`, `retry_run`, `rollback_run`, `summary_proc`, `difference_proc` |
+| `lgvpay_info_pkg` | Lấy thông tin lương | `get_type_work_hours`, `get_work_hours`, `get_base_pay`, `get_ordinary_wages*`, `get_*_allowance` |
+| `lgvpay_common_pkg` | Tiện ích lương | `get_planned_item_value`, `get_calc_var_value` |
+| `lgvpay_aggr_pkg`, `lgvpay_calculation_set_pkg` | Aggregate, đối tượng hưởng lương | `calculation_aggr`, `creation_target_employee` |
+| `lgvpay_upload_pkg` | Upload Excel lương | `upload_payroll_employee*`, `entry_payroll_item_by_item` |
+| `lgvpay_payroll_invoice_pkg`, `LGVPAY_LOG_PKG` | Gửi kết quả lương, log | `send_pay_result`, `set_log_msg_payroll_result` |
+| `lgvinf_if_batch_pkg`, `lgvinf_if_pay_batch_pkg` | Batch I/F `lgvinf` | `main_code/org/emp/per/asg/family/qualification/contract/grade_point`, `user_role_proc`, `main_assess_add` |
+| `lgcom_bizweb_approval_pkg` | Phê duyệt | `request_create_proc`, `forward_request_proc`, `get_portal_mandator_info`, `approval_line_create_proc` |
+| `lgcom_user_if_pkg`, `lgcom_org_if_pkg` | I/F user, tổ chức cho LGCOM | `main` |
+| `lgcom_*` khác | Hạ tầng | `error_log` (`error_prc`, `debug_prc`), `system_logging`, `mtz` (giờ địa phương), `excel`, `dq_batch`, `region`, `soap_handler`/`ws` |
+
+Lưu ý về thư mục package:
+- File trùng nội dung: `lgvatt_idcard_pkg.~pck` (backup), `lgvpay_info_pkg.sql`, `lgvpay_payroll_run_pkg.sql`, `soap_handler.pck` (bản cũ tên khác của `lgcom_soap_handler`). `lgvatt_ot_calculation_pkg.sql` là bản cũ hơn `.pck` – luôn đọc file `.pck`.
+- Source có thể lệch so với DB thật: ví dụ code Java/SQL gọi `lgvpay_upload_pkg.upload_payroll_emp_paid_leave`, `upload_request_os_kpi_master`… nhưng không có trong file `.pck`.
+
 ## Lưu ý
 
-- Một phần logic nằm trong Oracle PL/SQL package (ví dụ `lgvhr_common_pkg.get_shift_type_code_func`), không có trong repo.
+- Nhiều logic nghiệp vụ nằm trong Oracle PL/SQL package (xem mục **Database**); khi sửa SQL gọi package, đọc source trong `LGD_VHR Package/` trước.
 - Comment trong code phần lớn bằng tiếng Hàn. Viết code mới phải giữ đúng phong cách xung quanh (header comment, `LGCOMLogger`, `LOGGER.debug("param = " + param)`).
 - Một số ngoại lệ quy ước có sẵn, không nên coi là mẫu: `lgsmpc00200` chứa `LGUTLC00200Service`; thư mục `lgvatt/LGVATT30070` viết hoa; file `LGVPAY00007_원본.jsp` là bản sao cũ.
 - Thư mục `target/` là output build, không sửa.

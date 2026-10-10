@@ -31,13 +31,13 @@
              , TO_CHAR(tpp.end_date, 'DD/MM/YYYY') as end_date
              , tpp.paid_leave_detail_code      as paid_leave_detail_code
              , tpp.note                       as note
-             , tpp.base_salary  as base_salary
-             , tpp.position_allowance          as position_allowance
-             , tpp.qualification_allowance         as qualification_allowance
-             , tpp.job_allowance         as job_allowance
-             , tpp.adjustment_allowance_1         as adjustment_allowance_1
-             , tpp.adjustment_allowance_2         as adjustment_allowance_2
-             , tpp.adjustment_allowance_3         as adjustment_allowance_3
+             , lgvpay_info_pkg.get_base_pay(tpp.employee_no, TO_CHAR(LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), 'YYYYMMDD'), 'LGDV', '') AS base_salary
+             , lgvpay_info_pkg.get_position_allowance(tpp.employee_no, TO_CHAR(LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), 'YYYYMMDD')) AS position_allowance
+             , lgvpay_info_pkg.get_qualification_allowance(tpp.employee_no, TO_CHAR(LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), 'YYYYMMDD'), 'LGDVN') AS qualification_allowance
+             , lgvpay_info_pkg.get_job_allowance(tpp.employee_no, TO_CHAR(LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), 'YYYYMMDD')) AS job_allowance
+             , TO_NUMBER(NVL(lgvpay_common_pkg.get_planned_item_value(tpp.employee_no, LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), '23', 'BASE_AMOUNT'), 0)) AS adjustment_allowance_1
+             , TO_NUMBER(NVL(lgvpay_common_pkg.get_planned_item_value(tpp.employee_no, LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), '24', 'BASE_AMOUNT'), 0)) AS adjustment_allowance_2
+             , TO_NUMBER(NVL(lgvpay_common_pkg.get_planned_item_value(tpp.employee_no, LAST_DAY(TO_DATE(#{payMonth}, 'YYYYMM')), '25', 'BASE_AMOUNT'), 0)) AS adjustment_allowance_3
              , tpp.base_salary_cal         as base_salary_cal
         FROM   tb_pay_paid_leave_n  tpp
              , emp_master          em
