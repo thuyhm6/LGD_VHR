@@ -92,7 +92,7 @@
             <when test="employeeRoleList != null and employeeRoleList != ''">
         AND
         <foreach collection="employeeRoleList" item="item" index="idx" open="(" close=")" separator="OR">
-               ( #{employeeRoleList[${idx}].roleCode} IN ('VN_PAY_MASTER_USER', 'VN_PAY_SYSTEM_MASTER_USER') )
+               ( #{employeeRoleList[${idx}].roleCode} IN ('VN_PAY_MASTER_USER', 'VN_PAY_SYSTEM_MASTER_USER', 'VN_ATT_MASTER_USER') )
         </foreach>
             </when>
             <otherwise>

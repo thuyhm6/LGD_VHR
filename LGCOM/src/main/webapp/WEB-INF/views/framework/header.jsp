@@ -37,7 +37,7 @@
 	out.println("</script>");
 %>
 
-<c:set var="version" value="1.1.6"/>
+<c:set var="version" value="1.1.7"/>
 <c:set var="contextPath" value="${pageContext.request.contextPath}"/>
 
 <link rel="stylesheet" type="text/css"	href="${contextPath}/static/ext/bootstrap-3.3.7-dist/css/bootstrap.min.css?version=${version}">

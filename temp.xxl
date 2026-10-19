@@ -1,0 +1,5 @@
+Tạo giúp tôi một màn hình có programID là LGVPAY00036 - Payroll Item By OS Item, màn hình này có mọi chức năng giống hệt như LGVPAY00004, chỉ khác là ở màn hình LGVPAY00036 này thì chỉ truy vấn và thao tác được với những nhân viên mà trường GRADE  trong bảng EMP_MASTER có giá trị là  = 'L34'
+
+Tương tự Tạo giúp tôi một màn hình có programID là LGVPAY00037 - Payroll Item By OS  Employee, màn hình này có mọi chức năng giống hệt như LGVPAY00003, chỉ khác là ở màn hình LGVPAY00037 này thì chỉ truy vấn và thao tác được với những nhân viên mà trường GRADE  trong bảng EMP_MASTER có giá trị là  = 'L34'
+
+Tương tự Tạo giúp tôi một màn hình có programID là LGVPAY00038 - Payment Master By OS Employee, màn hình này có mọi chức năng giống hệt như LGVPAY00010, chỉ khác là ở màn hình LGVPAY00038 này thì chỉ truy vấn và thao tác được với những nhân viên mà trường GRADE  trong bảng EMP_MASTER có giá trị là  = 'L34'

@@ -286,6 +286,8 @@ var LGVPAY00001 = function() {
 		    	var popupData = myForm.popupInfo.executionListPopup;
 		    	popupData.payMonthName = srchFormUtil.getValue("payMonth");
 		    	popupData.searchFlag = "Y";
+		    	//다른 화면에서 급여유형이 전달된 경우 해당 유형으로 고정 (예: LGVPAY00035 → MTH_OS)
+		    	popupData.payTypeCode = "<c:out value="${urlAddr.payrollTypeCode}"/>";
 
                 var popup = new Popup( myForm,'lgvhr', 'M_LGVPAY_1019', '<lgcom:message code="label.pay.executionList"/>' );
                 popup.setSize(800,494);

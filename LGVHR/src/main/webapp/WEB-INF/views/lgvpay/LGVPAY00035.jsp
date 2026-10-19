@@ -45,7 +45,7 @@ var LGVPAY00035 = function() {
     
     // 팝업 데이터 정의 searchMode:single(단수),multi(복수)
 	myForm.popupInfo = {
-		calculationPopup	 : { popupKind:'', confirmKind:'', calculationSetId:'', calculationSetName:'', calculationData:[] },
+		calculationPopup	 : { popupKind:'', confirmKind:'', calculationSetId:'', calculationSetName:'', payrollType:PAYROLL_TYPE_CODE, calculationData:[] },
 		payrollRunPopup		 : { payrollCalcPeriodValue:'', payrollTypeCode:'', payrollTypeName:'', calculationSetId:'', calculationSetName:'', runData:[] },
 		retroPayrollRunPopup : { payrollCalcPeriodValue:'', payrollTypeCode:'', payrollTypeName:'', calculationSetId:'', calculationSetName:'', retroactiveStartMonth:'', retroactiveEndMonth:'', runData:[] },
 		errorDetailPopup 	 : { payrollCalculationExecId:'', employeeNo:'', searchFlag:'' }
@@ -117,6 +117,7 @@ var LGVPAY00035 = function() {
 	            var popupData = myForm.popupInfo.calculationPopup;
 	            popupData.popupKind    = "";
 	            popupData.confirmKind  = "";
+	            popupData.payrollType  = PAYROLL_TYPE_CODE;	//LGVPAY00035 : MTH_OS 급여대상자 SET만 조회
 	            popupData.calculationSetName = srchFormUtil.getValue("payrollCalcPeriodValue");
 	            srchFormUtil.setValue({calculationSetId : '', calculationSetName : ''});
 
@@ -866,6 +867,7 @@ var LGVPAY00035 = function() {
     		nav.addParam("payrollCalculationExecId", list[0].payrollCalculationExecId);
     		nav.addParam("employeeNo", list[0].employeeNo);
     		nav.addParam("authGroup", 'MASTER');
+    		nav.addParam("payrollTypeCode", PAYROLL_TYPE_CODE);	//LGVPAY00035 : Execution List 팝업을 MTH_OS로 제한
     		
     		nav.goPageInNewTab();
         }

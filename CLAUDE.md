@@ -83,7 +83,7 @@ Tham khảo: `lgvatt/lgvatt20030/.../LGVATT20030ServiceImpl.java`.
 1. `views/{module}/{ID}.jsp`
 2. `{module}/{id}/service/{ID}Service.java` + `serviceImpl/{ID}ServiceImpl.java` (`@Service(value="{ID}Service")`, inject `@Resource(name="commonDao") CommonDao commonDao`)
 3. `sql/oracle/{module}/sql-{id}.xml` với `namespace="{ID}"`. Mapper được nạp tự động theo pattern `classpath:/sql/oracle/**/sql-*.xml`.
-4. Đăng ký menu/program và quyền trong DB (màn hình quản trị LGCOM `lgsysc`). Menu được cache bằng Ehcache.
+4. Đăng ký menu/program và quyền trong DB (màn hình quản trị LGCOM `lgsysc`). Menu được cache bằng Ehcache. Cập nhật mục **Menu ↔ Program** bên dưới.
 
 ## Các phân hệ LGVHR
 
@@ -91,6 +91,147 @@ Tham khảo: `lgvatt/lgvatt20030/.../LGVATT20030ServiceImpl.java`.
 - **lgvpay**: Payroll Item, Formula, Aggregate, User Defined Table, đối tượng hưởng lương, Payroll Run / Retroactive Run (`lgvpayc0013`, `lgvpayc0014`), Payment Master, PaySlip (in/gửi/ngày mở), trợ cấp thôi việc, quyết toán phép cho người nghỉ việc, lương outsourcing, Global Value.
 - **lgvinf**: các batch nhận I/F gồm mã, tổ chức, nhân sự, HR master, bổ nhiệm, gia đình, bằng cấp, hợp đồng, bậc lương, quyền mặc định, thuế từ ERP.
 - **lgvcom**: My Request / My Approval (phê duyệt), popup tìm nhân viên (`M_LGVCOM_1010`), mail chung, mã hóa AES256.
+
+## Menu ↔ Program (nguồn: `PROGRAM INFO.xlsx`)
+
+File `PROGRAM INFO.xlsx` (gốc repo) là export bảng menu (`LGCOM_MENU_M`): `MENU_ID`, `SYSTEM_CODE`, `MODULE_CODE`, `HIGHT_MENU_ID` (menu cha), `PROGRAM_ID`, `MENU_NAME`, `MENU_DESC`. Dùng để tra `menuId` khi mở màn hình (`/container?menuId=...`) hoặc khi mở popup (`new Popup(_this, 'lgvhr', '{MENU_ID}', title)`).
+
+- `MENU_ID` dạng `M_{MODULE}_{số}`; menu không có `PROGRAM_ID` là nút thư mục. Cột "Tên menu" bên dưới ghi kèm đường dẫn thư mục cha.
+- Một program có thể gắn nhiều menu (`LGVPAY00001` = Pay Slip và Pay Slip(Master); `LGVCOM00020` = My Approval List và mục Approval trong ATT; `LGVATT00013` gắn cho menu gốc `M_LGVATT_1001` và OS KPI Standard).
+- Menu không nhất thiết cùng phân hệ với program: `M_LGVCOM_1014` → `LGVATTP0001` (popup tìm tổ chức).
+- Hậu tố `O` trong ID (`LGVATTO0010`) là Portlet.
+- Lệch giữa menu và source: `LGVPAY00036`/`37`/`38` (bản sao `LGVPAY00004`/`00003`/`00010`) chỉ dành cho nhân viên `EMP_MASTER.GRADE = 'L34'`); các JSP `LGVATT50050`, `LGVATT60030`, `LGVATT60060`, `LGVPAY00027`, `LGVPAY00028`, `LGVPAYP0022` không có trong file menu (có thể bị thiếu trong export hoặc được mở trực tiếp/làm popup).
+- Khi thêm màn hình mới, nhớ cập nhật cả file Excel và bảng dưới đây.
+
+#### LGVATT
+
+| MENU_ID | PROGRAM_ID | Tên menu |
+|---|---|---|
+| M_LGVATT_1001 | LGVATT00013 | Attendance (gốc) |
+| M_LGVATT_1039 | LGVATT40010 | Approval › [OW] Daily T&A Approval |
+| M_LGVATT_1040 | LGVCOM00020 | Approval › Modification & Future Plan Approval |
+| M_LGVATT_1014 | LGVATT20010 | T&A Management › [OW] Monthly Calendar for T&A |
+| M_LGVATT_1017 | LGVATT20020 | T&A Management › [OW] Request for Modification |
+| M_LGVATT_1069 | LGVATT20030 | T&A Management › OT Level New&Detail |
+| M_LGVATT_1061 | LGVATT30030 | T&A Management › Request For OT Level |
+| M_LGVATT_1021 | LGVATT20040 | T&A Management › [LW] Input of Daily T&A |
+| M_LGVATT_1022 | LGVATT20060 | T&A Management › [OW/LW] Request for Modification By PIC |
+| M_LGVATT_1019 | LGVATT20440 | T&A Management › Request for Future Plan |
+| M_LGVATT_1030 | LGVATT20450 | T&A Management › Future Plan Creation |
+| M_LGVATT_1080 | LGVATT20096 | T&A Management › Flexible Working New&Detail |
+| M_LGVATT_1031 | LGVATT20441 | T&A Management › Future Plan Detail |
+| M_LGVATT_1079 | LGVATT30096 | T&A Management › Request For Flexible Working |
+| M_LGVATT_1063 | LGVATT20550 | T&A Management › Request for Swap Weekly Holiday |
+| M_LGVATT_1064 | LGVATT20551 | T&A Management › Swap Holiday New&Detail |
+| M_LGVATT_1068 | LGVATT20552 | T&A Management › Swap Weekly Holiday (Master) |
+| M_LGVATT_1041 | LGVATT00010 | T&A Management › ID Card History |
+| M_LGVATT_1047 | LGVATT30070 | T&A Management › Request for Special OT |
+| M_LGVATT_1044 | LGVATT20070 | T&A Management › Special OT New&Detail |
+| M_LGVATT_1055 | LGVATT30080 | T&A Management › Confirm for Special OT |
+| M_LGVATT_1034 | LGVATT00100 | T&A Management › Assign T&A PIC of Org |
+| M_LGVATT_1049 | LGVATT50030 | T&A Management › Annual Leave History |
+| M_LGVATT_1056 | LGVATT40012 | T&A Management › [OW]Search for Daily T&A |
+| M_LGVATT_1057 | LGVATT00020 | T&A Management › T&A Management (Master) |
+| M_LGVATT_1070 | LGVATT00030 | T&A Management › Employee Shift Group Info |
+| M_LGVATT_1027 | LGVATT60010 | T&A Result Report › Attendance Weekly Report |
+| M_LGVATT_1048 | LGVATT30060 | T&A Result Report › T&A Result Monthly Report |
+| M_LGVATT_1050 | LGVATTQ0001 | T&A Result Report › Dynamic Query |
+| M_LGVATT_1065 | LGVATT30050 | T&A Result Report › Employee Monthly OT Level Info |
+| M_LGVATT_1066 | LGVATT30020 | T&A Result Report › Employee OT Detail |
+| M_LGVATT_1067 | LGVATT30040 | T&A Result Report › Employee OT Total Detail |
+| M_LGVATT_1071 | LGVATT30090 | T&A Result Report › Daily Dept T&A Summary |
+| M_LGVATT_1072 | LGVATT30092 | T&A Result Report › Weekly Dept T&A Summary |
+| M_LGVATT_1073 | LGVATT30093 | T&A Result Report › Monthly Dept T&A Summary |
+| M_LGVATT_1078 | LGVATT30094 | T&A Result Report › shift in/out data by employee |
+| M_LGVATT_1009 | LGVATT50020 | T&A Setup › Holiday Inquiry |
+| M_LGVATT_1060 | LGVATT50040 | T&A Setup › Setup OT level |
+| M_LGVATT_1081 | LGVATT50060 | T&A Setup › Employee Unpaid Leave Warning |
+| M_LGVATT_1082 | LGVATT00016 | T&A Setup › AL For Hazardous EMP |
+| M_LGVATT_1012 | LGVATT50010 | T&A Setup › Monthly T&A Closing |
+| M_LGVATT_1029 | LGVATT20011 | Popup › Popup - Daily Registration (일근태 등록) |
+| M_LGVATT_1052 | LGVATT40011 | Popup › Popup - Daily Attendance Edit By Approver |
+| M_LGVATT_1062 | LGVATT20012 | Popup › Popup - Alarming Working Hours |
+| M_LGVATT_1054 | LGVATTO0010 | Portlet › Att Summary |
+| M_LGVATT_1059 | LGVATT00011 | O/S Employee Section › Matching Screen between O/S employee ID card and VH number |
+| M_LGVATT_1083 | LGVATT00012 | O/S Employee Section › Request for OS KPI |
+| M_LGVATT_1084 | LGVATT00022 | O/S Employee Section › Request for OS KPI New&Detail |
+| M_LGVATT_1085 | LGVATT00013 | O/S Employee Section › OS KPI Standard |
+| M_LGVATT_1086 | LGVATT00014 | O/S Employee Section › Bonus KPI for OS |
+| M_LGVATT_1087 | LGVATT00015 | O/S Employee Section › Request for OS KPI Master |
+| M_LGVATT_1088 | LGVATT00023 | O/S Employee Section › Vendor Infomation |
+| M_LGVATT_1076 | LGVATT60020 | T&A Problems and solutions › Responsibility Role Users |
+| M_LGVATT_1077 | LGVATT60050 | T&A Problems and solutions › Attendance Hours Management |
+
+#### LGVPAY
+
+| MENU_ID | PROGRAM_ID | Tên menu |
+|---|---|---|
+| M_LGVPAY_1007 | LGVPAY00011 | Pre-Work › Pay Slip OpenDate Mangement |
+| M_LGVPAY_1061 | LGVPAY00036 | Pre-Work › Payroll Item By OS Item |
+| M_LGVPAY_1008 | LGVPAY00004 | Pre-Work › Payroll Item Entry By Item |
+| M_LGVPAY_1062 | LGVPAY00037 | Pre-Work › Payroll Item By OS  Employee |
+| M_LGVPAY_1009 | LGVPAY00003 | Pre-Work › Payroll Item Entry By Employee |
+| M_LGVPAY_1010 | LGVPAY00009 | Pre-Work › Payment Master |
+| M_LGVPAY_1011 | LGVPAY00010 | Pre-Work › Payment Master By Employee |
+| M_LGVPAY_1063 | LGVPAY00038 | Pre-Work › Payment Master By OS Employee |
+| M_LGVPAY_1047 | LGVPAY00023 | Pre-Work › Annual Leave Adjustment for Retiree |
+| M_LGVPAY_1056 | LGVPAY00034 | Pre-Work › Annual Leave Sumary |
+| M_LGVPAY_1055 | LGVPAY00029 | Pre-Work › Calculate Severance Allowance |
+| M_LGVPAY_1051 | LGVPAY00025 | Pre-Work › Payroll Employee Email |
+| M_LGVPAY_1054 | LGVPAY00030 | Pre-Work › Other Income Upload |
+| M_LGVPAY_1057 | LGVPAY00031 | Pre-Work › Paid Leave Upload |
+| M_LGVPAY_1058 | LGVPAY00032 | Pre-Work › Paid Leave Hours & Adj for PL Hours |
+| M_LGVPAY_1059 | LGVPAY00033 | Pre-Work › Perfect Actual |
+| M_LGVPAY_1013 | LGVPAY00007 | Payroll Run › Payroll Activity Management |
+| M_LGVPAY_1014 | LGVPAY00005 | Payroll Run › Calculation Set Employee |
+| M_LGVPAY_1060 | LGVPAY00035 | Payroll Run › Payroll OS Running |
+| M_LGVPAY_1015 | LGVPAY00008 | Payroll Run › Payroll Running |
+| M_LGVPAY_1049 | LGVPAY00024 | Payroll Run › Retropay Result Download |
+| M_LGVPAY_1016 | LGVPAY00012 | Payroll Run › Pay Result Download |
+| M_LGVPAY_1018 | LGVPAYP0001 | Payroll Run › Calculation Set Inquiry Popup |
+| M_LGVPAY_1044 | LGVPAY00021 | Payroll Run › Calculation Set Management |
+| M_LGVPAY_1003 | LGVPAY00001 | View › Pay Slip |
+| M_LGVPAY_1004 | LGVPAY00001 | View › Pay Slip(Master) |
+| M_LGVPAY_1005 | LGVPAYQ0001 | View › Dynamic Query |
+| M_LGVPAY_1045 | LGVPAY00022 | View › Print PaySlip |
+| M_LGVPAY_1052 | LGVPAY00026 | View › Send PaySlip |
+| M_LGVPAY_1023 | LGVPAY10001 | Basis Mgt. › Global Value |
+| M_LGVPAY_1030 | LGVPAY00013 | Basis Mgt. › Payroll Item Mgt. |
+| M_LGVPAY_1037 | LGVPAY00014 | Basis Mgt. › Formula Management |
+| M_LGVPAY_1039 | LGVPAY00015 | Basis Mgt. › Aggregate Management |
+| M_LGVPAY_1040 | LGVPAY00017 | Basis Mgt. › User Defined Table/Column |
+| M_LGVPAY_1041 | LGVPAY00018 | Basis Mgt. › User Defined Table Row |
+| M_LGVPAY_1042 | LGVPAY00019 | Basis Mgt. › User Defined Table Value |
+| M_LGVPAY_1043 | LGVPAY00020 | Basis Mgt. › User Defined Table Value Summary |
+| M_LGVPAY_1019 | LGVPAYP0002 | Popup › Execution List |
+| M_LGVPAY_1020 | LGVPAYP0003 | Popup › PayRoll Item |
+| M_LGVPAY_1021 | LGVPAYP0009 | Popup › Payroll Run-Error Detail |
+| M_LGVPAY_1024 | LGVPAYP0010 | Popup › Payroll Run-Payroll Run |
+| M_LGVPAY_1025 | LGVPAYP0011 | Popup › Payment Master by Employee-Band Info |
+| M_LGVPAY_1026 | LGVPAYP0012 | Popup › Payment Master by Employee-Dependant Info |
+| M_LGVPAY_1027 | LGVPAYP0013 | Popup › Payment Master by Employee-Contract Info |
+| M_LGVPAY_1028 | LGVPAYP0014 | Popup › Payment Master by Employee-Qualification Info |
+| M_LGVPAY_1029 | LGVPAYP0015 | Popup › Payment Master by Employee-Assignment History |
+| M_LGVPAY_1031 | LGVPAYP0016 | Popup › Payroll Item Mgt-Payroll Item |
+| M_LGVPAY_1032 | LGVPAYP0004 | Popup › Payroll Item Mgt-Formula |
+| M_LGVPAY_1033 | LGVPAYP0005 | Popup › Payroll Item Mgt-Code |
+| M_LGVPAY_1034 | LGVPAYP0006 | Popup › Payroll Item Mgt-Detail |
+| M_LGVPAY_1035 | LGVPAYP0007 | Popup › Payroll Item Mgt-Method |
+| M_LGVPAY_1036 | LGVPAYP0008 | Popup › Payroll Item Mgt-Use |
+| M_LGVPAY_1038 | LGVPAYP0017 | Popup › Formula Mgt-Payroll Item Detail |
+| M_LGVPAY_1046 | LGVPAYP0018 | Popup › Print PaySlip By Employee |
+| M_LGVPAY_1048 | LGVPAYP0019 | Popup › Payroll Run-Retroactive Payroll Run |
+| M_LGVPAY_1050 | LGVPAYP0020 | Popup › Request Payroll Confirm |
+| M_LGVPAY_1053 | LGVPAYP0021 | Popup › Send PaySlip By Employee |
+
+#### LGVCOM
+
+| MENU_ID | PROGRAM_ID | Tên menu |
+|---|---|---|
+| M_LGVCOM_1003 | LGVCOM00010 | Approval List › My Request List |
+| M_LGVCOM_1004 | LGVCOM00020 | Approval List › My Approval List |
+| M_LGVCOM_1010 | LGVCOM00100 | Popup › User Search |
+| M_LGVCOM_1014 | LGVATTP0001 | Popup › SearchOrg |
 
 ## Database (Oracle, schema `VHR_MGR`)
 

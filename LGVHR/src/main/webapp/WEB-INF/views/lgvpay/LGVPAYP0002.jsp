@@ -230,6 +230,11 @@ var LGVPAYP0002 = function() {
 	if ( executionPopData ) {
 		//검색조건 기본값 셋팅
 		srchFormUtil.setValue({ payrollCalcPeriodValue : nvl(executionPopData["payMonthName"], DateUtil.today("MM/YYYY")) });
+		//급여유형이 전달된 경우 해당 유형으로 고정 (예: LGVPAY00035 → LGVPAY00001 → MTH_OS)
+		if ( nvl(executionPopData["payTypeCode"]) != "" ) {
+			myForm.select("select[name='payrollTypeCode'] option").not("[value='" + executionPopData["payTypeCode"] + "']").remove();
+			srchFormUtil.setValue({ payrollTypeCode : executionPopData["payTypeCode"] });
+		}
 	    //팝업 데이터 조회할지 여부
 	    if ( nvl(executionPopData["searchFlag"]) == "Y" ) {
 	    	myForm.select(".searchBlock button[data-action='search']").trigger('click');

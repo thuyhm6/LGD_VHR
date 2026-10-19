@@ -64,6 +64,12 @@ var LGVPAYP0001 = function() {
 			delete _popupInfo['calculationData'];
 		}
 
+		// 급여유형이 주어지면 해당 유형으로 고정한다. (예: LGVPAY00035 → MTH_OS)
+		if($.trim(_popupInfo['payrollType']) != '') {
+			myForm.select("select[name='payrollType'] option").not("[value='" + _popupInfo['payrollType'] + "']").remove();
+			formUtil.setValue({payrollType:_popupInfo['payrollType']});
+		}
+
 		// 검색어가 주어지면 값을 세팅하고 조회한다.
 		var isSearch = false;
 		if($.trim(_popupInfo['calculationSetName']) != '') {

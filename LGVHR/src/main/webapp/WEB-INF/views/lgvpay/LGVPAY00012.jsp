@@ -13,6 +13,11 @@
 <head>
 <title></title>
 <%@ include file="//WEB-INF/views/framework/bizFormHeader.jsp" %>
+<c:forEach var="roles" items="${sessionScope.USER_SESSION.roleList}">
+    <c:if test="${roles.systemCode=='LGVHR' and roles.moduleCode=='LGVPAY' and roles.roleCode=='VN_PAY_OS_PIC' }">
+        <c:set var="payAuthTypeCode" value="OS_PIC"/>
+    </c:if>
+</c:forEach>
 <script src="/lgvhr/static/js/lgvatt.js"></script>
 <script type="text/javascript">
 var LGVPAY00012 = function() {
@@ -85,6 +90,9 @@ var LGVPAY00012 = function() {
 	    	var popupData = myForm.popupInfo.executionListPopup;
 	    	popupData.payMonthName = srchFormUtil.getValue("payMonth");
 	    	popupData.searchFlag = "Y";
+			<c:if test="${ payAuthTypeCode eq 'OS_PIC' }"><%-- 급여담당자인 경우 --%>
+			popupData.payTypeCode = "MTH_OS";	//급여유형 MTH_OS 만 조회
+			</c:if>
 
             var popup = new Popup( myForm,'lgvhr', 'M_LGVPAY_1019', '<lgcom:message code="label.pay.executionList"/>' );
             popup.setSize(800,494);
