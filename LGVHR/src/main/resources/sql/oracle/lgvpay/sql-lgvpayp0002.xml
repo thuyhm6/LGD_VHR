@@ -7,6 +7,7 @@
         SELECT /* LGVPAYP0002.retrieveExecutionList */
                pce.payroll_calculation_exec_id 
              , ccmc.common_code_name                                                AS pay_type_name
+             , pce.payroll_type_code                                                AS pay_type_code
              , TO_CHAR(TO_DATE(pcp.payroll_calc_period_value, 'YYYYMM'), 'MM/YYYY') AS pay_month_name
              , pcs.payroll_calculation_set_name
              ,( SELECT COUNT(*) FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS employee_count
@@ -34,6 +35,7 @@
         SELECT /* LGVPAYP0002.retrievePayrollCalculationExecIdData */
                pce.payroll_calculation_exec_id
              , ccmc.common_code_name                                                AS pay_type_name
+             , pce.payroll_type_code                                                AS pay_type_code
              , TO_CHAR(TO_DATE(pcp.payroll_calc_period_value, 'YYYYMM'), 'MM/YYYY') AS pay_month_name
              , pcs.payroll_calculation_set_name
              ,( SELECT COUNT(*) FROM tb_pay_calc_emp_exec_n WHERE payroll_calculation_exec_id = pce.payroll_calculation_exec_id) AS employee_count

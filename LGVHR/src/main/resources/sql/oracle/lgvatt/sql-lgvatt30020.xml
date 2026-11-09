@@ -15,6 +15,15 @@
          ,em.assignment_category                                         AS employee_category
          ,em.date_hire_subsidiary                                        AS date_hire_subsidiary
 		 ,to_char(t.time_and_attendance_date, 'DD/MM/YYYY')              AS attendance_date
+		 ,ac.time_and_attendance_type_code                               AS actual_attendance_type
+		 ,t.time_and_attendance_code                                     AS actual_attendance_detail
+		 -- OT Level : OS 직원(Grade L34)만 대상, 근무일수 = 근태일자 - 입사일(DATE_HIRE_SUBSIDIARY) + 1 (입사일 = 1일차) 기준 (~29일 : Level 1, 30~59일 : Level 2, 60일~ : Level 3)
+		 ,CASE WHEN em.grade = 'L34' AND em.date_hire_subsidiary IS NOT NULL THEN
+		            CASE WHEN TRUNC(t.time_and_attendance_date) - TRUNC(em.date_hire_subsidiary) + 1 <= 29 THEN 'Level 1'
+		                 WHEN TRUNC(t.time_and_attendance_date) - TRUNC(em.date_hire_subsidiary) + 1 <= 59 THEN 'Level 2'
+		                 ELSE 'Level 3'
+		            END
+		  END                                                            AS ot_level
 
          ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
                                     t.time_and_attendance_date, t.time_and_attendance_date,'year_total_ot_result') AS year_ot
@@ -78,12 +87,16 @@
                                     t.time_and_attendance_date, t.time_and_attendance_date,'public_holiday_night','year_total_ot_over_limit') AS ph_night_over_y_raw
 
              FROM tb_att_result_n t,
-              emp_master em
+              emp_master em,
+              tb_att_code_c ac
          WHERE em.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
            AND t.employee_no = em.employee_number
+           AND t.subsidiary_code = ac.subsidiary_code(+)
+           AND t.time_and_attendance_code = ac.time_and_attendance_code(+)
            AND t.time_and_attendance_date BETWEEN to_date(#{atendanceStartDate}, 'dd/mm/yyyy') AND to_date(#{atendanceEndDate}, 'dd/mm/yyyy')
-           AND em.date_hire_subsidiary <= to_date(#{atendanceStartDate}, 'dd/mm/yyyy')
-           AND (em.date_retire         >= to_date(#{atendanceStartDate}, 'dd/mm/yyyy') OR date_retire IS NULL) 
+           -- 근태일자 기준 재직자 (검색 시작일 기준 X)
+           AND em.date_hire_subsidiary <= t.time_and_attendance_date
+           AND (em.date_retire         >= t.time_and_attendance_date OR em.date_retire IS NULL)
            AND NVL(em.fse_yn,  'N')    <> 'Y'  
            AND NVL(em.flsa_yn, 'N')    <> 'Y'
 		]]>
@@ -92,6 +105,12 @@
 		</if>
 		<if test="categoryTitle != null and categoryTitle != ''">
 			   AND em.assignment_category = #{categoryTitle}
+		</if>
+		<if test="gradeType == 'OS'">
+			   AND em.grade = 'L34'
+		</if>
+		<if test="gradeType == 'NORMAL'">
+			   AND NVL(em.grade, ' ') <![CDATA[<>]]> 'L34'
 		</if>
 		<if test="orgId != null and orgId != ''">
 			   AND em.organization_id = #{orgId}
@@ -129,7 +148,11 @@
 		     ,employee_grade
 		     ,actual_shift_code
 		     ,employee_category
+		     ,TO_CHAR(date_hire_subsidiary, 'DD/MM/YYYY')        AS date_hire_subsidiary
 		     ,attendance_date
+		     ,actual_attendance_type
+		     ,actual_attendance_detail
+		     ,ot_level
 		     ,year_ot
 		     ,month_total_ot
 		

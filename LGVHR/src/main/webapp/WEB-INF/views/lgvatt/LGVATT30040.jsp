@@ -240,6 +240,10 @@ var LGVATT30040 = function(){
 							{ fieldName:'yearOt'	        			, dataType:'number'},
 							{ fieldName:'monthTotalOt'	        		, dataType:'number'},
 							
+							{ fieldName:'otLevel1'	        			, dataType:'number'},
+							{ fieldName:'otLevel2'	        			, dataType:'number'},
+							{ fieldName:'otLevel3'	        			, dataType:'number'},
+							
 							{ fieldName:'weekdayDay' 	    			, dataType:'number'},
 							{ fieldName:'holidayDay'					, dataType:'number'},
 							{ fieldName:'publicHolidayDay'    			, dataType:'number'},
@@ -386,6 +390,40 @@ var LGVATT30040 = function(){
 								editable: false,
 								styles: {textAlignment:'far', numberFormat: '#0.0'},
 								editor: {type:'number', 'textAlignment': 'far', 'editFormat': '#0.#'}
+							},
+							{
+								type:'group',
+								name:'otLevel',
+								fieldName:'otLevel',
+								width:150,
+								header:{
+							         text:'OT Level',
+							         fixedHeight: 20
+							    },
+								orientation:'horizontal',
+								columns: [
+								            {	name:'otLevel1',
+								            	fieldName:'otLevel1',
+								            	width:50,
+								            	header: {text:'Level 1', showTooltip: true},
+								            	editable: false,
+								            	styles: {textAlignment:'far', numberFormat: '#0.0' }
+								            },
+								            {	name:'otLevel2',
+								            	fieldName:'otLevel2',
+								            	width:50,
+								            	header: {text:'Level 2', showTooltip: true},
+								            	editable: false,
+								            	styles: {textAlignment:'far', numberFormat: '#0.0' }
+								            },
+								            {	name:'otLevel3',
+								            	fieldName:'otLevel3',
+								            	width:50,
+								            	header: {text:'Level 3', showTooltip: true},
+								            	editable: false,
+								            	styles: {textAlignment:'far', numberFormat: '#0.0' }
+								            }
+								         ]
 							},
 							{
 								type:'group',
@@ -667,6 +705,15 @@ $(document).ready( function() {
 								
 								<th><label><lgcom:message code="label.att.employmentCategory" /></label></th>
 								<td><select class="form-control input-sm size_150" name="categoryTitle"></select></td>
+								
+								<th><label>Grade</label></th>
+								<td>
+									<select class="form-control input-sm size_150" name="gradeType">
+										<option value="">All</option>
+										<option value="OS">OS EMP - L34</option>
+										<option value="NORMAL">Normal EMP</option>
+									</select>
+								</td>
 								
 								<th><label><lgcom:message code="label.att.monthTotalOT" /></label></th>
 								<td><input type="number" class="form-control input-sm" name="monthTotalOtFrom" size="10"></td>

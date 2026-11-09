@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LGVATT30095">
+
+	<!-- Report : OVERTIME_VIOLATIONS (Excel Download) -->
+	<insert id="excelDownOvertimeViolations">
+		<![CDATA[
+		INSERT INTO xxlge_export_info (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+									 , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5
+									 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9, ATTRIBUTE10
+									 , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
+									 , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20
+									 , ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23, ATTRIBUTE24, ATTRIBUTE25)
+		WITH normal_ot AS (
+		    -- ==========================================
+		    -- LUỒNG 1: XỬ LÝ TĂNG CA THƯỜNG (NORMAL OT)
+		    -- ==========================================
+		    SELECT
+		        r.employee_no,
+		        NULL AS request_no, -- Bảng thường không có Request No
+		        r.time_and_attendance_date,
+		        r.TIME_AND_ATTENDANCE_CODE AS work_type_code,
+		        r.overtime_sum_hours,
+		        t.check_in_date,
+		        t.check_out_date,
+		        R.SHIFT_TYPE_CODE,
+		        r.early_leave_hours,
+		        r.tardy_hours,
+		        r.going_out_hours,
+		        r.time_attend_input_reason_desc,
+		        -- 1. Tính Giờ Bắt Đầu Chuẩn
+		        CASE
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' 13:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_SD' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' 08:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_SN' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' 20:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_FN' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date + 1, 'YYYY-MM-DD') || ' 01:00', 'YYYY-MM-DD HH24:MI')
+		            ELSE TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' ' || r.work_start_time, 'YYYY-MM-DD HH24:MI')
+		        END AS std_start_datetime,
+
+		        -- 2. Tính Giờ Kết Thúc Chuẩn (để lấy làm mốc cộng giờ OT)
+		        CASE
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' 18:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_SD' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' 12:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_SN' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date + 1, 'YYYY-MM-DD') || ' 00:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_FN' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date + 1, 'YYYY-MM-DD') || ' 06:00', 'YYYY-MM-DD HH24:MI')
+		            WHEN r.TIME_AND_ATTENDANCE_CODE IN ('WH', 'PH') THEN
+		                (CASE
+		                    WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_FN' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date + 1, 'YYYY-MM-DD') || ' 01:00', 'YYYY-MM-DD HH24:MI')
+		                    ELSE TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' ' || r.work_start_time, 'YYYY-MM-DD HH24:MI')
+		                END + NUMTODSINTERVAL(r.work_hours, 'HOUR'))
+		            ELSE
+		                (CASE
+		                    WHEN r.TIME_AND_ATTENDANCE_CODE = 'HL_FN' THEN TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date + 1, 'YYYY-MM-DD') || ' 01:00', 'YYYY-MM-DD HH24:MI')
+		                    ELSE TO_TIMESTAMP(TO_CHAR(r.time_and_attendance_date, 'YYYY-MM-DD') || ' ' || r.work_start_time, 'YYYY-MM-DD HH24:MI')
+		                END + NUMTODSINTERVAL(r.work_hours + 1, 'HOUR'))
+		        END AS std_end_datetime
+
+		    FROM tb_att_result_n r
+		    JOIN tb_att_idcard_acs_time_n t ON r.employee_no = t.employee_no AND r.time_and_attendance_date = t.time_and_attendance_date
+		    JOIN tb_att_base_bas_n b ON r.shift_type_code = b.shift_type_code AND r.time_and_attendance_date = b.time_and_attendance_date
+		    WHERE r.time_and_attendance_date BETWEEN to_date(#{atendanceStartDate}, 'DD/MM/YYYY') AND to_date(#{atendanceEndDate}, 'DD/MM/YYYY')
+		      AND r.overtime_sum_hours > 0
+		),
+		normal_ot_target AS (
+		    SELECT
+		        'NORMAL' AS OT_SOURCE,
+		        request_no, employee_no, time_and_attendance_date, work_type_code, SHIFT_TYPE_CODE,
+		        early_leave_hours,
+		        tardy_hours,
+		        going_out_hours,
+		        time_attend_input_reason_desc, overtime_sum_hours, check_in_date, check_out_date, std_start_datetime,
+		        (std_end_datetime + NUMTODSINTERVAL(overtime_sum_hours, 'HOUR')) AS expected_ot_end_time,
+		        GREATEST(0, CAST(std_start_datetime AS DATE) - CAST(check_in_date AS DATE)) AS early_arrival_duration
+		    FROM normal_ot
+		    -- Lọc vi phạm: Mốc End Chuẩn + OT > Giờ về thực tế + Phút đến sớm bù trừ
+		    WHERE CAST((std_end_datetime + NUMTODSINTERVAL(overtime_sum_hours, 'HOUR')) AS DATE) > (CAST(check_out_date AS DATE) + GREATEST(0, CAST(std_start_datetime AS DATE) - CAST(check_in_date AS DATE)))
+		),
+
+		special_ot AS (
+		    -- ==========================================
+		    -- LUỒNG 2: XỬ LÝ TĂNG CA ĐẶC BIỆT (SPECIAL OT)
+		    -- ==========================================
+		    SELECT
+		        sot.REQUEST_NO AS request_no,
+		        sot.employee_no,
+		        sot.time_and_attendance_date,
+		        sot.SPECIAL_WORK_TYPE_CODE AS work_type_code,
+		        '' as SHIFT_TYPE_CODE,
+		        0 as early_leave_hours,
+		        0 as tardy_hours,
+		        0 as going_out_hours,
+		        sot.time_attend_input_reason_desc,
+		        NVL(sot.overtime_sum_hours, 0) AS overtime_sum_hours,
+		        t.check_in_date,
+		        t.check_out_date,
+		        TO_TIMESTAMP(TO_CHAR(sot.time_and_attendance_date, 'YYYY-MM-DD') || ' ' || sot.work_start_time, 'YYYY-MM-DD HH24:MI') AS std_start_datetime
+
+		    FROM tb_att_special_ot_result_n sot
+		    JOIN tb_att_idcard_acs_time_n t ON sot.employee_no = t.employee_no AND sot.time_and_attendance_date = t.time_and_attendance_date
+		    WHERE sot.time_and_attendance_date BETWEEN to_date(#{atendanceStartDate}, 'DD/MM/YYYY') AND to_date(#{atendanceEndDate}, 'DD/MM/YYYY')
+		      AND sot.overtime_sum_hours > 0
+		      AND (sot.confirm_flag = 'R' or PROGRESS_STATUS_CODE = '40')
+		),
+		special_ot_target AS (
+		    SELECT
+		        'SPECIAL' AS OT_SOURCE,
+		        request_no, employee_no, time_and_attendance_date, work_type_code, SHIFT_TYPE_CODE,
+		        early_leave_hours,
+		        tardy_hours,
+		        going_out_hours,
+		        time_attend_input_reason_desc, overtime_sum_hours, check_in_date, check_out_date, std_start_datetime,
+		        (std_start_datetime + NUMTODSINTERVAL(overtime_sum_hours, 'HOUR')) AS expected_ot_end_time,
+		        GREATEST(0, CAST(std_start_datetime AS DATE) - CAST(check_in_date AS DATE)) AS early_arrival_duration
+		    FROM special_ot
+		    -- Lọc vi phạm: Mốc Bắt Đầu Chuẩn + OT > Giờ về thực tế + Phút đến sớm bù trừ
+		    WHERE CAST((std_start_datetime + NUMTODSINTERVAL(overtime_sum_hours, 'HOUR')) AS DATE) > (CAST(check_out_date AS DATE) + GREATEST(0, CAST(std_start_datetime AS DATE) - CAST(check_in_date AS DATE)))
+		),
+
+		-- ==========================================
+		-- LUỒNG 3: GOM DATA & XUẤT BÁO CÁO (UNION ALL)
+		-- ==========================================
+		combined_violations AS (
+		    SELECT * FROM normal_ot_target
+		    UNION ALL
+		    SELECT * FROM special_ot_target
+		)
+		SELECT #{sessionId}
+		     , #{USER_SESSION.applicationUserId}
+		     , SYSDATE
+		     , 1
+		     , 'KO16KSC5601'
+		     , 'OT Source'
+		     , 'Request No'
+		     , 'Employee No'
+		     , 'Full Name (English)'
+		     , 'Organization'
+		     , 'Grade Code'
+		     , 'Grade Title'
+		     , 'Grade Title Name'
+		     , 'Assignment Category'
+		     , 'Grade Type'
+		     , 'Date Retire'
+		     , 'Attendance Date'
+		     , 'Work Type Code'
+		     , 'Shift Type Code'
+		     , 'Early Leave Hours'
+		     , 'Tardy Hours'
+		     , 'Going Out Hours'
+		     , 'Input Reason'
+		     , 'OT Start Time'
+		     , 'Actual Check In'
+		     , 'Early Arrival Hours Credit'
+		     , 'Overtime Sum Hours'
+		     , 'Expected OT End'
+		     , 'Actual Check Out'
+		     , 'OT Violation Hours'
+		  FROM DUAL
+
+		 UNION ALL
+		SELECT #{sessionId}
+		     , #{USER_SESSION.applicationUserId}
+		     , SYSDATE
+		     , ROW_NUMBER() OVER (ORDER BY v.time_and_attendance_date, v.employee_no) + 1
+		     , 'KO16KSC5601'
+		     , v.OT_SOURCE
+		     , v.request_no
+		     , v.employee_no
+		     , em.FULL_NAME_ENGLISH
+		     , em.ORG_NAME_LOCAL
+		     , em.grade
+		     , em.grade_title
+		     , (SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, 'en') FROM DUAL)
+		     , em.ASSIGNMENT_CATEGORY
+		     , em.GRADE_TYPE
+		     , TO_CHAR(em.date_retire, 'DD/MM/YYYY')
+		     , TO_CHAR(v.time_and_attendance_date, 'DD/MM/YYYY')
+		     , v.work_type_code
+		     , v.SHIFT_TYPE_CODE
+		     , TO_CHAR(v.early_leave_hours)
+		     , TO_CHAR(v.tardy_hours)
+		     , TO_CHAR(v.going_out_hours)
+		     , v.time_attend_input_reason_desc
+		     , TO_CHAR(v.std_start_datetime, 'DD/MM/YYYY HH24:MI')
+		     , TO_CHAR(v.check_in_date, 'DD/MM/YYYY HH24:MI')
+		     , TO_CHAR(ROUND(v.early_arrival_duration * 24 , 1))
+		     , TO_CHAR(v.overtime_sum_hours)
+		     , TO_CHAR(v.expected_ot_end_time, 'DD/MM/YYYY HH24:MI')
+		     , TO_CHAR(v.check_out_date, 'DD/MM/YYYY HH24:MI')
+		     , TO_CHAR(ROUND((CAST(v.expected_ot_end_time AS DATE) - (CAST(v.check_out_date AS DATE) + v.early_arrival_duration)) * 24 , 1))
+		  FROM combined_violations v
+		  LEFT JOIN EMP_MASTER em
+		    ON v.employee_no = em.EMPLOYEE_NUMBER
+		]]>
+	</insert>
+
+</mapper>

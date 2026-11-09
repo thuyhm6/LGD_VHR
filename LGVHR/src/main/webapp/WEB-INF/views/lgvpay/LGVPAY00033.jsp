@@ -6,67 +6,66 @@
 
    Copyright(c) 2017 LG CNS,  All rights reserved..
 
-    설 명 : Employee Perfect Actual
+    설 명 : Paid Leave Payment Rate Setup (PL_SW / PL_PLP)
+            1) 지급률 : PL코드 + OW/LW + Tier(연속일수 a 구간) + 적용기간 별 구성요소 지급률(%)
+                        Base amount type = MIN_WAGE 이면 Base salary 대신 최저임금(Global Value REGION_MINIMUM_WAGE) 사용
+            2) 급여항목 매핑 : (PL코드, Tier, 구성요소) -> Payroll Item
+                        (급여항목 Formula = lgvpay_paid_leave_pkg.calculation_pl_item)
     작성자 : HMT_20251201
+    수정   : HMT_20261026 Rebuild
 -------------------------------------------------------------%>
 <html lang="ko">
 <head>
 <title></title>
 <%@ include file="//WEB-INF/views/framework/bizFormHeader.jsp" %>
-<script src="/lgvhr/static/js/lgvatt.js"></script>
 <script type="text/javascript">
 var LGVPAY00033 = function() {
 	var myForm = this;
-    var _this = this;
-	var result;
 	// Form Util 선언
 	var srchForm = '.searchBlock form';
 	var srchFormUtil = new FormUtil( myForm, srchForm );
-	var gridContent = new FormUtil(myForm,'.gridContent form');
-	
- 	//필수항목 체크
-   	var validator = new Validator( myForm, srchForm );
-	
+
    	var code = new CommonCode("lgcom");
     code.add("paidLeaveCodeList", {codeTypeCode:'LGVHR_ATTENDANCE_PL_DETAIL_CODE'});
     code.execute();
-	
+
+    //급여항목 콤보
+    var payrollItemList = [];
+	myForm.transaction_sync("lgvhr", "lgvpay/LGVPAY00033/retrievePayrollItemList", {}, function(data) {
+		if ( data.result ) {
+			payrollItemList = data.result;
+		}
+	});
+
+	var empCategoryList = [ {code:'LGD_OW', name:'OW'}, {code:'LGD_LW', name:'LW'}, {code:'ALL', name:'ALL'} ];
+	var baseAmountList  = [ {code:'BASE_SALARY', name:'Base Salary'}, {code:'MIN_WAGE', name:'Minimum Wage'} ];
+	var componentList   = [ {code:'BASE_SALARY'       , name:'Base salary'},
+	                        {code:'POSITION_ALLW'     , name:'Position allowance'},
+	                        {code:'JOB_ALLW'          , name:'Job allowance'},
+	                        {code:'QUALIFICATION_ALLW', name:'Qualification allowance'},
+	                        {code:'ADJ1_ALLW'         , name:'Adjustment 1 allowance'},
+	                        {code:'ADJ2_ALLW'         , name:'Adjustment 2 allowance'},
+	                        {code:'ADJ3_ALLW'         , name:'Adjustment 3 allowance'} ];
+	var applyValueList  = [ {code:'PAY', name:'PAY (paid amount)'}, {code:'ADJ', name:'ADJ (pay - 100%)'} ];
+
 	//콤보 초기화
-	srchFormUtil.initCombo("paidLeaveDetailCode", code.get("paidLeaveCodeList"), {selectAll:false});
-   	
-   	myForm.setLayout( [ 
-   	        		{ name : "searchBlock", left : 0, right : 0, top : 0 },
-   	        		{ name : "gridControls", left : 0, right : 0, top : "searchBlock" },
-   	        	    { name : "gridContent", left : 0, right : 0, top : "gridControls", bottom : 0 }
-   	        	]);
-	
-   	transaction_sync( "lgvhr","lgvatt/LGVATT50030/retrieveAttendanceYyyymm", {}, function(data) {
-    	if ( data.result ) {
-    		yyyymmList = data.result.yyyymmList;
-    		
-    		srchFormUtil.initCombo("payMonth", data.result.yyyymmList,   {selectAll:false});
-    		srchFormUtil.setValue({payMonth: data.result.currentYyyymmData.attendanceYyyymm});
-    	}
-    });
+	srchFormUtil.initCombo("paidLeaveDetailCode", code.get("paidLeaveCodeList"), {selectAll:true});
+	srchFormUtil.setCalendar( { from : "effectiveDate", language:SESSION_USER.languageCode, format: 'DD/MM/YYYY' } );
+
+   	myForm.setLayout( [
+		{ name : "searchBlock",  left : 0, right : 0, top : 0 },
+		{ name : "rateControls", left : 0, right : 0, top : "searchBlock" },
+		{ name : "rateContent",  left : 0, right : 0, top : "rateControls", height : 300 },
+		{ name : "mapControls",  left : 0, right : 0, top : "rateContent" },
+		{ name : "mapContent",   left : 0, right : 0, top : "mapControls", bottom : 0 }
+	]);
+
  	// 그리드 선언
-	var grid = buildGrid('.perfectActualEmployeeGrid');
-	var gridView = grid.getGridBase();
-	var provider = grid.getDataProvider();
- 	
-	//파일 매니저 초기화 
-    var fileManager = new FileManager( myForm, { moduleCode : "LGCOM", fileCount : 3 } );
+	var rateGrid = buildRateGrid('.plRateGrid');
+	var mapGrid  = buildMapGrid('.plItemMapGrid');
+
 	// 조회조건 저장 처리
 	myForm.searchConditionControl(true);
-	
-	/* this.addEvent('change',"select[name='payMonth']",function(event) {
-		search();
-	}); */
-	
-	// 팝업 데이터 정의 searchMode:single(단수),multi(복수)
-	myForm.popupInfo = {
-		userPopup   : {searchMode:'single', popupKind:'', confirmKind:'', employeeNo:'', employeeName:'', attDate:'', userData:[]},
-        returnPopup : {returnComment:''}
-    };
 
 	/***  이벤트 핸들러  ***/
 	myForm.addEvent('click','button[data-action]',function(event) {
@@ -79,297 +78,298 @@ var LGVPAY00033 = function() {
 		case 'search':
 			search();
 			break;
-		case 'directCSV':
-			if(validator.isValid()) {
-				Message.confirm('<lgcom:message code="question.excelDownload"/>',function() {
-					var downloader = new Downloader( myForm );
-					downloader.csvDirectDownload("lgvhr", "LGVPAY00033.createDirectCSVDownloadData", srchFormUtil.getValue());
-				});
-			}
+
+		case 'addRate':
+			fncAddRow(rateGrid, {
+				paidLeaveDetailCode : srchFormUtil.getValue("paidLeaveDetailCode"),
+				empCategoryCode     : 'ALL',
+				tierNo              : 1,
+				fromDays            : 1,
+				baseAmountType      : 'BASE_SALARY',
+				baseSalaryRate      : 0, positionAllwRate : 0, jobAllwRate : 0, qualificationAllwRate : 0,
+				adj1AllwRate        : 0, adj2AllwRate : 0, adj3AllwRate : 0,
+				startDate           : DateUtil.today("DD/MM/YYYY"),
+				endDate             : '31/12/4712'
+			}, 'paidLeaveDetailCode');
 			break;
-			
-		case 'excelDownload':
-			if(validator.isValid()) {
-				Message.confirm('<lgcom:message code="question.excelDownload"/>',function() {
-					var param = srchFormUtil.getValue();
-					var downloader = new Downloader( myForm );
-					downloader.excel( "lgvhr", "lgvpay/LGVPAY00033/createExcelExportData", param );
-				});
+		case 'copyRate':
+			//선택 행 복사 : 새 적용기간 등록용
+			var gv = rateGrid.getGridBase();
+			var cur = gv.getCurrent();
+			if(cur.itemIndex < 0) {
+				Message.alert('<lgcom:message code="note.nodata"/>');
+				return;
 			}
+			var src = gv.getValues(cur.itemIndex);
+			delete src.plRateId;
+			src.startDate = DateUtil.today("DD/MM/YYYY");
+			src.endDate   = '31/12/4712';
+			fncAddRow(rateGrid, src, 'startDate');
 			break;
-     	// 유저 검색 팝업
-	    case "openPopupApprover" :
-            console.log("openPopupApprover");
-            var _popup = _this.popupInfo.userPopup;
-            _popup.searchMode   = "single";
-            _popup.popupKind    = "";
-            _popup.confirmKind  = "";
-            _popup.employeeNo = srchFormUtil.getValue("employeeNo");
-            _popup.employeeName = srchFormUtil.getValue("employeeName");
-            _popup.fseYn = "N";
-            _popup.flsaYn = "N";
-        	fncSearchEmpInfoInit();
-            
-            var popup = new Popup( _this,'lgvhr', 'M_LGVCOM_1010', '<lgcom:message code="UserSearch"/>' );
-            popup.setSize(800,494);
-            popup.open( function(){
-            	srchFormUtil.setValue({employeeNo  :_popup.userData[0].employeeNo});
-            	srchFormUtil.setValue({employeeName   :_popup.userData[0].employeeName});
-            });
-            _popup.userData = [];
-            break;
-			
+		case 'deleteRate':
+			rateGrid.getGridBase().deleteSelection(true);
+			break;
+		case 'saveRate':
+			if(!fncValidateRate()) return;
+			fncSave(rateGrid, 'lgvpay/LGVPAY00033/savePlRate');
+			break;
+
+		case 'addMap':
+			fncAddRow(mapGrid, {
+				paidLeaveDetailCode : srchFormUtil.getValue("paidLeaveDetailCode"),
+				tierNo              : 1,
+				applyValueType      : 'PAY'
+			}, 'paidLeaveDetailCode');
+			break;
+		case 'deleteMap':
+			mapGrid.getGridBase().deleteSelection(true);
+			break;
+		case 'saveMap':
+			if(!fncValidateMap()) return;
+			fncSave(mapGrid, 'lgvpay/LGVPAY00033/savePlItemMap');
+			break;
 		}
 	});
-	
+
 	/* Form Submit 방지 */
 	myForm.addEvent('submit','.searchBlock form',function(event) {
 		event.preventDefault();
 	});
-	//사번 또는 성명 클릭 시 값 초기화
-    myForm.addEvent ( "click", ".searchBlock form input[name='employeeNo'], input[name='employeeName']", function(event) {
-    	fncSearchEmpInfoInit();
-    });
-  	//사번, 성명값 초기화
-	function fncSearchEmpInfoInit() { 
-		srchFormUtil.setValue({employeeNo : '', employeeName : ''});		
-	}
-	grid.getGridBase().onCurrentRowChanged = function(cgrid, oldRow, newRow) {
-		var provider = cgrid.getDataProvider();
-		var editable = newRow < 0 || provider.getRowState(newRow) === 'created';
-		// 신규행이 아니면 employeeNo 컬럼 편집 불가
-		if(!editable) {
-			cgrid.setColumnProperty('employeeNo','editable',false);
-			cgrid.setColumnProperty('employeeNo','button','none');
-			// 삭제버튼 활성화
-			//myForm.select(".gridControls button[data-action='delete']").attr('disabled','disabled');
-		} else {
-			cgrid.setColumnProperty('employeeNo','editable',true);
-			cgrid.setColumnProperty('employeeNo','button','action');
-			// 삭제버튼 비활성화
-			//myForm.select(".gridControls button[data-action='delete']").removeAttr('disabled');
-		}
-	};
-	//employeeNo 클릭 시 user검색 팝업호출
-	grid.getGridBase().onCellButtonClicked = function(cgrid, itemIndex, column) {
-		cgrid.commitEditor();
-		var currRow = cgrid.getCurrent();
-		var gridRow = cgrid.getValues(currRow.itemIndex);
-		emplyoeePopup(itemIndex,column.name,gridRow.userId,gridRow.roleName);
-	};
+
 	//Search
 	function search() {
-		grid.getGridBase().cancel();
 		var param = srchFormUtil.getValue();
-		if(validator.isValid()) {
-			grid.loadData("lgvhr", "lgvpay/LGVPAY00033/retrievePerfectActual", param, function(data) {
-				if( grid.getRowCount() == 0 ) {
-					Message.alert('<lgcom:message code="note.nodata"/>');
-					return;
-				};
-			});
-		}
+		rateGrid.getGridBase().cancel();
+		mapGrid.getGridBase().cancel();
+		rateGrid.loadData("lgvhr", "lgvpay/LGVPAY00033/retrievePlRateList", param);
+		mapGrid.loadData("lgvhr", "lgvpay/LGVPAY00033/retrievePlItemMapList", param);
 	}
-	//user 검색팝업
-	function emplyoeePopup(rowIdx, colName, applicationUserId, keyword) {
-		var cgrid = grid.getGridBase();
-		myForm.popupInfo.userPopup = { searchMode : "single", fseYn:"N", flsaYn:"N"};
-		var popup = new Popup( _this,'lgvhr', 'M_LGVCOM_1010', '<lgcom:message code="UserSearch"/>' );
-		popup.setSize( 1000, 528 );
-		popup.open( function(){
-			var array = myForm.popupInfo.userPopup.userData;
-			if(array.length == 0) {
-				return;
-			}else{
-				transaction('lgvhr','lgvpay/LGVPAY00033/retrieveEmployeeInfo',{'employeeNo':array[0].employeeNo}, function(data) {
-					cgrid.setValue(rowIdx,'employeeNo',data.result.employeeNo);
-					cgrid.setValue(rowIdx,'employeeName',data.result.employeeName);
-					cgrid.setValue(rowIdx,'gradeCode',data.result.gradeCode);
-					cgrid.setValue(rowIdx,'gradeTitle',data.result.gradeTitleName);
-					cgrid.setValue(rowIdx,'organizationName',data.result.organizationName);
-					cgrid.setValue(rowIdx,'empCategoryName',data.result.empCategoryName);
-					cgrid.setValue(rowIdx,'workTypeName',data.result.workTypeName);
-					cgrid.setValue(rowIdx,'dateHireSubsidiary',data.result.dateHireSubsidiary);
-					cgrid.setValue(rowIdx,'dateRetire',data.result.dateRetire);
-				});
+
+	function fncAddRow(grid, values, focusColumn) {
+		var gv = grid.getGridBase();
+		try {
+			gv.commit();
+		} catch(e) {
+			Message.alert(e.message);
+			return;
+		}
+		gv.beginAppendRow();
+		gv.commit();
+		var idx = gv.getItemCount() - 1;
+		for(var key in values) {
+			if(values.hasOwnProperty(key) && values[key] !== undefined) {
+				gv.setValue(idx, key, values[key]);
 			}
+		}
+		gv.setCurrent({itemIndex:idx, column:focusColumn});
+		gv.setFocus();
+	}
+
+	function fncSave(grid, url) {
+		var gv = grid.getGridBase();
+		try {
+			gv.commit();
+		} catch(e) {
+			Message.alert(e.message);
+			return;
+		}
+		if(!grid.isChanged()) {
+			Message.alert('<lgcom:message code="error.noChangedData"/>');
+			return;
+		}
+		Message.confirm('<lgcom:message code="question.save"/>', function() {
+			grid.useProgress(true);
+			grid.saveChanges('lgvhr', url, srchFormUtil.getValue(), function(data) {
+				Message.alert('<lgcom:message code="note.saved"/>');
+				search();
+			});
 		});
 	}
-	
-	$("input[name=employeeNo]").keydown(function (key) {
-		if(key.keyCode == 13) {
-			myForm.select(".searchBlock button[data-action='openPopupApprover']").trigger('click');
+
+	//DD/MM/YYYY -> YYYYMMDD
+	function fncToYmd(value) {
+		if(isNull(value)) return '';
+		var arr = String(value).split('/');
+		if(arr.length != 3) return '';
+		return arr[2] + arr[1] + arr[0];
+	}
+
+	//변경 행만 반환
+	function fncChangedRows(grid) {
+		var gv = grid.getGridBase();
+		var provider = gv.getDataProvider();
+		var rows = [];
+		for(var i = 0; i < gv.getItemCount(); i++) {
+			var state = provider.getRowState(gv.getDataRow(i));
+			if(state == 'created' || state == 'updated') {
+				var row = gv.getValues(i);
+				row.itemIndex = i;
+				rows.push(row);
+			}
 		}
-	});
-	/***  내부 함수  ***/
-	//그리드 초기화
-	function buildGrid(gridId) {
-		var grid = new RealGrid(myForm, gridId);
-		grid.setPagingMode(true);
-		//필드 설정
-		grid.setFields([
-		    { fieldName: 'employeeNo'  				, dataType:'text'},
-		    { fieldName: 'employeeName'         	, dataType:'text'},
-		    { fieldName: 'employeeNameLocal'        , dataType:'text'},
-		    { fieldName: 'assignmentCategory'       , dataType:'text'},
-		    { fieldName: 'timeAndAttendanceYyyymm'  , dataType:'text'},
-		    { fieldName: 'perfectWorkDays'          , dataType:'text'},
-		    { fieldName: 'perfectWorkHours'         , dataType:'text'},
-		    { fieldName: 'actualHours'              , dataType:'text'},
-		    { fieldName: 'extraHours'               , dataType:'text'},
-		    { fieldName: '2s3gOrNot'                , dataType:'text'},
-		    { fieldName: 'plHours'                  , dataType:'text'},
-		    { fieldName: 'deducHours'               , dataType:'text'},
-		    { fieldName: 'actualHours2s10g'         , dataType:'text'},
+		return rows;
+	}
 
-		]);
-		grid.setLookups({});
-		//컬럼 설정
-		grid.setColumns([
- 				{
-					name:'employeeNo',
-					fieldName:'employeeNo',
-					width:100,
-					header: {text:'<lgcom:message code="label.pay.employeeNo" />', required : true},
-					styles: {textAlignment:'center'},
-					button: 'action',
-					editable: false
-				},
-				{
-					name:'assignmentCategory',
-					fieldName:'assignmentCategory',
-					width:200,
-					header: {text:'<lgcom:message code="assignmentCategory" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'timeAndAttendanceYyyymm',
-					fieldName:'timeAndAttendanceYyyymm',
-					width:200,
-					header: {text:'<lgcom:message code="timeAndAttendanceYyyymm" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'perfectWorkDays',
-					fieldName:'perfectWorkDays',
-					width:100,
-					header: {text:'<lgcom:message code="perfectWorkDays" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'perfectWorkHours',
-					fieldName:'perfectWorkHours',
-					width:100,
-					header: {text:'<lgcom:message code="perfectWorkHours" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'actualHours',
-					fieldName:'actualHours',
-					width:100,
-					header: {text:'<lgcom:message code="actualHours" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'extraHours',
-					fieldName:'extraHours',
-					width:100,
-					header: {text:'<lgcom:message code="extraHours" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'2s3gOrNot',
-					fieldName:'2s3gOrNot',
-					width:100,
-					header: {text:'<lgcom:message code="2s3gOrNot" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'plHours',
-					fieldName:'plHours',
-					width:100,
-					header: {text:'<lgcom:message code="plHours" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'deducHours',
-					fieldName:'deducHours',
-					width:100,
-					header: {text:'<lgcom:message code="deducHours" />'},
-					styles: {textAlignment:'near'},
-					editable : true
-				},
-				{
-					name:'actualHours2s10g',
-					fieldName:'actualHours2s10g',
-					width:100,
-					header: {text:'<lgcom:message code="actualHours2s10g" />'},
-					styles: {textAlignment:'near'},
-					editable : true
+	function fncValidateRate() {
+		try { rateGrid.getGridBase().commit(); } catch(e) { Message.alert(e.message); return false; }
+		var rows = fncChangedRows(rateGrid);
+		for(var i = 0; i < rows.length; i++) {
+			var r = rows[i], msg = '';
+			if(isNull(r.paidLeaveDetailCode) || isNull(r.empCategoryCode) || isNull(r.tierNo) || isNull(r.fromDays) || isNull(r.startDate)) {
+				msg = '<lgcom:message code="error.required" arguments="PL Type / Category / Tier / From Days / Start Date"/>';
+			} else if(!isNull(r.toDays) && Number(r.toDays) < Number(r.fromDays)) {
+				msg = 'From Days <= To Days';
+			} else if(!isNull(r.endDate) && fncToYmd(r.startDate) > fncToYmd(r.endDate)) {
+				msg = 'Start Date <= End Date';
+			} else {
+				var rates = [r.baseSalaryRate, r.positionAllwRate, r.jobAllwRate, r.qualificationAllwRate, r.adj1AllwRate, r.adj2AllwRate, r.adj3AllwRate];
+				for(var k = 0; k < rates.length; k++) {
+					if(!isNull(rates[k]) && (Number(rates[k]) < 0 || Number(rates[k]) > 100)) {
+						msg = 'Rate : 0 ~ 100 (%)';
+						break;
+					}
 				}
+			}
+			if(msg != '') {
+				rateGrid.getGridBase().setCurrent({itemIndex:r.itemIndex});
+				Message.alert(msg);
+				return false;
+			}
+		}
+		return true;
+	}
+
+	function fncValidateMap() {
+		try { mapGrid.getGridBase().commit(); } catch(e) { Message.alert(e.message); return false; }
+		var rows = fncChangedRows(mapGrid);
+		for(var i = 0; i < rows.length; i++) {
+			var r = rows[i];
+			if(isNull(r.paidLeaveDetailCode) || isNull(r.tierNo) || isNull(r.componentCode) || isNull(r.payrollItemId)) {
+				mapGrid.getGridBase().setCurrent({itemIndex:r.itemIndex});
+				Message.alert('<lgcom:message code="error.required" arguments="PL Type / Tier / Component / Payroll Item"/>');
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/***  내부 함수  ***/
+	function comboCol(name, text, width, lookupId, required) {
+		return { name:name, fieldName:name, width:width,
+		         header:{text:text, required:!!required}, styles:{textAlignment:'center'},
+		         lookupDisplay:true, lookupSourceId:lookupId, lookupKeyFields:[name],
+		         editor:{type:'dropDown', textReadOnly:true}, editButtonVisibility:'visible' };
+	}
+	function numCol(name, text, width, required) {
+		return { name:name, fieldName:name, width:width,
+		         header:{text:text, required:!!required}, styles:{textAlignment:'far', numberFormat:'#,##0.##'},
+		         editor:{type:'number', textAlignment:'far', editFormat:'#,##0.##'} };
+	}
+	function dateCol(name, text, required) {
+		return { name:name, fieldName:name, width:100,
+		         header:{text:text, required:!!required}, styles:{textAlignment:'center'},
+		         editor:{type:'date', datetimeFormat:'dd/MM/yyyy', maxLength:10}, editButtonVisibility:'visible' };
+	}
+	var gridOptions = {
+		grid: {
+			hideDeletedRows: false,
+			indicator: {visible:false},
+			panel: {visible:false},
+			checkBar: {visible:false},
+			footer: {visible:false},
+			paste: {enabled:false},
+			sorting  : {enabled:false},
+            sortMode : "explicit",
+			edit: { insertable: true, appendable: true, updatable: true, deletable: true },
+			header: {height: 50}
+		},
+		dataProvider: { insertable: true, updatable: true, deletable: true, softDeleting: true, deleteCreated: true },
+		display: { fitStyle: 'none' }
+	};
+
+	function buildRateGrid(gridId) {
+		var grid = new RealGrid(myForm, gridId);
+		grid.setFields([
+		    { fieldName: 'plRateId'              , dataType:'text'},
+		    { fieldName: 'paidLeaveDetailCode'   , dataType:'text'},
+		    { fieldName: 'empCategoryCode'       , dataType:'text'},
+		    { fieldName: 'tierNo'                , dataType:'number'},
+		    { fieldName: 'fromDays'              , dataType:'number'},
+		    { fieldName: 'toDays'                , dataType:'number'},
+		    { fieldName: 'baseAmountType'        , dataType:'text'},
+		    { fieldName: 'baseSalaryRate'        , dataType:'number'},
+		    { fieldName: 'positionAllwRate'      , dataType:'number'},
+		    { fieldName: 'jobAllwRate'           , dataType:'number'},
+		    { fieldName: 'qualificationAllwRate' , dataType:'number'},
+		    { fieldName: 'adj1AllwRate'          , dataType:'number'},
+		    { fieldName: 'adj2AllwRate'          , dataType:'number'},
+		    { fieldName: 'adj3AllwRate'          , dataType:'number'},
+		    { fieldName: 'startDate'             , dataType:'text'},
+		    { fieldName: 'endDate'               , dataType:'text'},
+		    { fieldName: 'note'                  , dataType:'text'}
 		]);
-		//옵션 설정
-		grid.setOptions({
-			grid: {
-				hideDeletedRows: false,
-				indicator: {visible:false},
-				panel: {visible:false},
-				checkBar: {visible:false},
-				footer: {visible:false},
-				/* 상단 합계 표시 */
-				header: {summary: {visible: true, 
-					               styles: {background: "#e9e9e9",
-					            	        borderLeft : "#dfdfdf,1",
-					            	        borderRight : "#dfdfdf,1",
-					            	        borderTop : "#dfdfdf,1",
-					        				borderBottom : "#dfdfdf, 1",
-					        				fontSize : 12,
-					        				fontBold : "false",
-					        				paddingLeft : 5,
-					        				paddingRight : 5
-					            	       }
-				                    },
-			             height:30
-			            },
-				paste: {enabled:false}, /*paste 기능막기 */
-				sorting  : {enabled:false}, /*Sorting 기능을 막는다.*/
-                sortMode : "explicit",
-				edit: {
-					insertable: true,
-					appendable: true,
-					updatable: true,
-					deletable: true
-				},
-				fixed: { colCount: 2 }
-			},
-			dataProvider: {
-				insertable: true,
-				updatable: true,
-				deletable: true,
-				softDeleting: true,
-				deleteCreated: true
-			},
-			display: { fitStyle: 'none' }
+		grid.setLookups({
+			plCode       : code.get("paidLeaveCodeList"),
+			empCategory  : empCategoryList,
+			baseAmount   : baseAmountList
 		});
-
-		// Context Menu Set
+		grid.setColumns([
+			comboCol('paidLeaveDetailCode', '<lgcom:message code="label.pay.plDetailCode"/>', 110, 'plCode', true),
+			comboCol('empCategoryCode', '<lgcom:message code="label.pay.plEmpCategory"/>', 90, 'empCategory', true),
+			numCol('tierNo'  , '<lgcom:message code="label.pay.plTierNo"/>'  , 70, true),
+			numCol('fromDays', '<lgcom:message code="label.pay.plFromDays"/>', 80, true),
+			numCol('toDays'  , '<lgcom:message code="label.pay.plToDays"/>'  , 80, false),
+			comboCol('baseAmountType', '<lgcom:message code="label.pay.plBaseAmountType"/>', 120, 'baseAmount', true),
+			{ type:'group', name:'rateGroup', width:700, orientation:'horizontal',
+			  header:{text:'<lgcom:message code="label.pay.plRate"/>'},
+			  columns:[ numCol('baseSalaryRate'       , '<lgcom:message code="label.pay.baseSalary"/>'            , 100),
+			            numCol('positionAllwRate'     , '<lgcom:message code="label.pay.positionAllowance"/>'     , 100),
+			            numCol('jobAllwRate'          , '<lgcom:message code="label.pay.jobAllowance"/>'          , 100),
+			            numCol('qualificationAllwRate', '<lgcom:message code="label.pay.qualificationAllowance"/>', 100),
+			            numCol('adj1AllwRate'         , '<lgcom:message code="label.pay.adjustmentAllowance1"/>'  , 100),
+			            numCol('adj2AllwRate'         , '<lgcom:message code="label.pay.adjustmentAllowance2"/>'  , 100),
+			            numCol('adj3AllwRate'         , '<lgcom:message code="label.pay.adjustmentAllowance3"/>'  , 100) ] },
+			dateCol('startDate', '<lgcom:message code="StartDate"/>', true),
+			dateCol('endDate'  , '<lgcom:message code="EndDate"/>'  , false),
+			{ name:'note', fieldName:'note', width:250, header:{text:'<lgcom:message code="note"/>'}, editor:{maxLength:500} }
+		]);
+		grid.setOptions($.extend(true, {}, gridOptions, {grid:{fixed:{colCount:3}}}));
 		grid.setContextMenu();
-
 		return grid;
 	}
-	gridView.onCellEdited = function(grid, itemIndex, dataRow, field){
-		grid.commit();
-	}
-}
 
+	function buildMapGrid(gridId) {
+		var grid = new RealGrid(myForm, gridId);
+		grid.setFields([
+		    { fieldName: 'plItemMapId'         , dataType:'text'},
+		    { fieldName: 'paidLeaveDetailCode' , dataType:'text'},
+		    { fieldName: 'tierNo'              , dataType:'number'},
+		    { fieldName: 'componentCode'       , dataType:'text'},
+		    { fieldName: 'payrollItemId'       , dataType:'text'},
+		    { fieldName: 'applyValueType'      , dataType:'text'},
+		    { fieldName: 'note'                , dataType:'text'}
+		]);
+		grid.setLookups({
+			plCode      : code.get("paidLeaveCodeList"),
+			component   : componentList,
+			payrollItem : payrollItemList,
+			applyValue  : applyValueList
+		});
+		grid.setColumns([
+			comboCol('paidLeaveDetailCode', '<lgcom:message code="label.pay.plDetailCode"/>', 110, 'plCode', true),
+			numCol('tierNo', '<lgcom:message code="label.pay.plTierNo"/>', 70, true),
+			comboCol('componentCode', '<lgcom:message code="label.pay.plComponent"/>', 200, 'component', true),
+			$.extend(comboCol('payrollItemId', 'Payroll Item', 280, 'payrollItem', true), {styles:{textAlignment:'near'}}),
+			comboCol('applyValueType', '<lgcom:message code="label.pay.plApplyValueType"/>', 150, 'applyValue', true),
+			{ name:'note', fieldName:'note', width:300, header:{text:'<lgcom:message code="note"/>'}, editor:{maxLength:500} }
+		]);
+		grid.setOptions(gridOptions);
+		grid.setContextMenu();
+		return grid;
+	}
+
+	search();
+}
 
 LGVPAY00033.prototype = new BizForm("${param.bizFormId}");
 
@@ -386,65 +386,69 @@ $(document).ready( function() {
 <div class="mdi-container">
     <section class="page-content">
 		<div class="pageHeader">
-			<h2></h2> 
+			<h2></h2>
 		</div>
 		<div class="searchBlock">
 			<form class="form search-wrap">
 				<table class="table">
 					<colgroup>
-						<col width="50"/>
-						<col width="100"/>
-						<col width="150"/>
-						<col width="160"/>
-						<col width="150"/>
-						<col width="160"/>
-						<col width="160"/>
+						<col width="120"/>
+						<col width="180"/>
+						<col width="120"/>
+						<col width="180"/>
+						<col width="*"/>
 					</colgroup>
 					<tbody>
 						<tr>
-							<th><label class="required"><lgcom:message code="label.att.month"/></label></th>
-		                    <td>
-		                        <div class="form-inline ">
-                                	<select class="form-control input-sm input-require" name="payMonth" id="payMonth"></select>
-                            	</div>
-		                    </td>
-		                    <th><label class="required"><i class="asterisk">*</i><lgcom:message code="label.pay.payType" /></label></th>
-		                	<td><select class="form-control input-sm input-require" name="paidLeaveDetailCode" ></select></td>
-		                	<th><label><lgcom:message code="label.pay.employeeNo" /></label></th>
-								<td>
-			                		<div class="input-group input-group-sm input-search">
-		                                <input class="form-control input-sm _find_origin_" name="employeeNo" type="text" data-action="emptyAndPopup">
-		                                <span class="input-group-btn">
-		                                    <button class="btn btn-default ico-lgd find" type="button" data-action="openPopupApprover">
-		                                        <span class="fa fa-search" aria-hidden="true"></span>
-		                                    </button>
-		                                </span>
-		                            </div>
-			                	</td>
-							<th>
-								<label><lgcom:message code="label.pay.employeeName" /></label>
-							</th>
-							<td>
-								<input type="text" class="form-control input-sm" name="employeeName">
-							</td>
-							</tr>
+		                    <th><label><lgcom:message code="label.pay.plDetailCode"/></label></th>
+		                	<td><select class="form-control input-sm" name="paidLeaveDetailCode"></select></td>
+		                	<th><label><lgcom:message code="label.pay.effectiveDate"/></label></th>
+		                	<td>
+		                		<div class="input-group input-group-sm date">
+		                			<input type="text" class="form-control input-sm" name="effectiveDate">
+		                			<span class="input-group-addon"><span class="fa fa-calendar"></span></span>
+		                		</div>
+		                	</td>
+		                	<td></td>
+						</tr>
 					</tbody>
 				</table>
-				<button class="btn btn-lgd btn-sm btn-search" type="button" data-action="search"><lgcom:message code="search" /></button>
+				<button class="btn btn-lgd btn-sm btn-search" type="button" data-action="search"><lgcom:message code="search"/></button>
 			</form>
 		</div>
-		<%-- 그리드 버튼 영역 --%>
-		<div class="gridControls module-group text-right">
-			<div class="btn-toolbar">	
-				<div class="btn-group">	
-			        <button type="button" class="btn btn-default btn-sm" data-action="excelDownload"><span class="ico ico-excel-down"  aria-hidden="true"></span> <lgcom:message code="Download"/></button>
-			        <button type="button" class="btn btn-default btn-sm" data-action="directCSV"><span class="ico ico-excel-down"  aria-hidden="true"></span> DirectCSV</button>
-			     </div>
-			</div>			
+		<%-- 지급률 --%>
+		<div class="rateControls module-group">
+			<h3 class="title pull-left"><lgcom:message code="label.pay.plRateSetup"/></h3>
+			<div class="btn-toolbar pull-right">
+				<div class="btn-group">
+					<button class="btn btn-default btn-sm ico-lgd" type="button" data-action="addRate"><span class="fa fa-plus" aria-hidden="true"></span> <lgcom:message code="Add"/></button>
+					<button class="btn btn-default btn-sm" type="button" data-action="copyRate">Copy</button>
+					<button class="btn btn-default btn-sm ico-lgd" type="button" data-action="deleteRate"><span class="fa fa-minus" aria-hidden="true"></span> <lgcom:message code="Delete"/></button>
+				</div>
+				<div class="btn-group">
+					<button class="btn btn-darkgray btn-sm" type="button" data-action="saveRate" data-access="LGVPAY00033/savePlRate"><lgcom:message code="save"/></button>
+				</div>
+			</div>
 		</div>
-	<div class="gridContent grid-wrap">
-		<div class="grid perfectActualEmployeeGrid"></div>
-	</div>
+		<div class="rateContent grid-wrap">
+			<div class="grid plRateGrid"></div>
+		</div>
+		<%-- 급여항목 매핑 --%>
+		<div class="mapControls module-group">
+			<h3 class="title pull-left"><lgcom:message code="label.pay.plItemMapping"/></h3>
+			<div class="btn-toolbar pull-right">
+				<div class="btn-group">
+					<button class="btn btn-default btn-sm ico-lgd" type="button" data-action="addMap"><span class="fa fa-plus" aria-hidden="true"></span> <lgcom:message code="Add"/></button>
+					<button class="btn btn-default btn-sm ico-lgd" type="button" data-action="deleteMap"><span class="fa fa-minus" aria-hidden="true"></span> <lgcom:message code="Delete"/></button>
+				</div>
+				<div class="btn-group">
+					<button class="btn btn-darkgray btn-sm" type="button" data-action="saveMap" data-access="LGVPAY00033/savePlItemMap"><lgcom:message code="save"/></button>
+				</div>
+			</div>
+		</div>
+		<div class="mapContent grid-wrap">
+			<div class="grid plItemMapGrid"></div>
+		</div>
 	</section>
 </div>
 </body>

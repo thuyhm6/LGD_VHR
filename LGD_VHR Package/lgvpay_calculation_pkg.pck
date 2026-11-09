@@ -469,6 +469,12 @@ FUNCTION get_ordinary_wage(p_payroll_calculation_exec_id    IN NUMBER,
                            p_employee_no                    IN VARCHAR2,
                            p_basis_yyyymmdd                 IN VARCHAR2 ) RETURN NUMBER;
 
+--Ordinary wage for OT calculation (Grade L34 OS employee : ordinary wage + OS Adjustment)
+FUNCTION get_ot_base_wage(p_payroll_calculation_exec_id    IN NUMBER,
+                          p_employee_no                    IN VARCHAR2,
+                          p_basis_yyyymmdd                 IN VARCHAR2,
+                          p_subsidiary_code                IN VARCHAR2 ) RETURN NUMBER;
+
 
 PROCEDURE calculation_housing_allw( p_employee_no                 IN VARCHAR2, 
                                     p_period_id                   IN NUMBER,
@@ -3002,9 +3008,9 @@ BEGIN
     
     IF v_ot_hours > 0 THEN
 
-      SELECT nvl(round(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+      SELECT nvl(round(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                            ,p_employee_no
-                                                           ,v_end_yyyymmdd
+                                                           ,v_end_yyyymmdd,v_subsidiary_code
                                                             ) * v_ot_hours * v_rate/ v_basis_working_hours
 
                 ),0)
@@ -3234,9 +3240,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 150 ot := Ordiary wage/192 * 150 OT Time.
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.weekday_overtime_hours * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3250,9 +3256,9 @@ BEGIN
     ;
     
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.weekday_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3267,9 +3273,9 @@ BEGIN
 
     --< 20181030 KTH Start Add
     IF g_add_ot_time <> 0 THEN
-        SELECT nvl(round(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+        SELECT nvl(round(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                            ,p_employee_no
-                                                           ,v_end_yyyymmdd
+                                                           ,v_end_yyyymmdd,v_subsidiary_code
                                                             ) * g_add_ot_time * v_rate/ v_basis_working_hours
 
                 ),0)
@@ -3289,9 +3295,9 @@ BEGIN
 
     /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
-   SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+   SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.weekday_overtime_hours * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3307,9 +3313,9 @@ BEGIN
     ;
     
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.weekday_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3564,9 +3570,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 150 ot := Ordiary wage/192 * 150 OT Time.
 
-    SELECT nvl(round(SUM((lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM((lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.holiday_overtime_hours * v_rate)/ v_basis_working_hours
 
             )),0)
@@ -3580,9 +3586,9 @@ BEGIN
 
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.holiday_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3597,9 +3603,9 @@ BEGIN
     --HMT_20210420 End
 
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.holiday_overtime_hours * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3614,9 +3620,9 @@ BEGIN
     AND    arn.confirm_flag                   = 'Y'
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.holiday_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3878,9 +3884,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 300 ot := Ordiary wage/192 * 300 OT Time.
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) / v_basis_working_hours * arn.public_holiday_overtime_hours * v_rate
 
             )),0)
@@ -3894,9 +3900,9 @@ BEGIN
 
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.public_holiday_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -3914,9 +3920,9 @@ BEGIN
 /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) / v_basis_working_hours * arn.public_holiday_overtime_hours * v_rate
 
             )),0)
@@ -3931,9 +3937,9 @@ BEGIN
     AND    arn.confirm_flag                   = 'Y'
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.public_holiday_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4190,9 +4196,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 300 ot := Ordiary wage/192 * 300 OT Time.
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.weekday_night_overtime_hours * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4206,9 +4212,9 @@ BEGIN
 
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.weekday_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4226,9 +4232,9 @@ BEGIN
     /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         )* arn.weekday_night_overtime_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -4243,9 +4249,9 @@ BEGIN
     AND    arn.confirm_flag                   = 'Y'
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.weekday_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4502,9 +4508,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 300 ot := Ordiary wage/192 * 300 OT Time.
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.weekday_ot_af_night_work_hours * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4518,9 +4524,9 @@ BEGIN
 
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.weekday_af_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4536,9 +4542,9 @@ BEGIN
 
     /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.weekday_ot_af_night_work_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -4553,9 +4559,9 @@ BEGIN
     AND    arn.confirm_flag                   = 'Y'
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.weekday_af_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4812,9 +4818,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 300 ot := Ordiary wage/192 * 300 OT Time.
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.holiday_night_overtime_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -4828,9 +4834,9 @@ BEGIN
 
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.holiday_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -4847,9 +4853,9 @@ BEGIN
 
 /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.holiday_night_overtime_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -4864,9 +4870,9 @@ BEGIN
     AND    arn.confirm_flag                   = 'Y'
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.holiday_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -5129,9 +5135,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 390 ot := Ordiary wage/192 * 390 OT Time.
 
-    SELECT NVL(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT NVL(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.public_holiday_night_ot_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -5145,9 +5151,9 @@ BEGIN
 
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.public_holiday_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -5164,9 +5170,9 @@ BEGIN
 /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
 
-    SELECT NVL(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT NVL(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.public_holiday_night_ot_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -5181,9 +5187,9 @@ BEGIN
     AND    arn.confirm_flag                   = 'Y'
     ;
     --HMT_20210420 Start
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(ayo.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * ayo.public_holiday_night_ot_over * v_rate/ v_basis_working_hours
 
             )),0)
@@ -5428,9 +5434,9 @@ BEGIN
     -- Ordiary wage : base salary + fixed allowance
     -- 300 ot := Ordiary wage/192 * 300 OT Time.
 
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.normal_night_overtime_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -5446,9 +5452,9 @@ BEGIN
 
  /* Helocall : ?? ?? ????? ???  OT ? ???? ???
        ??? ??? RETURN  ??. */
-    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ordinary_wage(p_payroll_calculation_exec_id
+    SELECT nvl(round(SUM(lgvpay_calculation_pkg.get_ot_base_wage(p_payroll_calculation_exec_id
                                                        ,p_employee_no
-                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd')
+                                                       ,to_char(arn.time_and_attendance_date ,'yyyymmdd'),v_subsidiary_code
                                                         ) * arn.normal_night_overtime_hours * v_rate / v_basis_working_hours
 
             )),0)
@@ -10194,6 +10200,63 @@ EXCEPTION
         v_err_msg := 'Error : get_ordinary_wage => '||SQLERRM;
         lgvpay_log_pkg.set_log_msg_payroll_result( p_payroll_calculation_exec_id, p_employee_no, v_err_msg );
         RETURN v_return;
+END;
+
+
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Program Name    : get_ot_base_wage                                         */
+/* Description    :  Ordinary wage for OT calculation                         */
+/*                   - Grade L34 (OS) : ordinary wage + OS Adjustment         */
+/*                     (OS Adjustment is decided by working days of           */
+/*                      p_basis_yyyymmdd => OT Level of the day)              */
+/*                   - Others         : ordinary wage                         */
+/*                                                                            */
+/* Parameter       :  Name                in/out   type      description      */
+/*                ---------------------------------------------------------   */
+/*                   p_basis_yyyymmdd     in     varchar2   OT date           */
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2026/10/21    HMT             Initial Release                              */
+/******************************************************************************/
+FUNCTION get_ot_base_wage(p_payroll_calculation_exec_id    IN NUMBER,
+                          p_employee_no                    IN VARCHAR2,
+                          p_basis_yyyymmdd                 IN VARCHAR2,
+                          p_subsidiary_code                IN VARCHAR2 ) RETURN NUMBER IS
+    v_err_msg       VARCHAR2(4000);
+    v_ordinary_wage NUMBER := 0;
+    v_adj_os        NUMBER := 0;
+    v_grade         emp_master.grade%TYPE;
+BEGIN
+    v_ordinary_wage := NVL(get_ordinary_wage(p_payroll_calculation_exec_id, p_employee_no, p_basis_yyyymmdd), 0);
+
+    BEGIN
+        SELECT em.grade
+        INTO   v_grade
+        FROM   emp_master em
+        WHERE  em.employee_number = p_employee_no;
+    EXCEPTION
+        WHEN OTHERS THEN
+            v_grade := NULL;
+    END;
+
+    -- Add OS Adjustment only for OS employee (Grade L34)
+    IF v_grade = 'L34' THEN
+        v_adj_os := NVL(lgvpay_info_pkg.get_adj_os(p_employee_no, p_basis_yyyymmdd, p_subsidiary_code, ''), 0);
+    END IF;
+
+    RETURN v_ordinary_wage + v_adj_os;
+EXCEPTION
+    WHEN OTHERS THEN
+        v_err_msg := 'Error : get_ot_base_wage => '||SQLERRM;
+        lgvpay_log_pkg.set_log_msg_payroll_result( p_payroll_calculation_exec_id, p_employee_no, v_err_msg );
+        RETURN v_ordinary_wage;
 END;
 
 

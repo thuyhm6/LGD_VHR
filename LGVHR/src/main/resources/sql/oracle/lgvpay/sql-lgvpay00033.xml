@@ -1,140 +1,158 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="LGVPAY00033">
-    <!-- 급여대상자 조회 -->
-    <select id="retrievePerfectActual" parameterType="LGCOMData" resultType="LGCOMData">
-        SELECT /* LGVPAY00033.retrievePerfectActual */
-             r.employee_no , em.assignment_category, r.time_and_attendance_yyyymm
-			,SUM(DECODE(b.time_and_attendance_code,'NW',1,'PH',1,0)) perfect_work_days 
-			,SUM(lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), 
-			b.shift_type_code, b.work_hours, 'pay_perfect_hours')) as perfect_work_hours
-			,SUM( CASE WHEN (c.paid_days > 0 OR c.attendance_days > 0) THEN lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), b.shift_type_code, b.work_hours, 'pay_perfect_hours')
-			      END) ACTUAL_HOURS
-			,(SUM( CASE WHEN (c.paid_days > 0 OR c.attendance_days > 0) THEN lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), b.shift_type_code, b.work_hours, 'pay_perfect_hours') 
-			            WHEN r.time_and_attendance_code = 'WH' THEN 0 
-			            ELSE (SELECT ar.work_hours FROM tb_att_result_n ar where ar.employee_no = r.employee_no and ar.time_and_attendance_date = b.time_and_attendance_date and ar.time_and_attendance_code != 'NN' )
-			            END   ) - 192
-			            - (nvl(SUM(nvl(r.tardy_hours,0)) + SUM(nvl(r.going_out_hours,0)) + SUM(nvl(r.early_leave_hours,0)),0)) ) AS EXTRA_HOURS 
-			,SUM( CASE WHEN r.shift_type_code LIKE '32%' THEN 1
-			      ELSE 0 END) as "2S3G_OR_NOT" 
-			,SUM( CASE WHEN r.time_attend_detail_code = #{paidLeaveDetailCode} THEN b.work_hours ELSE 0 END) PL_HOURS, 
-			nvl(SUM(nvl(r.tardy_hours,0)) + SUM(nvl(r.going_out_hours,0)) + SUM(nvl(r.early_leave_hours,0)),0) DEDUC_HOURS,
-			SUM(CASE WHEN ((c.paid_days > 0 OR c.attendance_days > 0) AND b.shift_type_code like '%102%') THEN
-			        lgvpay_info_pkg.get_work_hours(
-			                         'LGDVN'
-			                         ,r.employee_no
-			                         ,b.time_and_attendance_date
-			                         ,DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW')
-			                         ,b.shift_type_code
-			                         ,b.work_hours
-			                         ,'pay_perfect_hours')
-			        END) AS actual_hours_2S10G
-			FROM tb_att_result_n r, tb_att_code_c c, tb_att_base_bas_n b, emp_master em
-			WHERE r.time_and_attendance_code = c.time_and_attendance_code
-			AND r.shift_type_code = b.shift_type_code
-			AND r.time_and_attendance_date = b.time_and_attendance_date
-			AND r.time_and_attendance_yyyymm = #{payMonth}
-			AND em.employee_number = r.employee_no
-			AND em.employee_number IN (
-			select tpp.employee_no from tb_pay_paid_leave_n  tpp where 
-			              tpp.payment_yyyymm      = #{payMonth}
-			              AND    tpp.paid_leave_detail_code      = #{paidLeaveDetailCode}
-			)
-			
-        <if test="employeeNo != null and employeeNo != ''">
-            AND em.employee_no = #{employeeNo}
-       </if>
-       <if test="employeeName != null and employeeName != ''">
-           AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
-       </if>
-        GROUP BY r.employee_no, em.assignment_category, r.time_and_attendance_yyyymm
+
+    <!-- ===================== 지급률 (TB_PAY_PL_RATE_M) ===================== -->
+    <select id="retrievePlRateList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00033.retrievePlRateList */
+               m.pl_rate_id
+             , m.paid_leave_detail_code
+             , m.emp_category_code
+             , m.tier_no
+             , m.from_days
+             , m.to_days
+             , m.base_amount_type
+             , m.base_salary_rate
+             , m.position_allw_rate
+             , m.job_allw_rate
+             , m.qualification_allw_rate
+             , m.adj1_allw_rate
+             , m.adj2_allw_rate
+             , m.adj3_allw_rate
+             , TO_CHAR(m.effective_start_date, 'DD/MM/YYYY') AS start_date
+             , TO_CHAR(m.effective_end_date  , 'DD/MM/YYYY') AS end_date
+             , m.note
+        FROM   tb_pay_pl_rate_m m
+        WHERE  m.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        <if test="paidLeaveDetailCode != null and paidLeaveDetailCode != ''">
+        AND    m.paid_leave_detail_code = #{paidLeaveDetailCode}
+        </if>
+        <if test="effectiveDate != null and effectiveDate != ''">
+        AND    TO_DATE(#{effectiveDate}, 'DD/MM/YYYY') BETWEEN m.effective_start_date AND m.effective_end_date
+        </if>
+        ORDER BY m.paid_leave_detail_code, m.effective_start_date DESC, m.emp_category_code, m.tier_no
     </select>
 
-    
-
-    
-
-    <!-- 엑셀 다운로드 -->
-    <insert id="createExcelDownloadData" parameterType="java.util.HashMap">
-      INSERT INTO  /* LGVPAY00033.createExcelDownloadData */
-          XXLGE_EXPORT_INFO (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
-                                     , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
-                                     , ATTRIBUTE9, ATTRIBUTE10 , ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15
-                                     , ATTRIBUTE16, ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20, ATTRIBUTE21)
-      SELECT AA.*
-        FROM (
-              SELECT #{sessionId}
-                    , #{USER_SESSION.applicationUserId}
-                    , SYSDATE
-                    , 1 AS ORDER_BY
-                    , 'KO16KSC5601'
-                    , 'Employee No' AS EMPLOYEE_NO
-                    , 'Employee Name' AS EMPLOYEE_NAME_LOCAL
-                    , 'Employee Eng Name' AS EMPLOYEE_NAME
-                    , 'Payment' AS payment
-					, 'Remark' AS REMARK
-					, 'AP Number' AS ap_number
-					, 'PIC Number' AS pic_number
-					, 'PIC Name' AS pic_name
-                    , 'Organization Name' AS ORGANIZATION_NAME
-                    , 'Type' AS PERSON_TYPE
-                    , 'Status' AS STATUS
-                    , 'Grade' AS GRADE_CODE
-                    , 'Title' AS GRADE_TITLE
-                    , 'Emp. Category' AS EMP_CATEGORY_NAME
-                    , 'Hire Date' AS DATE_HIRE_SUBSIDIARY
-                    , 'Resignation Date' AS DATE_RETIRE
-                    , 'Supervisor' AS SUPERVISOR
-                    , 'Supervisor' AS SUPERVISOR_NAME
-                    , 'Supervisor' AS SUPERVISOR_ORG_NAME
-                    , 'Mobile Phone No.' AS MOBILE_PHONE
-                    , 'Work Type' AS SHIFT_TYPE_NAME
-               FROM DUAL
-               UNION ALL
-               SELECT #{sessionId}
-                     , #{USER_SESSION.applicationUserId}
-                     , SYSDATE
-                     , 2 AS ORDER_BY
-                     , 'KO16KSC5601'
-                     , em.employee_number       AS employee_no
-                     , em.full_name_english   AS employee_name
-                     , em.full_name_local     AS employee_name_local
-                     , TO_CHAR(tpe.payment)    as payment
-					 , tpe.remark              as remark
-					 , tpe.ap_number       as ap_number
-					 , tpe.pic_id          as pic_id
-					 , tpe.pic_name         as pic_name
-                     , em.org_name_local      AS organization_name
-                     , em.person_type         AS person_type
-                     , em.status              AS status
-                     , em.grade   AS grade_code
-                     , (SELECT lgvhr_common_pkg.decode_lookup('IF_VIETNAM_GRADE_TITLE', em.grade_title, NULL, #{USER_SESSION.languageCode}) FROM DUAL)      AS grade_title
-                     , em.grade_type          AS emp_category_name
-                     , TO_CHAR(em.date_hire_subsidiary, 'DD/MM/YYYY') AS date_hire_subsidiary
-                     , TO_CHAR(em.date_retire, 'DD/MM/YYYY')          AS date_retire
-                     , em.supervisor                                  AS supervisor
-                     , (select ema.full_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_name
-                     , (select ema.org_name_local from emp_master ema where em.supervisor = ema.employee_number) as supervisor_org_name
-                     , um.employee_mobile_phone_no as mobile_phone
-                     ,(SELECT lgvhr_common_pkg.decode_lookup('LGVHR_SHIFT_TYPE_CODE', em.attribute10, NULL, #{USER_SESSION.languageCode}) FROM DUAL) AS shift_type_name
-                   FROM   tb_pay_emp_other_income_n   tpe
-                         , emp_master          em
-                         , lgcom_user_m        um
-                         , lgcom_company_v     cv
-                   WHERE  em.employee_number   = tpe.employee_no
-                   AND    um.user_name         = em.employee_number
-                   AND    cv.short_code        = em.subsidiary_code
-                   AND    tpe.payment_yyyymm   = #{payMonth} 
-                   <if test="employeeNo != null and employeeNo != ''">
-                        AND tpe.employee_no = #{employeeNo}
-                   </if>
-                   <if test="employeeName != null and employeeName != ''">
-                        AND UPPER(em.full_name_local) like '%' || UPPER(#{employeeName}) || '%'
-                    </if>
-                   ORDER BY ORDER_BY, EMPLOYEE_NO asc
-              ) AA
-              ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc
+    <insert id="insertPlRate" parameterType="LGCOMData">
+        INSERT /* LGVPAY00033.insertPlRate */ INTO tb_pay_pl_rate_m
+              ( pl_rate_id, subsidiary_code, paid_leave_detail_code, emp_category_code, tier_no, from_days, to_days
+              , base_amount_type, base_salary_rate, position_allw_rate, job_allw_rate, qualification_allw_rate
+              , adj1_allw_rate, adj2_allw_rate, adj3_allw_rate, effective_start_date, effective_end_date, note
+              , creation_date, creation_user_id )
+        VALUES( sq_pay_pl_rate_id.NEXTVAL, #{subsidiaryCode}, #{paidLeaveDetailCode}, #{empCategoryCode}, #{tierNo}, #{fromDays}, #{toDays, jdbcType=NUMERIC}
+              , NVL(#{baseAmountType, jdbcType=VARCHAR}, 'BASE_SALARY')
+              , NVL(#{baseSalaryRate, jdbcType=NUMERIC}, 0), NVL(#{positionAllwRate, jdbcType=NUMERIC}, 0), NVL(#{jobAllwRate, jdbcType=NUMERIC}, 0), NVL(#{qualificationAllwRate, jdbcType=NUMERIC}, 0)
+              , NVL(#{adj1AllwRate, jdbcType=NUMERIC}, 0), NVL(#{adj2AllwRate, jdbcType=NUMERIC}, 0), NVL(#{adj3AllwRate, jdbcType=NUMERIC}, 0)
+              , TO_DATE(#{startDate}, 'DD/MM/YYYY'), TO_DATE(NVL(#{endDate, jdbcType=VARCHAR}, '31/12/4712'), 'DD/MM/YYYY'), #{note, jdbcType=VARCHAR}
+              , SYSDATE, #{applicationUserId} )
     </insert>
-    
+
+    <update id="updatePlRate" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00033.updatePlRate */ tb_pay_pl_rate_m
+        SET    paid_leave_detail_code  = #{paidLeaveDetailCode}
+             , emp_category_code       = #{empCategoryCode}
+             , tier_no                 = #{tierNo}
+             , from_days               = #{fromDays}
+             , to_days                 = #{toDays, jdbcType=NUMERIC}
+             , base_amount_type        = NVL(#{baseAmountType, jdbcType=VARCHAR}, 'BASE_SALARY')
+             , base_salary_rate        = NVL(#{baseSalaryRate, jdbcType=NUMERIC}, 0)
+             , position_allw_rate      = NVL(#{positionAllwRate, jdbcType=NUMERIC}, 0)
+             , job_allw_rate           = NVL(#{jobAllwRate, jdbcType=NUMERIC}, 0)
+             , qualification_allw_rate = NVL(#{qualificationAllwRate, jdbcType=NUMERIC}, 0)
+             , adj1_allw_rate          = NVL(#{adj1AllwRate, jdbcType=NUMERIC}, 0)
+             , adj2_allw_rate          = NVL(#{adj2AllwRate, jdbcType=NUMERIC}, 0)
+             , adj3_allw_rate          = NVL(#{adj3AllwRate, jdbcType=NUMERIC}, 0)
+             , effective_start_date    = TO_DATE(#{startDate}, 'DD/MM/YYYY')
+             , effective_end_date      = TO_DATE(NVL(#{endDate, jdbcType=VARCHAR}, '31/12/4712'), 'DD/MM/YYYY')
+             , note                    = #{note, jdbcType=VARCHAR}
+             , last_update_date        = SYSDATE
+             , last_update_user_id     = #{applicationUserId}
+        WHERE  pl_rate_id = #{plRateId}
+    </update>
+
+    <delete id="deletePlRate" parameterType="LGCOMData">
+        DELETE /* LGVPAY00033.deletePlRate */ FROM tb_pay_pl_rate_m
+        WHERE  pl_rate_id = #{plRateId}
+    </delete>
+
+    <!-- 저장 후 검증 : 같은 PL코드 + 구분 + 적용기간 + 일수구간이 겹치는 행 -->
+    <select id="retrievePlRateConflict" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00033.retrievePlRateConflict */
+               a.paid_leave_detail_code
+             , a.emp_category_code
+             , a.tier_no                                    AS tier_no_a
+             , b.tier_no                                    AS tier_no_b
+             , TO_CHAR(GREATEST(a.effective_start_date, b.effective_start_date), 'DD/MM/YYYY') AS conflict_date
+        FROM   tb_pay_pl_rate_m a
+             , tb_pay_pl_rate_m b
+        WHERE  a.subsidiary_code        = #{subsidiaryCode}
+        AND    b.subsidiary_code        = a.subsidiary_code
+        AND    b.paid_leave_detail_code = a.paid_leave_detail_code
+        AND    b.emp_category_code      = a.emp_category_code
+        AND    b.pl_rate_id             &gt; a.pl_rate_id
+        AND    b.effective_start_date  &lt;= a.effective_end_date
+        AND    b.effective_end_date    &gt;= a.effective_start_date
+        AND    b.from_days             &lt;= NVL(a.to_days, 99999)
+        AND    NVL(b.to_days, 99999)   &gt;= a.from_days
+        AND    ROWNUM = 1
+    </select>
+
+    <!-- ===================== 급여항목 매핑 (TB_PAY_PL_ITEM_MAP_M) ===================== -->
+    <select id="retrievePlItemMapList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00033.retrievePlItemMapList */
+               mp.pl_item_map_id
+             , mp.paid_leave_detail_code
+             , mp.tier_no
+             , mp.component_code
+             , TO_CHAR(mp.payroll_item_id) AS payroll_item_id
+             , pi.payroll_item_name
+             , mp.apply_value_type
+             , mp.note
+        FROM   tb_pay_pl_item_map_m  mp
+             , tb_pay_payroll_item_m pi
+        WHERE  pi.payroll_item_id(+) = mp.payroll_item_id
+        AND    mp.subsidiary_code    = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+        <if test="paidLeaveDetailCode != null and paidLeaveDetailCode != ''">
+        AND    mp.paid_leave_detail_code = #{paidLeaveDetailCode}
+        </if>
+        ORDER BY mp.paid_leave_detail_code, mp.tier_no
+               , DECODE(mp.component_code, 'BASE_SALARY', 1, 'POSITION_ALLW', 2, 'JOB_ALLW', 3, 'QUALIFICATION_ALLW', 4, 'ADJ1_ALLW', 5, 'ADJ2_ALLW', 6, 7)
+    </select>
+
+    <insert id="insertPlItemMap" parameterType="LGCOMData">
+        INSERT /* LGVPAY00033.insertPlItemMap */ INTO tb_pay_pl_item_map_m
+              ( pl_item_map_id, subsidiary_code, paid_leave_detail_code, tier_no, component_code
+              , payroll_item_id, apply_value_type, note, creation_date, creation_user_id )
+        VALUES( sq_pay_pl_item_map_id.NEXTVAL, #{subsidiaryCode}, #{paidLeaveDetailCode}, #{tierNo}, #{componentCode}
+              , #{payrollItemId}, NVL(#{applyValueType, jdbcType=VARCHAR}, 'PAY'), #{note, jdbcType=VARCHAR}, SYSDATE, #{applicationUserId} )
+    </insert>
+
+    <update id="updatePlItemMap" parameterType="LGCOMData">
+        UPDATE /* LGVPAY00033.updatePlItemMap */ tb_pay_pl_item_map_m
+        SET    paid_leave_detail_code = #{paidLeaveDetailCode}
+             , tier_no                = #{tierNo}
+             , component_code         = #{componentCode}
+             , payroll_item_id        = #{payrollItemId}
+             , apply_value_type       = NVL(#{applyValueType, jdbcType=VARCHAR}, 'PAY')
+             , note                   = #{note, jdbcType=VARCHAR}
+             , last_update_date       = SYSDATE
+             , last_update_user_id    = #{applicationUserId}
+        WHERE  pl_item_map_id = #{plItemMapId}
+    </update>
+
+    <delete id="deletePlItemMap" parameterType="LGCOMData">
+        DELETE /* LGVPAY00033.deletePlItemMap */ FROM tb_pay_pl_item_map_m
+        WHERE  pl_item_map_id = #{plItemMapId}
+    </delete>
+
+    <!-- 급여항목 콤보 -->
+    <select id="retrievePayrollItemList" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVPAY00033.retrievePayrollItemList */
+               TO_CHAR(pi.payroll_item_id) AS code
+             , pi.payroll_item_name        AS name
+        FROM   tb_pay_payroll_item_m pi
+        WHERE  TO_CHAR(SYSDATE, 'YYYYMMDD') BETWEEN pi.start_yyyymmdd AND NVL(pi.end_yyyymmdd, '47121231')
+        ORDER BY pi.payroll_item_name
+    </select>
 
 </mapper>

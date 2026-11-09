@@ -102,7 +102,8 @@ var LGVPAY00012 = function() {
             		
             		srchFormUtil.setValue({ payrollCalculationExecId : selectData.payrollCalculationExecId
 						                  , payMonth                 : selectData.payMonthName
-						                  , payType                  : selectData.payTypeName });
+						                  , payType                  : selectData.payTypeName
+						                  , payTypeCode              : selectData.payTypeCode });
             	} 
             });
             popupData.executionData = [];
@@ -112,23 +113,14 @@ var LGVPAY00012 = function() {
 				var payMonthSplit = srchFormUtil.getValue("payMonth").split("/");
 				var payMonth = payMonthSplit[1]+payMonthSplit[0];
 				srchFormUtil.setValue("searchPayMonth", payMonth);
-				// vanaa 03/11/2025 Check download LGD, OUS
+				// 급여유형(payTypeCode)이 MTH_OS 이면 OS 다운로드
 				var param = srchFormUtil.getValue();
-				myForm.transaction_sync("lgvhr", "lgvpay/LGVPAY00013/checkDownload", param, function(data) { 
-					if ( data.result.objectType == "OS") {
-						Message.confirm('<lgcom:message code="question.excelDownload"/>',function() {
-							var downloader = new Downloader( myForm );
-							param = $.extend(param, {languageCode:SESSION_USER.languageCode});
-							downloader.csvDirectDownload("lgvhr", "LGVPAY00012.createDirectCSVDownloadDataOS", param);
-						});
-					}
-					else {
-						Message.confirm('<lgcom:message code="question.excelDownload"/>',function() {
-							var downloader = new Downloader( myForm );
-							param = $.extend(param, {languageCode:SESSION_USER.languageCode});
-							downloader.csvDirectDownload("lgvhr", "LGVPAY00012.createDirectCSVDownloadData", param);
-						});
-					}
+				var sqlId = ( param.payTypeCode == "MTH_OS" ) ? "LGVPAY00012.createDirectCSVDownloadDataOS"
+				                                              : "LGVPAY00012.createDirectCSVDownloadData";
+				Message.confirm('<lgcom:message code="question.excelDownload"/>',function() {
+					var downloader = new Downloader( myForm );
+					param = $.extend(param, {languageCode:SESSION_USER.languageCode});
+					downloader.csvDirectDownload("lgvhr", sqlId, param);
 				});
 			}
 		break;
@@ -206,7 +198,8 @@ $(document).ready( function() {
 	                            </div>
 		                	</td>
 		                	<th><label><lgcom:message code="label.pay.payMonth" /></label></th>
-		                		<input type="hidden" name="searchPayMonth"> 
+		                		<input type="hidden" name="searchPayMonth">
+		                		<input type="hidden" name="payTypeCode">
 								<td><input type="text" class="form-control input-sm" name="payMonth" disabled></td>
 							<th><label><lgcom:message code="label.pay.payType"/></label></th>
 		                    <td>

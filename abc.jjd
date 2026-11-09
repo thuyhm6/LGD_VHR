@@ -1,0 +1,7 @@
+chỉnh sửa lại giúp tôi 2 giao diện LGVATT30020 và LGVATT30040. với giao diện LGVATT30020 thì thêm 1 cột OT level. cột này lấy ra bằng cách nếu nhân viên có GRADE trong bảng EMP_MASTER = 'L34', và nếu ngày tăng ca (TIME_AND_ATTENDANCE_DATE) - ngày vào làm (DATE_HIRRE_LGE) = 30 ngày, thì là Level 1, từ 30 - 60 ngày thì là Level 2, từ 61 ngày trở đi là Level 3. THêm giúp tôi điều kiện tìm kiếm với Grade có 2 giá trị để lựa chọn "OS EMP - L34" và Normal EMP - còn lại. với giao diện LGVATT30040 thì sẽ có 3 cột Level 1, Level 2, Level 3 tương ứng với tổng OT của 3 Level
+
+
+Tạo cho tôi giao diện LGVATT30095, có 3 điều kiện tìm kiếm: ngày bắt đầu, ngày kết thúc và Tên báo cáo. cùng 1 nút xuất excel. Ngày bắt đầu và ngày kết thúc làm tương tự như atendanceStartDate và atendanceEndDate của LGVATT30020. Tên báo cáo - reportName làm tương tự như shiftCode của LGVATT30020, với các giá trị reportName thì thay bằng LGVHR_ATT_REPORT_CHECK. khi người dùng chọn Tên báo cáo là OVERTIME_VIOLATIONS, thì sử dụng câu lệnh SQL sau để xuất ra báo cáo: WITH normal_ot AS 
+
+Danh sách những người đi ca kíp (SHIFT_TYPE_CODE IN Like '%21' or SHIFT_TYPE_CODE IN Like '%32') và không OT, không đi muộn về sớm, ra ngoài dữ liệu lấy trong bảng TB_ATT_RESULT_N.
+Danh sách những người đi ca kíp (SHIFT_TYPE_CODE IN Like '%21' or SHIFT_TYPE_CODE IN Like '%32') mà đi làm ngày nghỉ (TIME_AND_ATTENDANCE_CODE in (WH, PH))

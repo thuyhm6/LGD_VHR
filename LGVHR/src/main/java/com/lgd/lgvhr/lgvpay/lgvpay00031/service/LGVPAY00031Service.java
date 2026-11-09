@@ -53,12 +53,21 @@ public interface LGVPAY00031Service {
     public void deleteAllPaidLeaveInMonth(LGCOMData param);
     
     /**
-     * Desc : Calculate Attendance Paid Leave.
+     * Desc : Apply Paid Leave registration to T&A plan / result.
      * @Method Name : saveCalculateAttendancePL
+     * @param  param
+     * @return planCnt, actualCnt
+     * @throws Exception
+     */
+    public LGCOMData saveCalculateAttendancePL(LGCOMData param);
+
+    /**
+     * Desc : Paid Leave Excel Download.
+     * @Method Name : createExcelExportData
      * @param  param
      * @throws Exception
      */
-    public void saveCalculateAttendancePL(LGCOMData param);
+    public List<LGCOMData> createExcelExportData(LGCOMData param);
     /**
      * Desc : 행추가된 사용자 정보를 조회한다.
      * @Method Name : retrieveEmployeeInfo

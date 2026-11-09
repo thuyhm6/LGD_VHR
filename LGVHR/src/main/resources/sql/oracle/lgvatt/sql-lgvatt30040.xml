@@ -14,6 +14,10 @@
          ,em.attribute10                                                 AS actual_shift_code
          ,em.assignment_category                                         AS employee_category
          ,em.date_hire_subsidiary                                        AS date_hire_subsidiary
+         -- OT Level 별 월 OT 합계 (OS 직원 Grade L34만 대상)
+         ,lv.ot_level1                                                   AS ot_level1
+         ,lv.ot_level2                                                   AS ot_level2
+         ,lv.ot_level3                                                   AS ot_level3
 
          ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
                                     to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result') AS year_ot
@@ -77,7 +81,37 @@
                                     TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','year_total_ot_over_limit') AS ph_night_over_y_raw
 
     FROM emp_master em
+        ,(
+           -- 근무일수 = 근태일자 - 입사일(DATE_HIRE_SUBSIDIARY) + 1 (입사일 = 1일차) 기준 (~29일 : Level 1, 30~59일 : Level 2, 60일~ : Level 3)
+           -- OT 시간 = month_total_ot_result 와 동일 기준 (tb_att_result_n + 확정된 Special OT)
+           SELECT ot.employee_no
+                 ,SUM(CASE WHEN ot.att_date - TRUNC(le.date_hire_subsidiary) + 1 <= 29 THEN ot.ot_hours ELSE 0 END)                        AS ot_level1
+                 ,SUM(CASE WHEN ot.att_date - TRUNC(le.date_hire_subsidiary) + 1 BETWEEN 30 AND 59 THEN ot.ot_hours ELSE 0 END)            AS ot_level2
+                 ,SUM(CASE WHEN ot.att_date - TRUNC(le.date_hire_subsidiary) + 1 >= 60 THEN ot.ot_hours ELSE 0 END)                        AS ot_level3
+             FROM (SELECT t.employee_no
+                         ,TRUNC(t.time_and_attendance_date) AS att_date
+                         ,NVL(t.weekday_overtime_hours, 0) + NVL(t.holiday_overtime_hours, 0) + NVL(t.public_holiday_overtime_hours, 0) + NVL(t.weekday_night_overtime_hours, 0)
+                          + NVL(t.weekday_ot_af_night_work_hours, 0) + NVL(t.holiday_night_overtime_hours, 0) + NVL(t.public_holiday_night_ot_hours, 0) AS ot_hours
+                     FROM tb_att_result_n t
+                    WHERE t.time_and_attendance_date BETWEEN to_date(#{attendanceYm}, 'YYYYMM') AND LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
+                   UNION ALL
+                   SELECT ts.employee_no
+                         ,TRUNC(ts.time_and_attendance_date) AS att_date
+                         ,NVL(ts.weekday_overtime_hours, 0) + NVL(ts.holiday_overtime_hours, 0) + NVL(ts.public_holiday_overtime_hours, 0) + NVL(ts.weekday_night_overtime_hours, 0)
+                          + NVL(ts.weekday_ot_af_night_work_hours, 0) + NVL(ts.holiday_night_overtime_hours, 0) + NVL(ts.public_holiday_night_ot_hours, 0) AS ot_hours
+                     FROM tb_att_special_ot_result_n ts
+                    WHERE ts.confirm_flag = 'Y'
+                      AND ts.time_and_attendance_date BETWEEN to_date(#{attendanceYm}, 'YYYYMM') AND LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
+                  ) ot
+                 ,emp_master le
+            WHERE le.employee_number = ot.employee_no
+              AND le.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+              AND le.grade           = 'L34'
+              AND le.date_hire_subsidiary   IS NOT NULL
+            GROUP BY ot.employee_no
+          ) lv
    WHERE em.subsidiary_code = 'LGDVN'
+     AND lv.employee_no(+)  = em.employee_number
      AND em.date_hire_subsidiary <= LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
      AND (em.date_retire >= to_date(#{attendanceYm}, 'YYYYMM') OR em.date_retire IS NULL)
      AND NVL(em.fse_yn,  'N') <> 'Y'
@@ -88,6 +122,12 @@
 		</if>
 		<if test="categoryTitle != null and categoryTitle != ''">
 			   AND em.assignment_category = #{categoryTitle}
+		</if>
+		<if test="gradeType == 'OS'">
+			AND em.grade = 'L34'
+		</if>
+		<if test="gradeType == 'NORMAL'">
+			AND NVL(em.grade, ' ') <![CDATA[<>]]> 'L34'
 		</if>
 		<if test="orgId != null and orgId != ''">
 			AND em.organization_id = #{orgId}
@@ -129,6 +169,9 @@
 		     ,TO_CHAR(date_hire_subsidiary, 'DD/MM/YYYY')        AS date_hire_subsidiary
 		     ,year_ot
 		     ,month_total_ot
+		     ,ot_level1
+		     ,ot_level2
+		     ,ot_level3
 		
 		     ,weekday_day
 		     ,CASE WHEN weekday_day_over_m_raw > weekday_day_over_y_raw THEN weekday_day_over_m_raw ELSE 0 END AS weekday_day_over_m
@@ -168,7 +211,8 @@
                                      , ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5 , ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8
                                      , ATTRIBUTE9, ATTRIBUTE10, ATTRIBUTE11, ATTRIBUTE12, ATTRIBUTE13, ATTRIBUTE14, ATTRIBUTE15, ATTRIBUTE16
                                      , ATTRIBUTE17, ATTRIBUTE18, ATTRIBUTE19, ATTRIBUTE20, ATTRIBUTE21, ATTRIBUTE22, ATTRIBUTE23
-                                     , ATTRIBUTE24, ATTRIBUTE25, ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30, ATTRIBUTE31, ATTRIBUTE32)
+                                     , ATTRIBUTE24, ATTRIBUTE25, ATTRIBUTE26, ATTRIBUTE27, ATTRIBUTE28, ATTRIBUTE29, ATTRIBUTE30, ATTRIBUTE31, ATTRIBUTE32
+                                     , ATTRIBUTE33, ATTRIBUTE34, ATTRIBUTE35)
       SELECT AA.*
         FROM (
               SELECT #{sessionId}
@@ -213,6 +257,10 @@
                     , 'Holiday Night Over Month - 270%' AS HOLIDAY_NIGHT_OVER_MONTH
                     , 'Public Holiday Night Over Month - 390%' AS PH_NIGHT_OVER_MONTH
                     
+                    , 'OT Level 1' AS OT_LEVEL1
+                    , 'OT Level 2' AS OT_LEVEL2
+                    , 'OT Level 3' AS OT_LEVEL3
+                    
                FROM DUAL
                UNION ALL
                SELECT * FROM (WITH raw_data AS (
@@ -223,6 +271,10 @@
          ,em.attribute10                                                 AS actual_shift_code
          ,em.assignment_category                                         AS employee_category
          ,em.date_hire_subsidiary                                        AS date_hire_subsidiary
+         -- OT Level 별 월 OT 합계 (OS 직원 Grade L34만 대상)
+         ,lv.ot_level1                                                   AS ot_level1
+         ,lv.ot_level2                                                   AS ot_level2
+         ,lv.ot_level3                                                   AS ot_level3
 
          ,lgvatt_ot_calculation_pkg.get_ot_total(em.subsidiary_code,em.employee_number,
                                     to_date(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'year_total_ot_result') AS year_ot
@@ -286,8 +338,40 @@
                                     TO_DATE(#{attendanceYm}, 'YYYYMM'), LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM')),'public_holiday_night','year_total_ot_over_limit') AS ph_night_over_y_raw
 
              FROM emp_master em
+                 <![CDATA[
+                 ,(
+           -- 근무일수 = 근태일자 - 입사일(DATE_HIRE_SUBSIDIARY) + 1 (입사일 = 1일차) 기준 (~29일 : Level 1, 30~59일 : Level 2, 60일~ : Level 3)
+           -- OT 시간 = month_total_ot_result 와 동일 기준 (tb_att_result_n + 확정된 Special OT)
+           SELECT ot.employee_no
+                 ,SUM(CASE WHEN ot.att_date - TRUNC(le.date_hire_subsidiary) + 1 <= 29 THEN ot.ot_hours ELSE 0 END)                        AS ot_level1
+                 ,SUM(CASE WHEN ot.att_date - TRUNC(le.date_hire_subsidiary) + 1 BETWEEN 30 AND 59 THEN ot.ot_hours ELSE 0 END)            AS ot_level2
+                 ,SUM(CASE WHEN ot.att_date - TRUNC(le.date_hire_subsidiary) + 1 >= 60 THEN ot.ot_hours ELSE 0 END)                        AS ot_level3
+             FROM (SELECT t.employee_no
+                         ,TRUNC(t.time_and_attendance_date) AS att_date
+                         ,NVL(t.weekday_overtime_hours, 0) + NVL(t.holiday_overtime_hours, 0) + NVL(t.public_holiday_overtime_hours, 0) + NVL(t.weekday_night_overtime_hours, 0)
+                          + NVL(t.weekday_ot_af_night_work_hours, 0) + NVL(t.holiday_night_overtime_hours, 0) + NVL(t.public_holiday_night_ot_hours, 0) AS ot_hours
+                     FROM tb_att_result_n t
+                    WHERE t.time_and_attendance_date BETWEEN to_date(#{attendanceYm}, 'YYYYMM') AND LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
+                   UNION ALL
+                   SELECT ts.employee_no
+                         ,TRUNC(ts.time_and_attendance_date) AS att_date
+                         ,NVL(ts.weekday_overtime_hours, 0) + NVL(ts.holiday_overtime_hours, 0) + NVL(ts.public_holiday_overtime_hours, 0) + NVL(ts.weekday_night_overtime_hours, 0)
+                          + NVL(ts.weekday_ot_af_night_work_hours, 0) + NVL(ts.holiday_night_overtime_hours, 0) + NVL(ts.public_holiday_night_ot_hours, 0) AS ot_hours
+                     FROM tb_att_special_ot_result_n ts
+                    WHERE ts.confirm_flag = 'Y'
+                      AND ts.time_and_attendance_date BETWEEN to_date(#{attendanceYm}, 'YYYYMM') AND LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
+                  ) ot
+                 ,emp_master le
+            WHERE le.employee_number = ot.employee_no
+              AND le.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+              AND le.grade           = 'L34'
+              AND le.date_hire_subsidiary   IS NOT NULL
+            GROUP BY ot.employee_no
+          ) lv
+                 ]]>
 			 WHERE em.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
 			   <![CDATA[
+			   AND lv.employee_no(+)  = em.employee_number
 			   AND em.date_hire_subsidiary <= LAST_DAY(to_date(#{attendanceYm}, 'YYYYMM'))
 		       AND (em.date_retire         >= to_date(#{attendanceYm}, 'YYYYMM') OR date_retire IS NULL) 
 		       AND NVL(em.fse_yn,  'N')    <> 'Y'  
@@ -298,6 +382,12 @@
 				</if>
 				<if test="categoryTitle != null and categoryTitle != ''">
 					   AND em.assignment_category = #{categoryTitle}
+				</if>
+				<if test="gradeType == 'OS'">
+					AND em.grade = 'L34'
+				</if>
+				<if test="gradeType == 'NORMAL'">
+					AND NVL(em.grade, ' ') <![CDATA[<>]]> 'L34'
 				</if>
 				<if test="orgId != null and orgId != ''">
 					AND em.organization_id = #{orgId}
@@ -370,6 +460,10 @@
 				     ,to_char(CASE WHEN weekday_af_night_over_m_raw > weekday_af_night_over_y_raw THEN weekday_af_night_over_m_raw ELSE 0 END) AS weekday_af_night_over_m
 				     ,to_char(CASE WHEN holiday_night_over_m_raw > holiday_night_over_y_raw THEN holiday_night_over_m_raw ELSE 0 END) AS holiday_night_over_m
 				     ,to_char(CASE WHEN ph_night_over_m_raw > ph_night_over_y_raw THEN ph_night_over_m_raw ELSE 0 END) AS public_holiday_night_over_m
+				     
+				     ,to_char(ot_level1)
+				     ,to_char(ot_level2)
+				     ,to_char(ot_level3)
 				
 				FROM raw_data)) AA
               ORDER BY ORDER_BY, AA.EMPLOYEE_NO asc

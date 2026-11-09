@@ -216,7 +216,7 @@ var LGVATT30020 = function(){
 				//필드 설정
 				grid.setFields(
 						[
-							{ fieldName:'attendanceDmy'     			, dataType:'text'  },
+							{ fieldName:'attendanceDate'     			, dataType:'text'  },
 						 
 							{ fieldName:'employee'     					, dataType:'text'  },
 							{ fieldName:'employeeOrg'	        		, dataType:'text'  },
@@ -225,8 +225,13 @@ var LGVATT30020 = function(){
 							{ fieldName:'employeeGrade' 	        	, dataType:'text'  },
 							{ fieldName:'employeeCategory' 	        	, dataType:'text'  },
 							{ fieldName:'dateHireSubsidiary'         	, dataType:'text'  },
-							
-							{ fieldName:'actualShiftCode'         		, dataType:'text'  },
+
+							{ fieldName:'actualAttendance'      		, dataType:'text'  },
+							{ fieldName:'actualAttendanceType' 			, dataType:'text'  },
+							{ fieldName:'actualAttendanceDetail'		, dataType:'text'  },
+
+							{ fieldName:'actualShiftCode'       		, dataType:'text'  },
+							{ fieldName:'otLevel'         				, dataType:'text'  },
 							{ fieldName:'yearOt'	        			, dataType:'number'},
 							{ fieldName:'monthTotalOt'	        		, dataType:'number'},
 							
@@ -262,6 +267,7 @@ var LGVATT30020 = function(){
 				grid.setLookupsMultiLvl({
 					 			'employeeGrade': code.get("gradeTitle"),
 					 			'attendanceType': valueSet.get("attTypeName"),
+					 			'attendanceDetail': valueSet.get("attCode"),
 					 			'employeeCategory': code.get("categoryTitle"),
 					 			'orgList': {data: allOrgList}
 					 		}); 
@@ -269,10 +275,10 @@ var LGVATT30020 = function(){
 				//컬럼 설정
 				grid.setColumns(
 						[
-							{	name:'attendanceDmy',
-								fieldName:'attendanceDmy',
+							{	name:'attendanceDate',
+								fieldName:'attendanceDate',
 								width:100,
-								header: {text:'<lgcom:message code="label.att.month"/>'},
+								header: {text:'<lgcom:message code="label.att.date"/>'},
 								styles: {textAlignment:'center'},
 								editable: false
 							},
@@ -342,12 +348,52 @@ var LGVATT30020 = function(){
 											}
 								         ]
 							},
+							{
+								type:'group',
+								name:'actualAttendance',
+								fieldName:'actualAttendance',
+								width:140,
+								header:{
+							         text:'<lgcom:message code="label.att.actualAttendance" />',
+							         fixedHeight: 20
+							    },
+								orientation:'horizontal',
+								columns: [
+								            {	name:'actualAttendanceType',
+								            	fieldName:'actualAttendanceType',
+								            	width:60,
+								            	header: {text:'<lgcom:message code="label.att.actualAttendanceType" />'},
+								            	lookupDisplay: true,
+												lookupSourceId: 'attendanceType',
+												lookupKeyFields: ['actualAttendanceType'],
+												editable: false,
+												styles: {textAlignment:'near' }
+											},
+								            {	name:'actualAttendanceDetail',
+												fieldName:'actualAttendanceDetail',
+												width:80,
+												header: {text:'<lgcom:message code="label.att.actualAttendanceDetail" />'},
+												lookupDisplay: true,
+												lookupSourceId: 'attendanceDetail',
+												lookupKeyFields: ['actualAttendanceDetail'],
+												editable: false,
+												styles: {textAlignment:'near' }
+											}
+								         ]
+							},
 							{	name:'actualShiftCode',
 								fieldName:'actualShiftCode',
 								width:50,
 								header: {text:'<lgcom:message code="label.att.actualShiftCode" />'},
 								editable: false,
 								styles: {textAlignment:'near' }
+							},
+							{	name:'otLevel',
+								fieldName:'otLevel',
+								width:60,
+								header: {text:'OT Level'},
+								editable: false,
+								styles: {textAlignment:'center' }
 							},
 							{	name:'yearOt', 
 								fieldName:'yearOt', 
@@ -649,6 +695,15 @@ $(document).ready( function() {
 								
 								<th><label><lgcom:message code="label.att.employmentCategory" /></label></th>
 								<td><select class="form-control input-sm size_150" name="categoryTitle"></select></td>
+								
+								<th><label>Grade</label></th>
+								<td>
+									<select class="form-control input-sm size_150" name="gradeType">
+										<option value="">All</option>
+										<option value="OS">OS EMP - L34</option>
+										<option value="NORMAL">Normal EMP</option>
+									</select>
+								</td>
 								
 			                </tr>
 			                <tr>

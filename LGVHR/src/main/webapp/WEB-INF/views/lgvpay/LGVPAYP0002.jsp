@@ -111,6 +111,7 @@ var LGVPAYP0002 = function() {
 		grid.setFields([
 			{ fieldName:'payrollCalculationExecId' , dataType:'text'  },
 			{ fieldName:'payTypeName'              , dataType:'text'  },
+			{ fieldName:'payTypeCode'              , dataType:'text'  },
 			{ fieldName:'payMonthName'	           , dataType:'text'  },
 			{ fieldName:'payrollCalculationSetName', dataType:'text'  },
 			{ fieldName:'employeeCount'            , dataType:'number'},

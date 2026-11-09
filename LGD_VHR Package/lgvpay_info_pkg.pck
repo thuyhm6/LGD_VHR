@@ -24,6 +24,41 @@ FUNCTION get_base_pay( p_employee_no        IN VARCHAR2
                      )  RETURN NUMBER ;
 FUNCTION get_position_allowance( p_employee_no IN VARCHAR2, p_effective_yyyymmdd IN VARCHAR2) RETURN NUMBER ;   
 FUNCTION get_job_allowance( p_employee_no IN VARCHAR2, p_effective_yyyymmdd IN VARCHAR2) RETURN NUMBER;
+
+FUNCTION get_adj_os( p_employee_no        IN VARCHAR2
+                      , p_effective_yyyymmdd IN VARCHAR2
+                      , p_subsidiary_code    IN VARCHAR2
+                      , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     )  RETURN NUMBER ;
+                     
+FUNCTION get_kpi_os( p_employee_no        IN VARCHAR2
+                      , p_effective_yyyymmdd IN VARCHAR2
+                      , p_subsidiary_code    IN VARCHAR2
+                      , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     )  RETURN NUMBER ;
+                     
+FUNCTION get_service_fee( p_employee_no        IN VARCHAR2
+                      , p_effective_yyyymmdd IN VARCHAR2
+                      , p_subsidiary_code    IN VARCHAR2
+                      , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                      ,p_payroll_calculation_exec_id IN NUMBER
+                      ,p_payroll_item_id IN NUMBER
+                      ,p_period_id  IN NUMBER
+                     )  RETURN NUMBER ;
+                     
+FUNCTION get_entrance_bonus( p_employee_no        IN VARCHAR2
+                      , p_effective_yyyymmdd IN VARCHAR2
+                      , p_subsidiary_code    IN VARCHAR2
+                      , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                      , v_end_yyyymmdd       IN DATE
+                     )  RETURN NUMBER ;
+                     
+FUNCTION get_13th( p_employee_no        IN VARCHAR2
+                      , p_effective_yyyymmdd IN VARCHAR2
+                      , p_subsidiary_code    IN VARCHAR2
+                      , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     )  RETURN NUMBER ; 
+
 FUNCTION get_encour_allowance( p_employee_no IN VARCHAR2, p_effective_yyyymmdd IN VARCHAR2) RETURN NUMBER;
 FUNCTION get_hardship_allowance( p_employee_no IN VARCHAR2, p_effective_yyyymmdd IN VARCHAR2) RETURN NUMBER;                  
 
@@ -515,6 +550,955 @@ EXCEPTION
      --   dbms_output.put_line('p_employee_no =>'||p_employee_no||SQLERRM);
         v_return_value := 0;
         RETURN v_return_value;
+END;
+
+
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Filename       : pay_info_pkg.pck                                          */
+/* Program ID     :                                                           */
+/* Pakage Name    : pay_info_pkg                                              */
+/* Description    : ???? ?? function ? ??? package                  */
+/*                  Basic Package with Functions Related in Payroll           */
+/*                                                                            */
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2017/09/28            Initial Release                                      */
+/******************************************************************************/
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Program Name    : get_adj_os                                             */
+/* Description    : ??? ??? ???? Function                           */
+/*                  Calculation of Employee's get_adj_os              
+/*                                                                            */
+/* Parameter       :  Name                in/out   type      description
+/*                ---------------------------------------------------------
+/*                   p_employee_no        in     varchar2   Employee Number
+/*                   p_effective_yyyymmdd in     varchar2   effective_yyyymmdd 
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2025/11/02            Initial Release                                      */
+/******************************************************************************/
+FUNCTION get_adj_os( p_employee_no        IN VARCHAR2
+                     , p_effective_yyyymmdd IN VARCHAR2
+                     , p_subsidiary_code    IN VARCHAR2
+                     , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     ) RETURN NUMBER IS
+  v_return     NUMBER ;
+  v_grade_type VARCHAR2(100);
+  v_pay_step   VARCHAR2(100);
+  v_probation_flag    VARCHAR2(1);
+  v_probation_rate    NUMBER := 1;
+  v_date_hire         DATE;
+  
+  v_date_retire         Date;
+  v_date_ss             VARCHAR2(8);
+  
+BEGIN 
+  
+    select em.date_retire into v_date_retire from emp_master em where em.employee_number = p_employee_no;
+    IF v_date_retire IS NOT NULL
+       AND v_date_retire <= TO_DATE(p_effective_yyyymmdd,'YYYYMMDD')
+    THEN
+       v_date_ss := To_char(v_date_retire, 'YYYYMMDD');
+    ELSE
+       v_date_ss := p_effective_yyyymmdd;
+    END IF;
+    
+    -- ??? ?????? grade ? pay step ????
+    -- Select Grade and Pay Step With Employee Number and Assignment Date       
+    SELECT em.DATE_HIRE_SUBSIDIARY, asg.grade
+    INTO   v_date_hire, v_grade_type
+    FROM    emp_master em
+          , emp_assig asg
+          ,tb_pay_emp_grade_point_n pay_step
+    WHERE  asg.employee_number = p_employee_no
+    AND    em.employee_number = asg.employee_number
+    AND    to_date(v_date_ss,'yyyymmdd') BETWEEN asg.assignment_start_date AND to_date(asg.attribute1,'yyyymmdd')
+    AND    pay_step.employee_no(+) = asg.employee_number
+    AND    v_date_ss  BETWEEN pay_step.start_yyyymmdd(+) AND nvl(pay_step.end_yyyymmdd(+),'471212131')
+    ;
+    
+    
+    v_return := nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no, to_date(v_date_ss,'YYYYMMDD'), 'OS_ADJUSTMENT' ,'BASE_AMOUNT',p_subsidiary_code ),0);
+    
+    
+ --   dbms_output.put_line('v_return1111=>'||v_return);
+    
+    
+    IF v_return = 0 THEN
+     
+        
+        -- ??? ??? ???? ?? ?? ?? 
+        SELECT /*+ LEADING(B) */ TO_NUMBER(D.TABLE_CELL_VALUE) 
+        INTO   v_return
+        FROM   tb_pay_user_dfin_table_m a
+             , tb_pay_user_dfin_table_col_n b
+             , tb_pay_user_dfin_table_row_n c
+             , tb_pay_user_dfin_table_value_n d
+        WHERE a.table_name    = 'OS_ADJUSTMENT'
+        AND   b.table_seq_no  =  a.table_seq_no  
+        AND   c.table_seq_no  = b.table_seq_no
+        AND   d.row_no        = c.row_no
+        AND   d.column_seq_no = b.column_seq_no
+        AND   TRUNC(to_date(p_effective_yyyymmdd,'yyyymmdd')) BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+        AND   TRUNC(to_date(p_effective_yyyymmdd,'yyyymmdd')) BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+        AND   b.user_column_name            =  'OS_ADJUSTMENT'
+        AND   TO_NUMBER(c.lower_limit_critical_value)<= (to_date(v_date_ss,'YYYYMMDD') - v_date_hire + 1)
+        AND   TO_NUMBER(c.UPPER_LIMIT_CRITICAL_VALUE)>= (to_date(v_date_ss,'YYYYMMDD') - v_date_hire + 1)
+        ;
+    
+    END IF;
+    
+    
+    --parameter ? ??? ??? ?????? ????.
+    BEGIN
+        SELECT 'Y'
+        INTO   v_probation_flag
+        FROM   emp_master em
+        WHERE  em.employee_number = p_employee_no
+        AND    p_effective_yyyymmdd BETWEEN to_char(em.probation_start_date,'yyyymmdd') AND to_char(em.probation_end_date,'yyyymmdd');
+   EXCEPTION
+       WHEN OTHERS THEN
+           v_probation_flag := 'N';
+   END;
+   
+    IF p_flag = 'A' THEN   -- PROBATION ??? ???? ??(????? ??)
+        IF v_probation_flag = 'Y' THEN 
+            SELECT lgvpay_common_pkg.get_calc_var_value(p_subsidiary_code, 'PROBATION_RATE',p_effective_yyyymmdd)
+            INTO   v_probation_rate
+            FROM   dual;
+            
+        ELSE
+            v_probation_rate := 1;
+        END IF;
+    ELSE --PROBATION????? ?? ?? RETURN ( ??? ?? ) 
+        v_probation_rate := 1;
+    END IF;
+    
+    --dbms_output.put_line('v_probation_rate=>'||v_probation_rate);
+    
+    if (v_grade_type <> 'L34') then
+       RETURN round(v_return * v_probation_rate);
+    else
+       RETURN round(v_return);
+    end if;
+    
+    
+EXCEPTION
+    WHEN OTHERS THEN 
+        v_return := 0;
+        RETURN v_return;
+END;
+
+
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Filename       : pay_info_pkg.pck                                          */
+/* Program ID     :                                                           */
+/* Pakage Name    : pay_info_pkg                                              */
+/* Description    : ???? ?? function ? ??? package                  */
+/*                  Basic Package with Functions Related in Payroll           */
+/*                                                                            */
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2017/09/28            Initial Release                                      */
+/******************************************************************************/
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Program Name    : get_kpi_os                                             */
+/* Description    : ??? ??? ???? Function                           */
+/*                  Calculation of Employee's Base pay                
+/*                                                                            */
+/* Parameter       :  Name                in/out   type      description
+/*                ---------------------------------------------------------
+/*                   p_employee_no        in     varchar2   Employee Number
+/*                   p_effective_yyyymmdd in     varchar2   effective_yyyymmdd 
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2025/11/04            Initial Release                                      */
+/******************************************************************************/
+FUNCTION get_kpi_os( p_employee_no        IN VARCHAR2
+                     , p_effective_yyyymmdd IN VARCHAR2
+                     , p_subsidiary_code    IN VARCHAR2
+                     , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     ) RETURN NUMBER IS
+  v_return     NUMBER ;
+  v_grade_type VARCHAR2(100);
+  v_pay_step   VARCHAR2(100);
+  v_probation_flag    VARCHAR2(1);
+  v_probation_rate    NUMBER := 1;
+  
+BEGIN 
+    -- ??? ?????? grade ? pay step ????
+    -- Select Grade and Pay Step With Employee Number and Assignment Date       
+    SELECT asg.grade
+         , pay_step.competency_grade_point_code
+    INTO   v_grade_type
+          ,v_pay_step 
+    FROM   emp_assig asg
+          ,tb_pay_emp_grade_point_n pay_step
+    WHERE  asg.employee_number = p_employee_no
+    AND    to_date(p_effective_yyyymmdd,'yyyymmdd') BETWEEN asg.assignment_start_date AND to_date(asg.attribute1,'yyyymmdd')
+    AND    pay_step.employee_no(+) = asg.employee_number
+    AND    p_effective_yyyymmdd  BETWEEN pay_step.start_yyyymmdd(+) AND nvl(pay_step.end_yyyymmdd(+),'471212131')
+    ;
+    
+    
+    v_return := nvl(lgvpay_common_pkg.get_planned_item_kpi_os_value( p_employee_no, to_date(p_effective_yyyymmdd,'YYYYMMDD'), 'OS_KPI' ,'RATE',p_subsidiary_code ),0);
+    
+    
+ --   dbms_output.put_line('v_return1111=>'||v_return);
+    
+    
+    IF v_return = 0 THEN
+        -- ??? ??? ???? ?? ?? ?? 
+        SELECT kpi.kpi_rate + kpi_b.kpi_bonus
+        INTO   v_return
+        FROM
+        TB_ATT_EMP_IDCARD_M car
+        ,tb_pay_kpi_os kpi
+        ,tb_pay_kpi_bonus_os kpi_b
+        where car.employee_no = p_employee_no
+        and car.vendor_code = kpi.vendor_code
+        and car.team = kpi.team
+        and kpi.vendor_code = kpi_b.vendor_code
+        and kpi.month = TO_CHAR(to_date(p_effective_yyyymmdd,'yyyymmdd'), 'yyyymm')
+        and kpi.month = kpi_b.month
+        and kpi.status = 40;
+    END IF;
+    
+    RETURN v_return;
+    
+    
+EXCEPTION
+    WHEN OTHERS THEN 
+        v_return := 0;
+        RETURN v_return;
+END;
+
+
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Filename       : pay_info_pkg.pck                                          */
+/* Program ID     :                                                           */
+/* Pakage Name    : get_service_fee                                              */
+/* Description    : ???? ?? function ? ??? package                  */
+/*                  Basic Package with Functions Related in Payroll           */
+/*                                                                            */
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2017/09/28            Initial Release                                      */
+/******************************************************************************/
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Program Name    : get_service_fee                                             */
+/* Description    : ??? ??? ???? Function                           */
+/*                  Calculation of Employee's Base pay                
+/*                                                                            */
+/* Parameter       :  Name                in/out   type      description
+/*                ---------------------------------------------------------
+/*                   p_employee_no        in     varchar2   Employee Number
+/*                   p_effective_yyyymmdd in     varchar2   effective_yyyymmdd 
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2025/11/04            Initial Release                                      */
+/******************************************************************************/
+FUNCTION get_service_fee( p_employee_no        IN VARCHAR2
+                     , p_effective_yyyymmdd IN VARCHAR2
+                     , p_subsidiary_code    IN VARCHAR2
+                     , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     ,p_payroll_calculation_exec_id IN NUMBER
+                     ,p_payroll_item_id IN NUMBER
+                     ,p_period_id IN NUMBER
+                     ) RETURN NUMBER IS
+  v_return            NUMBER ;
+  v_grade_type        VARCHAR2(100);
+  v_pay_step          VARCHAR2(100);
+  v_probation_flag    VARCHAR2(1);
+  v_probation_rate    NUMBER := 1;
+  v_kpi               NUMBER := 0;
+  v_can_set_id        NUMBER := 0;
+  v_perfect_work_days      NUMBER := 0;
+  v_perfect_work_hours     NUMBER := 0;
+  v_actual_hours           NUMBER := 0;
+  v_total_amount_item      NUMBER := 0;
+  v_end_month              VARCHAR2(10);
+  v_base_salary            NUMBER := 0;
+  v_deducOur               NUMBER := 0;
+  v_yyyymm                 VARCHAR(10);
+BEGIN 
+    -- ??? ?????? grade ? pay step ????
+    -- Select Grade and Pay Step With Employee Number and Assignment Date       
+    SELECT asg.grade
+         , pay_step.competency_grade_point_code
+    INTO   v_grade_type
+          ,v_pay_step 
+    FROM   emp_assig asg
+          ,tb_pay_emp_grade_point_n pay_step
+    WHERE  asg.employee_number = p_employee_no
+    AND    to_date(p_effective_yyyymmdd,'yyyymmdd') BETWEEN asg.assignment_start_date AND to_date(asg.attribute1,'yyyymmdd')
+    AND    pay_step.employee_no(+) = asg.employee_number
+    AND    p_effective_yyyymmdd  BETWEEN pay_step.start_yyyymmdd(+) AND nvl(pay_step.end_yyyymmdd(+),'471212131')
+    ;
+    
+    v_return := nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no, to_date(p_effective_yyyymmdd,'YYYYMMDD'), 'OS_SERVICE_FEE' ,'BASE_AMOUNT',p_subsidiary_code ),0);
+    
+ --   dbms_output.put_line('v_return1111=>'||v_return);
+    
+    
+    IF v_return = 0 THEN
+        -- ??? ??? ???? ?? ?? ?? 
+       --SELECT kpi.kpi_rate + kpi_b.kpi_bonus
+       --INTO   v_kpi
+       --FROM
+       --TB_ATT_EMP_IDCARD_M car
+       --,tb_pay_kpi_os kpi
+       --,tb_pay_kpi_bonus_os kpi_b
+       --where car.employee_no = p_employee_no
+       --and car.vendor_code = kpi.vendor_code
+       --and car.team = kpi.team
+       --and kpi.vendor_code = kpi_b.vendor_code
+       --and kpi.month = TO_CHAR(to_date(p_effective_yyyymmdd,'yyyymmdd'), 'yyyymm')
+       --and kpi.month = kpi_b.month
+       --and kpi.status = 40;
+       
+       begin
+         select RESULT_VALUE  
+         INTO   v_kpi
+         from tb_pay_calc_result_n 
+         where PAYROLL_ITEM_ID = (select PAYROLL_ITEM_ID from tb_pay_payroll_item_m where PAYROLL_ITEM_NAME  = 'OS_KPI')
+         and PAYROLL_CALCULATION_EXEC_ID = p_payroll_calculation_exec_id
+         and EMPLOYEE_NO  = p_employee_no;
+         EXCEPTION
+      WHEN OTHERS THEN 
+          v_kpi := 0;
+      END;
+       -- l?y canset d? l?y gi? công chu?n
+       SELECT /* LGVPAY00008.retrievePayrollRunList */
+             pce.payroll_calculation_set_id
+        INTO v_can_set_id
+        FROM   tb_pay_calc_period_basis_n     pcpb
+             , tb_pay_calc_exec_n             pce
+             , lgcom_common_code_multi_lang_c cccm
+             , tb_pay_calc_emp_exec_n         pcee
+             , tb_pay_calc_set_n              pacs
+
+        WHERE  pcpb.payroll_calc_period_value      = TO_CHAR(to_date(p_effective_yyyymmdd,'yyyymmdd'), 'yyyymm')
+        AND    pcpb.Subsidiary_Code                = p_subsidiary_code
+        AND    pce.basis_date BETWEEN to_date(pcpb.start_yyyymmdd,'yyyymmdd') AND to_date(pcpb.end_yyyymmdd,'yyyymmdd')
+        AND     pce.payroll_calculation_exec_id      = p_payroll_calculation_exec_id
+        AND    pce.payroll_type_code               = 'MTH'
+        AND    cccm.code_type_code                 = 'LGVHR_PAY_RUN_TYPE'
+        AND    pce.payroll_type_code               = cccm.common_code
+        AND    cccm.language_code                  = 'en'
+        AND    pcee.payroll_calculation_exec_id(+) = pce.payroll_calculation_exec_id
+        AND    pacs.payroll_calculation_set_id     = pce.payroll_calculation_set_id
+
+        GROUP BY pce.payroll_calculation_exec_id
+               , pce.payroll_calculation_set_id
+               , pacs.payroll_calculation_set_name
+               , TO_CHAR(TO_DATE(pcpb.payroll_calc_period_value,'yyyymm'),'mm/yyyy')
+               , pce.payroll_type_code
+               , cccm.common_code_name
+               , TO_CHAR(pce.basis_date,'dd/mm/yyyy')
+               , NVL(pce.confirm_flag, 'N')
+               , NVL(pce.retroactive_flag, 'N')
+               , TO_CHAR(TO_DATE(pce.retroactive_pay_start_yyyymm,'yyyymm'),'mm/yyyy')
+               , TO_CHAR(TO_DATE(pce.retroactive_payroll_end_yyyymm,'yyyymm'),'mm/yyyy')
+               , pce.creation_user_id
+               , pce.adding_up_taxation_flag
+               , TO_CHAR(TO_DATE(pce.addup_taxation_start_yyyymm,'yyyymm'),'mm/yyyy')
+        ORDER BY 1 DESC;
+    
+    
+    -- l?y S? gi? th?c t?  (perfect_work_hourrs) /s? gi? tiêu chu?n(actual_hour)
+    
+    SELECT
+       SUM(DECODE(b.time_and_attendance_code,'NW',1,'PH',1,0)) perfect_work_days 
+      
+      ,SUM(lgvpay_info_pkg.get_work_hours('LGDVN', r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), 
+      b.shift_type_code, b.work_hours, 'pay_perfect_hours')) as perfect_work_hours
+      
+      ,SUM( CASE
+      WHEN (c.paid_days > 0 OR c.attendance_days > 0) THEN lgvpay_info_pkg.get_work_hours(p_subsidiary_code, r.employee_no, b.time_and_attendance_date, DECODE(r.time_and_attendance_code,'WH','WH','PH','PH','NW'), 
+      b.shift_type_code, b.work_hours, 'pay_perfect_hours')
+      END
+      ) ACTUAL_HOURS
+      
+      INTO 
+      v_perfect_work_days
+      ,v_perfect_work_hours
+      ,v_actual_hours
+      
+      FROM tb_att_result_n r, tb_att_code_c c, tb_att_base_bas_n b, emp_master em
+      WHERE r.time_and_attendance_code = c.time_and_attendance_code
+      AND r.shift_type_code = b.shift_type_code
+      AND r.time_and_attendance_date = b.time_and_attendance_date
+      --AND em.grade = 'L34'
+      AND r.time_and_attendance_yyyymm = TO_CHAR(to_date(p_effective_yyyymmdd,'yyyymmdd'), 'yyyymm')
+      --and TO_CHAR(r.time_and_attendance_date , 'DD') between 01 and 06
+      AND em.employee_number = r.employee_no
+      AND em.employee_number IN (
+      select employee_no from vhr_mgr.tb_pay_calc_set_target_per_n where PAYROLL_CALCULATION_SET_ID = v_can_set_id
+      )
+      and employee_no = p_employee_no
+    GROUP BY r.employee_no, em.assignment_category, r.time_and_attendance_yyyymm;
+    
+    -- l?y các lo?i luong fix d? c?ng l?i
+    
+    
+       --SELECT CASE WHEN em.date_retire BETWEEN TO_date(period.start_yyyymmdd, 'yyyymmdd')  AND TO_date(period.end_yyyymmdd, 'yyyymmdd')
+       --            THEN to_char(em.date_retire,'yyyymmdd')
+       --            ELSE period.end_yyyymmdd
+       --       END
+       --INTO   v_end_month
+       --FROM   tb_pay_calc_period_basis_n period
+       --      ,emp_master em
+       --      ,emp_assig  ass
+       --WHERE  period.payroll_calculation_period_id = p_period_id
+       --AND    em.employee_number                   = p_employee_no
+       --AND    ass.employee_number                  = em.employee_number
+       --AND    least(nvl(em.date_retire,to_date(period.end_yyyymmdd,'yyyymmdd')) , to_date(period.end_yyyymmdd,'yyyymmdd')) BETWEEN ass.assignment_start_date AND to_date(ass.attribute1,'yyyymmdd')
+       --;
+    
+   SELECT TO_CHAR(LAST_DAY(TO_DATE(p_effective_yyyymmdd, 'YYYYMMDD')), 'YYYYMMDD') AS v_end_month
+   into v_end_month
+   FROM dual;
+    
+   --select to_number(RESULT_VALUE) into v_base_salary from tb_pay_calc_result_n where PAYROLL_CALCULATION_EXEC_ID = p_payroll_calculation_exec_id and PAYROLL_ITEM_ID = 5 and EMPLOYEE_NO = p_employee_no;
+   
+   select TO_CHAR(LAST_DAY(TO_DATE(p_effective_yyyymmdd, 'YYYYMMDD')), 'YYYYMM') into v_yyyymm from dual; 
+   BEGIN
+          SELECT 
+          nvl(SUM(nvl(r.tardy_hours,0)) + SUM(nvl(r.going_out_hours,0)) + SUM(nvl(r.early_leave_hours,0)),0)
+          into v_deducOur
+          FROM tb_att_result_n r, tb_att_code_c c, tb_att_base_bas_n b, emp_master em
+          WHERE r.time_and_attendance_code = c.time_and_attendance_code
+          AND r.shift_type_code = b.shift_type_code
+          AND r.time_and_attendance_date = b.time_and_attendance_date
+          AND r.time_and_attendance_yyyymm = v_yyyymm
+          AND em.employee_number = r.employee_no
+          and employee_no = p_employee_no
+          GROUP BY r.employee_no, em.assignment_category, r.time_and_attendance_yyyymm;
+   EXCEPTION
+    WHEN OTHERS THEN 
+        v_deducOur := 0;
+    END;
+    v_total_amount_item := nvl(lgvpay_info_pkg.get_base_pay( p_employee_no ,v_end_month ,p_subsidiary_code  , 'A') ,0)
+                     +nvl(lgvpay_info_pkg.get_position_allowance( p_employee_no , v_end_month ) ,0)
+                     +nvl(lgvpay_info_pkg.get_job_allowance( p_employee_no, v_end_month ) ,0)
+                     --+nvl(lgvpay_info_pkg.get_special_allowance( p_employee_no, p_effective_yyyymmdd ) ,0)
+                     --+nvl(lgvpay_info_pkg.get_qualification_allowance( p_employee_no , p_effective_yyyymmdd,v_subsidiary_code ) ,0)
+                     --+nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no , to_date(p_effective_yyyymmdd,'yyyymmdd') , 'ADJ_ALLOWANCE1','BASE_AMOUNT',v_subsidiary_code ) ,0) 
+                     --+nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no , to_date(p_effective_yyyymmdd,'yyyymmdd') , 'ADJ_ALLOWANCE2','BASE_AMOUNT',v_subsidiary_code ) ,0)
+                     --+nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no , to_date(p_effective_yyyymmdd,'yyyymmdd') , 'ADJ_ALLOWANCE3','BASE_AMOUNT',v_subsidiary_code ) ,0)
+                     +nvl(lgvpay_info_pkg.get_adj_os( p_employee_no   , v_end_month , p_subsidiary_code  , 'A' ) ,0); -- ADD get_adj_os
+    
+    
+   --select SUM(RESULT_VALUE)  
+   --   INTO   v_total_amount_item
+   --   from tb_pay_calc_result_n 
+   --   where PAYROLL_CALCULATION_EXEC_ID = p_payroll_calculation_exec_id
+   --   and EMPLOYEE_NO  = p_employee_no
+   --   and PAYROLL_ITEM_ID in 
+   --   (
+   --      SELECT  a.payroll_item_id
+   --        FROM    tb_pay_payroll_item_m      a
+   --              , tb_pay_calc_formula_n      b
+   --              , tb_pay_calc_period_basis_n c
+   --              , tb_pay_calc_mthd_n         d
+   --              , lgcom_common_code_c cc
+   --        WHERE   b.payroll_calculation_formula_id = a.payroll_calculation_formula_id
+   --        AND     d.payroll_calc_method_code = cc.common_code
+   --        AND     c.payroll_calculation_period_id  = p_period_id
+   --        AND    c.end_yyyymmdd                    BETWEEN a.start_yyyymmdd AND nvl(a.end_yyyymmdd,'47121231')
+   --        AND    d.payroll_item_id                 = a.payroll_item_id
+   --        AND    d.payroll_calc_method_code        ='FIXED_FLAG'
+   --        AND    d.payroll_apply_flag              = 'Y'
+   --        AND    EXISTS  ( SELECT 1
+   --                     FROM  tb_pay_payroll_item_use_n piu
+   --                     WHERE piu.payroll_item_id   = a.payroll_item_id
+   --                     AND   c.end_yyyymmdd      BETWEEN piu.effective_start_yyyymmdd AND piu.effective_end_yyyymmdd
+   --                     AND   piu.payroll_type_code = 'MTH') 
+   --   );
+       
+       v_return := (v_actual_hours - v_deducOur) / v_perfect_work_hours * v_total_amount_item * v_kpi / 100;
+    END IF;
+    
+    RETURN v_return;
+    
+    
+EXCEPTION
+    WHEN OTHERS THEN 
+        v_return := 0;
+        RETURN v_return;
+END;
+
+
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Filename       : pay_info_pkg.pck                                          */
+/* Program ID     :                                                           */
+/* Pakage Name    : get_entrance_bonus                                              */
+/* Description    : ???? ?? function ? ??? package                  */
+/*                  Basic Package with Functions Related in Payroll           */
+/*                                                                            */
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2017/09/28            Initial Release                                      */
+/******************************************************************************/
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Program Name    : get_entrance_bonus                                             */
+/* Description    : ??? ??? ???? Function                           */
+/*                  Calculation of Employee's Base pay                
+/*                                                                            */
+/* Parameter       :  Name                in/out   type      description
+/*                ---------------------------------------------------------
+/*                   p_employee_no        in     varchar2   Employee Number
+/*                   p_effective_yyyymmdd in     varchar2   effective_yyyymmdd 
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2025/11/05            Initial Release                                      */
+/******************************************************************************/
+FUNCTION get_entrance_bonus( p_employee_no        IN VARCHAR2
+                     , p_effective_yyyymmdd IN VARCHAR2
+                     , p_subsidiary_code    IN VARCHAR2
+                     , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     , v_end_yyyymmdd       IN DATE
+                     ) RETURN NUMBER IS
+  v_return            NUMBER ;
+  v_grade_type        VARCHAR2(100);
+  v_pay_step          VARCHAR2(100);
+  v_probation_flag    VARCHAR2(1);
+  v_probation_rate    NUMBER := 1;
+  v_date_hire_subsidiary          DATE;
+  v_days                          NUMBER;
+  v_day_of_month                  NUMBER;
+  v_temp                          NUMBER := 0;
+  v_gender                        VARCHAR2(30);
+  
+  v_seq                           NUMBER := 0;
+  v_seq_m_1                       NUMBER := 0;
+  v_prev_month                    DATE;
+  v_days_prev                     NUMBER;
+BEGIN 
+    -- ??? ?????? grade ? pay step ????
+    -- Select Grade and Pay Step With Employee Number and Assignment Date       
+    SELECT asg.grade
+         , pay_step.competency_grade_point_code
+    INTO   v_grade_type
+          ,v_pay_step 
+    FROM   emp_assig asg
+          ,tb_pay_emp_grade_point_n pay_step
+    WHERE  asg.employee_number = p_employee_no
+    AND    to_date(p_effective_yyyymmdd,'yyyymmdd') BETWEEN asg.assignment_start_date AND to_date(asg.attribute1,'yyyymmdd')
+    AND    pay_step.employee_no(+) = asg.employee_number
+    AND    p_effective_yyyymmdd  BETWEEN pay_step.start_yyyymmdd(+) AND nvl(pay_step.end_yyyymmdd(+),'471212131')
+    ;
+    
+    v_return := nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no, to_date(p_effective_yyyymmdd,'YYYYMMDD'), 'OS_ENTRANCE_BONUS' ,'BASE_AMOUNT',p_subsidiary_code ),0);
+    
+ --   dbms_output.put_line('v_return1111=>'||v_return);
+    
+    
+    IF v_return = 0 THEN
+    
+        IF lgvpay_common_pkg.get_chcek_entrance_bonus(p_employee_no, 'OS_ENTRANCE_BONUS_PROGRAM_TIME', 'DATE_HIRE_SUBSIDIARY') = 'Y' THEN
+           
+    --SELECT /* LGVPAY10001.retrieveGlobalValueHistoryList */
+    --          cvn.payroll_calc_variable_id     /* ????????? */
+    --        , cvh.effective_start_yyyymmdd  /* ?????? */
+    --        , cvh.effective_end_yyyymmdd  /* ?????? */
+    --        , cvh.result_value  /* ????? */
+    --        , cvh.effective_start_yyyymmdd AS ori_effective_start_yyyymmdd /* ??????(???) */
+    --   FROM   tb_pay_calc_var_n cvn
+    --        , tb_pay_calc_var_value_n cvh
+    --        , emp_master em
+    --   WHERE  cvn.subsidiary_code = 'LGDVN'  /* ?????? */
+    --   AND    cvn.PAYROLL_CALC_VARIABLE_NAME = 'ENTRANCE_BONUS_PROGRAM_TIME'
+    --   AND    cvn.payroll_calc_variable_id = cvh.payroll_calc_variable_id
+    --   AND    cvh.result_value = 'DATE_HIRE_SUBSIDIARY'
+    --   AND    em.date_hire_subsidiary between TO_DATE(cvh.effective_start_yyyymmdd, 'YYYYMMDD') and TO_DATE(cvh.effective_end_yyyymmdd, 'YYYYMMDD')
+    --   AND    em.employee_number = 'VH000027'
+    
+    -- v_end_yyyymmdd
+     select em.date_hire_subsidiary,
+            em.gender
+     into v_date_hire_subsidiary, v_gender
+     from emp_master em 
+     where employee_number = p_employee_no;
+    
+    v_days := (v_end_yyyymmdd - v_date_hire_subsidiary) + 1;
+    v_prev_month := LAST_DAY(ADD_MONTHS(v_end_yyyymmdd, -1));
+    v_days_prev := (v_prev_month - v_date_hire_subsidiary) + 1;
+    
+    BEGIN
+      IF v_gender = 'M' Then
+        SELECT TO_NUMBER(c.sort_order_no)
+        INTO   v_seq
+        FROM   tb_pay_user_dfin_table_m a
+             , tb_pay_user_dfin_table_col_n b
+             , tb_pay_user_dfin_table_row_n c
+             , tb_pay_user_dfin_table_value_n d
+        WHERE a.table_name    = 'OS_ENTRANCE_BONUS'
+        AND   b.table_seq_no  =  a.table_seq_no  
+        AND   c.table_seq_no  = b.table_seq_no
+        AND   d.row_no        = c.row_no
+        AND   d.column_seq_no = b.column_seq_no
+        AND   v_end_yyyymmdd BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+        AND   v_end_yyyymmdd BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+        AND  b.user_column_name = 'MALE'
+        AND   TO_NUMBER(c.lower_limit_critical_value)  <= v_days
+        AND   TO_NUMBER(c.UPPER_LIMIT_CRITICAL_VALUE)  >= v_days
+        AND ROWNUM = 1
+        ;
+      ELSE
+        SELECT TO_NUMBER(c.sort_order_no)
+        INTO   v_seq
+        FROM   tb_pay_user_dfin_table_m a
+             , tb_pay_user_dfin_table_col_n b
+             , tb_pay_user_dfin_table_row_n c
+             , tb_pay_user_dfin_table_value_n d
+        WHERE a.table_name    = 'OS_ENTRANCE_BONUS'
+        AND   b.table_seq_no  =  a.table_seq_no  
+        AND   c.table_seq_no  = b.table_seq_no
+        AND   d.row_no        = c.row_no
+        AND   d.column_seq_no = b.column_seq_no
+        AND   v_end_yyyymmdd BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+        AND   v_end_yyyymmdd BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+        AND  b.user_column_name = 'FEMALE'
+        AND   TO_NUMBER(c.lower_limit_critical_value)  <= v_days
+        AND   TO_NUMBER(c.UPPER_LIMIT_CRITICAL_VALUE)  >= v_days
+        AND ROWNUM = 1
+        ;
+      END IF;
+      
+        EXCEPTION
+      WHEN OTHERS THEN 
+          v_seq := 0;
+      END;
+      
+      BEGIN
+        IF v_gender = 'M' Then
+          SELECT TO_NUMBER(c.sort_order_no)
+          INTO   v_seq_m_1
+          FROM   tb_pay_user_dfin_table_m a
+               , tb_pay_user_dfin_table_col_n b
+               , tb_pay_user_dfin_table_row_n c
+               , tb_pay_user_dfin_table_value_n d
+          WHERE a.table_name    = 'OS_ENTRANCE_BONUS'
+          AND   b.table_seq_no  =  a.table_seq_no  
+          AND   c.table_seq_no  = b.table_seq_no
+          AND   d.row_no        = c.row_no
+          AND   d.column_seq_no = b.column_seq_no
+          AND   v_prev_month BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+          AND   v_prev_month BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+          AND  b.user_column_name = 'MALE'
+          AND   TO_NUMBER(c.lower_limit_critical_value)  <= v_days_prev
+          AND   TO_NUMBER(c.UPPER_LIMIT_CRITICAL_VALUE)  >= v_days_prev
+          ;
+        ELSE
+          SELECT TO_NUMBER(c.sort_order_no)
+          INTO   v_seq_m_1
+          FROM   tb_pay_user_dfin_table_m a
+               , tb_pay_user_dfin_table_col_n b
+               , tb_pay_user_dfin_table_row_n c
+               , tb_pay_user_dfin_table_value_n d
+          WHERE a.table_name    = 'OS_ENTRANCE_BONUS'
+          AND   b.table_seq_no  =  a.table_seq_no  
+          AND   c.table_seq_no  = b.table_seq_no
+          AND   d.row_no        = c.row_no
+          AND   d.column_seq_no = b.column_seq_no
+          AND   v_prev_month BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+          AND   v_prev_month BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+          AND  b.user_column_name = 'FEMALE'
+          AND   TO_NUMBER(c.lower_limit_critical_value)  <= v_days_prev
+          AND   TO_NUMBER(c.UPPER_LIMIT_CRITICAL_VALUE)  >= v_days_prev
+          ;
+        END IF;
+        
+          EXCEPTION
+        WHEN OTHERS THEN 
+            v_seq_m_1 := 0;
+      END;
+      
+      BEGIN
+        
+      IF v_gender = 'M' Then
+          SELECT NVL(SUM(TO_NUMBER(D.TABLE_CELL_VALUE)), 0)
+          INTO   v_return
+          FROM   tb_pay_user_dfin_table_m a
+               , tb_pay_user_dfin_table_col_n b
+               , tb_pay_user_dfin_table_row_n c
+               , tb_pay_user_dfin_table_value_n d
+          WHERE a.table_name    = 'OS_ENTRANCE_BONUS'
+          AND   b.table_seq_no  =  a.table_seq_no  
+          AND   c.table_seq_no  = b.table_seq_no
+          AND   d.row_no        = c.row_no
+          AND   d.column_seq_no = b.column_seq_no
+          AND   v_end_yyyymmdd BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+          AND   v_end_yyyymmdd BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+          AND  b.user_column_name = 'MALE'
+          AND   TO_NUMBER(c.sort_order_no)  > v_seq_m_1
+          AND   TO_NUMBER(c.sort_order_no)  <= v_seq
+          ;
+        ELSE
+         SELECT NVL(SUM(TO_NUMBER(D.TABLE_CELL_VALUE)), 0)
+         INTO   v_return
+          FROM   tb_pay_user_dfin_table_m a
+               , tb_pay_user_dfin_table_col_n b
+               , tb_pay_user_dfin_table_row_n c
+               , tb_pay_user_dfin_table_value_n d
+          WHERE a.table_name    = 'OS_ENTRANCE_BONUS'
+          AND   b.table_seq_no  =  a.table_seq_no  
+          AND   c.table_seq_no  = b.table_seq_no
+          AND   d.row_no        = c.row_no
+          AND   d.column_seq_no = b.column_seq_no
+          AND   v_end_yyyymmdd BETWEEN TO_date(d.effective_start_yyyymmdd,'yyyymmdd') AND to_date(d.effective_end_yyyymmdd,'yyyymmdd')
+          AND   v_end_yyyymmdd BETWEEN TO_date(c.effective_start_yyyymmdd,'yyyymmdd') AND to_date(c.effective_end_yyyymmdd,'yyyymmdd')
+          AND  b.user_column_name = 'FEMALE'
+          AND   TO_NUMBER(c.sort_order_no)  > v_seq_m_1
+          AND   TO_NUMBER(c.sort_order_no)  <= v_seq
+          ;
+        END IF;
+        EXCEPTION
+      WHEN OTHERS THEN 
+          v_return := 0;
+      END;
+      ----
+      END IF;
+    END IF;
+    
+    RETURN v_return;
+    
+    
+EXCEPTION
+    WHEN OTHERS THEN 
+        v_return := 0;
+        RETURN v_return;
+END;
+
+/******************************************************************************/
+/*                 (c) Copyright LG CNS Inc. 2017                             */
+/*                      All rights reserved.                                  */
+/******************************************************************************/
+/*                                                                            */
+/* Program Name    : get_13th                                             */
+/* Description    : ??? ??? ???? Function                           */
+/*                  Calculation of Employee's 13th               
+/*                                                                            */
+/* Parameter       :  Name                in/out   type      description
+/*                ---------------------------------------------------------
+/*                   p_employee_no        in     varchar2   Employee Number
+/*                   p_effective_yyyymmdd in     varchar2   effective_yyyymmdd 
+/******************************************************************************/
+/* Modification Log                                                           */
+/*                                                                            */
+/* Date       In Charge         Description                                   */
+/* ------------ -------- -------------------------------                      */
+/* 2025/11/14            Initial Release                                      */
+/******************************************************************************/
+FUNCTION get_13th( p_employee_no        IN VARCHAR2
+                     , p_effective_yyyymmdd IN VARCHAR2
+                     , p_subsidiary_code    IN VARCHAR2
+                     , p_flag               IN VARCHAR2 DEFAULT NULL  --flag : 'A' PROBATION ??, B: REGUALR ? ??? 
+                     ) RETURN NUMBER IS
+  v_return     NUMBER ;
+  v_grade_type VARCHAR2(100);
+  v_pay_step   VARCHAR2(100);
+  v_probation_flag    VARCHAR2(1);
+  v_probation_rate    NUMBER := 1;
+  
+  v_check             NUMBER:= 0;
+  v_base_sum          NUMBER:= 0;
+  v_min_salary        NUMBER:= 0;
+  v_days_of_year      NUMBER:= 0;
+  v_days_sub          NUMBER:= 0;
+  v_total_residual_days        NUMBER;
+  v_date_end                   DATE;
+  v_days_retire        NUMBER := 0;
+  v_date_start                   DATE;
+  
+BEGIN 
+    -- ??? ?????? grade ? pay step ????
+    -- Select Grade and Pay Step With Employee Number and Assignment Date      
+    v_date_end := to_date(p_effective_yyyymmdd,'YYYYMMDD');
+     
+    SELECT asg.grade
+         , pay_step.competency_grade_point_code
+    INTO   v_grade_type
+          ,v_pay_step 
+    FROM   emp_assig asg
+          ,tb_pay_emp_grade_point_n pay_step
+    WHERE  asg.employee_number = p_employee_no
+    AND    to_date(p_effective_yyyymmdd,'yyyymmdd') BETWEEN asg.assignment_start_date AND to_date(asg.attribute1,'yyyymmdd')
+    AND    pay_step.employee_no(+) = asg.employee_number
+    AND    p_effective_yyyymmdd  BETWEEN pay_step.start_yyyymmdd(+) AND nvl(pay_step.end_yyyymmdd(+),'471212131')
+    ;
+    
+    
+    v_return := nvl(lgvpay_common_pkg.get_planned_item_value( p_employee_no, to_date(p_effective_yyyymmdd,'YYYYMMDD'), '13TH_SALARY' ,'BASE_AMOUNT',p_subsidiary_code ),0);
+    
+    
+ --   dbms_output.put_line('v_return1111=>'||v_return);
+    
+    
+    IF v_return = 0 THEN
+      -- check ngay nghi viec < ngay cuoi cung trong nam thi khong tinh thang 13
+      SELECT
+       CASE 
+         WHEN em.date_retire IS NOT NULL 
+          AND em.date_retire < ADD_MONTHS(TRUNC(v_date_end, 'YYYY'), -1) - 1
+         THEN 1
+         ELSE 0
+        END AS v_check
+        into v_check
+        FROM emp_master em
+        where em.employee_number = p_employee_no;
+        
+        IF v_check = 1 THEN 
+          RETURN v_return;
+        END IF;
+        
+      -- lay tien luong co ban thang cuoi cung trong nam
+        SELECT DISTINCT NVL(b.result_value,0) INTO v_base_sum FROM
+          tb_pay_calc_exec_n a
+          , tb_pay_calc_result_n b
+          , tb_pay_payroll_item_m c
+          where 
+          a.PAYROLL_CALCULATION_EXEC_ID = b.PAYROLL_CALCULATION_EXEC_ID
+          and b.payroll_item_id = c.payroll_item_id
+          and a.confirm_flag = 'Y'
+          and c.payroll_item_name = 'BASE_SALARY'
+          AND EXTRACT(YEAR FROM BASIS_DATE) =
+            EXTRACT(YEAR FROM ADD_MONTHS(v_date_end, -12))
+          AND EXTRACT(MONTH FROM BASIS_DATE) = 12
+          and b.EMPLOYEE_NO = p_employee_no;
+          
+          -- ngay trong nam
+          SELECT 
+              (ADD_MONTHS(TRUNC(v_date_end, 'YYYY'), 0) 
+            - ADD_MONTHS(TRUNC(v_date_end, 'YYYY'), -12)) 
+            into v_days_of_year
+          FROM dual;
+            
+          -- lay so tien toi thieu
+           SELECT NVL(result_value, 0)
+           into v_min_salary
+            FROM tb_pay_calc_var_n a
+                ,tb_pay_calc_var_value_n b
+           WHERE a.Payroll_Calc_Variable_Id = b.Payroll_Calc_Variable_Id
+             AND TO_CHAR(TRUNC(v_date_end, 'YYYY') - 1, 'YYYYMMDD') between b.effective_start_yyyymmdd and b.effective_end_yyyymmdd
+             AND a.PAYROLL_CALC_VARIABLE_NAME = 'OS_MINIMUM_13TH';
+         
+         -- tinh ngay nghi phep
+         SELECT NVL(MAX(DECODE(time_and_attendance_yyyymm, TO_CHAR(TRUNC(v_date_end, 'YYYY') - 1, 'YYYYMM'),
+          NVL(residual_annual_leave_days, 0) 
+         + NVL(annual_compensation_days, 0), 0)), 0)
+                   into v_total_residual_days
+             FROM   tb_att_annual_leave_n
+             WHERE  subsidiary_code = 'LGDVN'
+             AND    time_and_attendance_yyyymm BETWEEN SUBSTR(TO_CHAR(TRUNC(v_date_end, 'YYYY') - 1, 'YYYYMM'), 1, 4) || '01' 
+             AND TO_CHAR(TRUNC(v_date_end, 'YYYY') - 1, 'YYYYMM')
+             AND    employee_no = p_employee_no
+             GROUP BY employee_no;
+         
+         SELECT em.date_hire_subsidiary - ADD_MONTHS(TRUNC(v_date_end, 'YYYY'), -12) 
+          AS v_days_retire
+          into v_days_retire
+          FROM emp_master em
+          where em.employee_number = p_employee_no;
+        
+         IF v_total_residual_days <= 0 THEN
+            -- v_days_sub   
+           select count(*) 
+           into v_days_sub
+           from tb_att_result_n 
+           where employee_no =  p_employee_no
+           and time_and_attendance_date >= ADD_MONTHS(TRUNC(v_date_end, 'YYYY'), -12)
+           AND time_and_attendance_date <  TRUNC(v_date_end, 'YYYY') and TIME_AND_ATTENDANCE_CODE in ('AB');
+         ELSE
+           select count(*) 
+           into v_days_sub
+           from tb_att_result_n 
+           where employee_no =  p_employee_no
+           and time_and_attendance_date >= ADD_MONTHS(TRUNC(v_date_end, 'YYYY'), -12)
+           AND time_and_attendance_date <  TRUNC(v_date_end, 'YYYY') - 1 and TIME_AND_ATTENDANCE_CODE IN ('AB','UL','UM','UF','US'); 
+         END IF;
+         IF v_days_retire < 0 THEN
+           v_return := v_base_sum / v_days_of_year * (v_days_of_year - v_days_sub);
+         ELSE
+           v_return := v_base_sum / v_days_of_year * (v_days_of_year - v_days_sub - v_days_retire);
+         END IF;
+         
+         IF v_return > 0 THEN
+           IF v_return <= v_min_salary THEN
+              v_return := v_min_salary;
+           END IF;
+         ELSE
+           v_return := 0;
+         END IF;
+    END IF;
+ 
+    --dbms_output.put_line('v_probation_rate=>'||v_probation_rate);
+    
+    RETURN v_return;
+    
+    
+EXCEPTION
+    WHEN OTHERS THEN 
+        v_return := 0;
+        RETURN v_return;
 END;
 
 

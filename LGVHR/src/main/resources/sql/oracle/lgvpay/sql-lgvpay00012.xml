@@ -578,6 +578,9 @@
                           ,ot150_300h_hr
                           ,ot150_300h_special_hr
                           ,ot150_300h_taxable
+                          ,ot150_40h_hr
+                          ,ot150_40h_special_hr
+                          ,ot150_40h_taxable
                           ,ot150_taxable
                           ,ot150_non_taxable
                           ,total_ot150
@@ -586,6 +589,9 @@
                           ,ot200_300h_hr
                           ,ot200_300h_special_hr
                           ,ot200_300h_taxable
+                          ,ot200_40h_hr
+                          ,ot200_40h_special_hr
+                          ,ot200_40h_taxable
                           ,ot200_taxable
                           ,ot200_non_taxable
                           ,total_ot200
@@ -594,6 +600,9 @@
                           ,ot300_300h_hr
                           ,ot300_300h_special_hr
                           ,ot300_300h_taxable
+                          ,ot300_40h_hr
+                          ,ot300_40h_special_hr
+                          ,ot300_40h_taxable
                           ,ot300_taxable
                           ,ot300_non_taxable
                           ,total_ot300
@@ -602,6 +611,9 @@
                           ,nt200_300h_hr
                           ,nt200_300h_special_hr
                           ,nt200_300h_taxable
+                          ,nt200_40h_hr
+                          ,nt200_40h_special_hr
+                          ,nt200_40h_taxable
                           ,nt200_taxable
                           ,nt200_non_taxable
                           ,total_nt200
@@ -610,6 +622,9 @@
                           ,nt210_300h_hr
                           ,nt210_300h_special_hr
                           ,nt210_300h_taxable
+                          ,nt210_40h_hr
+                          ,nt210_40h_special_hr
+                          ,nt210_40h_taxable
                           ,nt210_taxable
                           ,nt210_non_taxable
                           ,total_nt210
@@ -618,6 +633,9 @@
                           ,nt270_300h_hr
                           ,nt270_300h_special_hr
                           ,nt270_300h_taxable
+                          ,nt270_40h_hr
+                          ,nt270_40h_special_hr
+                          ,nt270_40h_taxable
                           ,nt270_taxable
                           ,nt270_non_taxable
                           ,total_nt270
@@ -626,6 +644,9 @@
                           ,nt390_300h_hr
                           ,nt390_300h_special_hr
                           ,nt390_300h_taxable
+                          ,nt390_40h_hr
+                          ,nt390_40h_special_hr
+                          ,nt390_40h_taxable
                           ,nt390_taxable
                           ,nt390_non_taxable
                           ,total_nt390
@@ -679,9 +700,20 @@
                           ,ps
                           ,salary_13
                           ,menstruation_allowance
+                          ,child_incentive --ThuyHM_20250428
+                          ,retention_incentive
+                          ,lucky_money
+                          ,interviewer_pool_bonus
+                          ,internal_intro_incentive
+                          ,signing_bonus
+                          ,serverance_allowance  --ThuyHM 20260201
+                          ,onboard_incentive
+                          ,extra_night_hr
+                          ,extra_night_incentive
                           ,actual_salary 
                           ,total_taxable_earning
                           ,famliy_deduction
+                          ,night_work_non_taxable
                           ,total_income_to_calculate_tax
                           ,calc_exception_flag
                           ,total_non_taxable_earning
@@ -749,6 +781,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hOTTaxable'        AND lslm.language_code = 'en') as ot150_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hOTHr'             AND lslm.language_code = 'en') as ot150_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot150300hSpecialOTHr'      AND lslm.language_code = 'en') as ot150_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot15040hOTTaxable'         AND lslm.language_code = 'en') as ot150_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot15040hOTHr'              AND lslm.language_code = 'en') as ot150_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot15040hSpecialOTHr'       AND lslm.language_code = 'en') as ot150_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Taxable'              AND lslm.language_code = 'en') as ot200_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200NonTaxable'           AND lslm.language_code = 'en') as ot200_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200Total'                AND lslm.language_code = 'en') as total_ot200
@@ -757,6 +792,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hOTTaxable'        AND lslm.language_code = 'en') as ot200_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hOTHr'             AND lslm.language_code = 'en') as ot200_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot200300hSpecialOTHr'      AND lslm.language_code = 'en') as ot200_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot20040hOTTaxable'         AND lslm.language_code = 'en') as ot200_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot20040hOTHr'              AND lslm.language_code = 'en') as ot200_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot20040hSpecialOTHr'       AND lslm.language_code = 'en') as ot200_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Taxable'              AND lslm.language_code = 'en') as ot300_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300NonTaxable'           AND lslm.language_code = 'en') as ot300_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300Total'                AND lslm.language_code = 'en') as total_ot300
@@ -765,6 +803,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hOTTaxable'        AND lslm.language_code = 'en') as ot300_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hOTHr'             AND lslm.language_code = 'en') as ot300_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot300300hSpecialOTHr'      AND lslm.language_code = 'en') as ot300_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot30040hOTTaxable'         AND lslm.language_code = 'en') as ot300_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot30040hOTHr'              AND lslm.language_code = 'en') as ot300_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ot30040hSpecialOTHr'       AND lslm.language_code = 'en') as ot300_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Taxable'              AND lslm.language_code = 'en') as nt200_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200NonTaxable'           AND lslm.language_code = 'en') as nt200_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200Total'                AND lslm.language_code = 'en') as total_nt200
@@ -773,6 +814,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hOTTaxable'        AND lslm.language_code = 'en') as nt200_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hOTHr'             AND lslm.language_code = 'en') as nt200_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt200300hSpecialOTHr'      AND lslm.language_code = 'en') as nt200_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt20040hOTTaxable'         AND lslm.language_code = 'en') as nt200_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt20040hOTHr'              AND lslm.language_code = 'en') as nt200_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt20040hSpecialOTHr'       AND lslm.language_code = 'en') as nt200_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Taxable'              AND lslm.language_code = 'en') as nt210_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210NonTaxable'           AND lslm.language_code = 'en') as nt210_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210Total'                AND lslm.language_code = 'en') as total_nt210
@@ -781,6 +825,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hOTTaxable'        AND lslm.language_code = 'en') as nt210_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hOTHr'             AND lslm.language_code = 'en') as nt210_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt210300hSpecialOTHr'      AND lslm.language_code = 'en') as nt210_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt21040hOTTaxable'         AND lslm.language_code = 'en') as nt210_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt21040hOTHr'              AND lslm.language_code = 'en') as nt210_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt21040hSpecialOTHr'       AND lslm.language_code = 'en') as nt210_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Taxable'              AND lslm.language_code = 'en') as nt270_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270NonTaxable'           AND lslm.language_code = 'en') as nt270_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270Total'                AND lslm.language_code = 'en') as total_nt270
@@ -789,6 +836,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hOTTaxable'        AND lslm.language_code = 'en') as nt270_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hOTHr'             AND lslm.language_code = 'en') as nt270_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt270300hSpecialOTHr'      AND lslm.language_code = 'en') as nt270_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt27040hOTTaxable'         AND lslm.language_code = 'en') as nt270_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt27040hOTHr'              AND lslm.language_code = 'en') as nt270_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt27040hSpecialOTHr'       AND lslm.language_code = 'en') as nt270_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Taxable'              AND lslm.language_code = 'en') as nt390_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390NonTaxable'           AND lslm.language_code = 'en') as nt390_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390Total'                AND lslm.language_code = 'en') as total_nt390
@@ -797,6 +847,9 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hOTTaxable'        AND lslm.language_code = 'en') as nt390_300h_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hOTHr'             AND lslm.language_code = 'en') as nt390_300h_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt390300hSpecialOTHr'      AND lslm.language_code = 'en') as nt390_300h_special_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt39040hOTTaxable'         AND lslm.language_code = 'en') as nt390_40h_taxable
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt39040hOTHr'              AND lslm.language_code = 'en') as nt390_40h_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt39040hSpecialOTHr'       AND lslm.language_code = 'en') as nt390_40h_special_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30NonTaxable'            AND lslm.language_code = 'en') as nt30_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30Hr'                    AND lslm.language_code = 'en') as nt30_hr
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nt30SpecialOTHr'           AND lslm.language_code = 'en') as nt30_special_ot_hr
@@ -849,9 +902,20 @@
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.ps'                        AND lslm.language_code = 'en') as ps
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.13thSalary'                AND lslm.language_code = 'en') as salary_13
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.menstruationAllowance'     AND lslm.language_code = 'en') as menstruation_allowance
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.childIncentive'            AND lslm.language_code = 'en') as child_incentive   --ThuyHM_20250428
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.retentionIncentive'        AND lslm.language_code = 'en') as retention_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.luckyMoney'                AND lslm.language_code = 'en') as lucky_money
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.interviewerPoolBonus'      AND lslm.language_code = 'en') as interviewer_pool_bonus
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.internalIntroIncentive'    AND lslm.language_code = 'en') as internal_intro_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.signingBonus'              AND lslm.language_code = 'en') as signing_bonus
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.serveranceAllowance'       AND lslm.language_code = 'en') as serverance_allowance   --ThuyHM 20260201
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.onboardIncentive'          AND lslm.language_code = 'en') as onboard_incentive
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraNightHr'              AND lslm.language_code = 'en') as extra_night_hr
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.extraNightIncentive'       AND lslm.language_code = 'en') as extra_night_incentive
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.actualSalary'              AND lslm.language_code = 'en') as actual_salary
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalTaxableEarning'       AND lslm.language_code = 'en') as total_taxable_earning
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.famliyDeduction'           AND lslm.language_code = 'en') as famliy_deduction                          
+                          ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.nightWorkNonTaxable'       AND lslm.language_code = 'en') as night_work_non_taxable
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalIncomeToCalculateTax' AND lslm.language_code = 'en') as total_income_to_calculate_tax
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.calcExceptionFlag'         AND lslm.language_code = 'en') as calc_exception_flag
                           ,(SELECT label_name FROM lgcom_screen_label_m lslm WHERE lslm.label_id = 'label.pay.totalNonTaxableEarning'    AND lslm.language_code = 'en') as total_non_taxable_earning
@@ -920,6 +984,9 @@
                             ,to_char(a.overtime150_300h_taxable) as ot150_300h_taxable
                             ,to_char(a.overtime150_300h_hr) as ot150_300h_hr
                             ,to_char(a.overtime150_300h_hc_hr) as ot150_300h_special_hr
+                            ,to_char(a.overtime150_40h_taxable) as ot150_40h_taxable
+                            ,to_char(a.overtime150_40h_hr) as ot150_40h_hr
+                            ,to_char(a.overtime150_40h_hc_hr) as ot150_40h_special_hr
                             ,to_char(a.overtime200_taxable) as ot200_taxable
                             ,to_char(a.overtime200_non_taxable) as ot200_non_taxable
                             ,to_char(a.total_overtime200) as total_ot200
@@ -928,6 +995,9 @@
                             ,to_char(a.overtime200_300h_taxable) as ot200_300h_taxable
                             ,to_char(a.overtime200_300h_hr) as ot200_300h_hr
                             ,to_char(a.overtime200_300h_hc_hr) as ot200_300h_special_hr
+                            ,to_char(a.overtime200_40h_taxable) as ot200_40h_taxable
+                            ,to_char(a.overtime200_40h_hr) as ot200_40h_hr
+                            ,to_char(a.overtime200_40h_hc_hr) as ot200_40h_special_hr
                             ,to_char(a.overtime300_taxable) as ot300_taxable
                             ,to_char(a.overtime300_non_taxable) as ot300_non_taxable
                             ,to_char(a.total_overtime300) as total_ot300
@@ -936,6 +1006,9 @@
                             ,to_char(a.overtime300_300h_taxable) as ot300_300h_taxable
                             ,to_char(a.overtime300_300h_hr) as ot300_300h_hr
                             ,to_char(a.overtime300_300h_hc_hr) as ot300_300h_special_hr
+                            ,to_char(a.overtime300_40h_taxable) as ot300_40h_taxable
+                            ,to_char(a.overtime300_40h_hr) as ot300_40h_hr
+                            ,to_char(a.overtime300_40h_hc_hr) as ot300_40h_special_hr
                             ,to_char(a.night200_taxable) as nt200_taxable
                             ,to_char(a.night200_non_taxable) as nt200_non_taxable
                             ,to_char(a.total_night200) as total_nt200
@@ -944,6 +1017,9 @@
                             ,to_char(a.night200_300h_taxable) as nt200_300h_taxable
                             ,to_char(a.night200_300h_hr) as nt200_300h_hr
                             ,to_char(a.night200_300h_hc_hr) as nt200_300h_special_hr
+                            ,to_char(a.night200_40h_taxable) as nt200_40h_taxable
+                            ,to_char(a.night200_40h_hr) as nt200_40h_hr
+                            ,to_char(a.night200_40h_hc_hr) as nt200_40h_special_hr
                             ,to_char(a.night210_taxable) as nt210_taxable
                             ,to_char(a.night210_non_taxable) as nt210_non_taxable
                             ,to_char(a.total_night210) as total_nt210
@@ -952,6 +1028,9 @@
                             ,to_char(a.night210_300h_taxable) as nt210_300h_taxable
                             ,to_char(a.night210_300h_hr) as nt210_300h_hr
                             ,to_char(a.night210_300h_hc_hr) as nt210_300h_special_hr
+                            ,to_char(a.night210_40h_taxable) as nt210_40h_taxable
+                            ,to_char(a.night210_40h_hr) as nt210_40h_hr
+                            ,to_char(a.night210_40h_hc_hr) as nt210_40h_special_hr
                             ,to_char(a.night270_taxable) as nt270_taxable
                             ,to_char(a.night270_non_taxable) as nt270_non_taxable
                             ,to_char(a.total_night270) as total_nt270
@@ -960,6 +1039,9 @@
                             ,to_char(a.night270_300h_taxable) as nt270_300h_taxable
                             ,to_char(a.night270_300h_hr) as nt270_300h_hr
                             ,to_char(a.night270_300h_hc_hr) as nt270_300h_special_hr
+                            ,to_char(a.night270_40h_taxable) as nt270_40h_taxable
+                            ,to_char(a.night270_40h_hr) as nt270_40h_hr
+                            ,to_char(a.night270_40h_hc_hr) as nt270_40h_special_hr
                             ,to_char(a.night390_taxable) as nt390_taxable
                             ,to_char(a.night390_non_taxable) as nt390_non_taxable
                             ,to_char(a.total_night390) as total_nt390
@@ -968,10 +1050,13 @@
                             ,to_char(a.night390_300h_taxable) as nt390_300h_taxable
                             ,to_char(a.night390_300h_hr) as nt390_300h_hr
                             ,to_char(a.night390_300h_hc_hr) as nt390_300h_special_hr
+                            ,to_char(a.night390_40h_taxable) as nt390_40h_taxable
+                            ,to_char(a.night390_40h_hr) as nt390_40h_hr
+                            ,to_char(a.night390_40h_hc_hr) as nt390_40h_special_hr
                             ,to_char(a.night30_non_taxable) as nt30_non_taxable
                             ,to_char(a.night30_hr) as nt30_hr
                             ,to_char(a.night30_hc_hr) as nt30_special_ot_hr
-                            ,to_char(a.total_ot_sal) as total_ot_sal
+                            ,to_char(a.total_ot_sal + a.extra_night_incentive) as total_ot_sal
                             ,to_char(a.tardy_amount) as lateness_deduction
                             ,to_char(a.tardy_hr) as lateness_hr
                             ,to_char(a.goout_amount) as goout_deduction
@@ -1018,10 +1103,21 @@
                             ,to_char(a.ps) as ps
                             ,to_char(a.salary_13th) as salary_13
                             ,to_char(a.menstruation_allowance) as menstruation_allowance
+                            ,to_char(a.child_incentive) as child_incentive --ThuyHM_20250428
+                            ,to_char(a.retention_incentive) as retention_incentive
+                            ,to_char(a.lucky_money) as lucky_money
+                            ,to_char(a.interviewer_pool_bonus) as interviewer_pool_bonus
+                            ,to_char(a.internal_intro_incentive) as internal_intro_incentive
+                            ,to_char(a.signing_bonus) as signing_bonus
+                            ,to_char(a.serverance_allowance) as serverance_allowance
+                            ,to_char(a.onboard_incentive) as onboard_incentive  --ThuyHM 20260201
+                            ,to_char(a.extra_night_hr) as extra_night_hr  
+                            ,to_char(a.extra_night_incentive) as extra_night_incentive  
                             ,to_char(a.actual_salary_for_excel) as actual_salary                            
                             ,to_char(a.aggregate_taxation_amount) as total_taxable_earning
                             ,to_char(a.family_deduction) as famliy_deduction
-                            ,to_char(a.total_income_to_calcualate_tax) as total_income_to_calculate_tax
+                            ,to_char(a.night_work_non_taxable) as night_work_non_taxable
+                            ,to_char(GREATEST(a.total_income_to_calcualate_tax, 0)) as total_income_to_calculate_tax
                             ,to_char(NVL(a.calc_exception_flag,'Y'))  as calc_exception_flag
                             ,to_char(a.tax_free_sum_amount) as total_non_taxable_earning
                             ,to_char(a.salary_total_amount) as gross_salary

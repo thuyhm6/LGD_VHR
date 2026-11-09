@@ -6,6 +6,8 @@ import javax.annotation.Resource;
 
 import org.springframework.context.support.MessageSourceAccessor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.lgd.lgcom.common.dao.CommonDao;
 import com.lgd.lgcom.common.util.LGCOMConstants;
@@ -20,15 +22,16 @@ import com.lgd.lgvhr.lgvpay.lgvpay00031.service.LGVPAY00031Service;
  *------------------------------------------------------------------------------
  * @Project : LGDisplay LGVHR Project
  * @Source  : LGVPAY00031ServiceImpl.java
- * @Desc    : Retrieve Paid Leave Employee List
+ * @Desc    : Paid Leave Registration (PL_SW / PL_PLP) - Upload / Apply to T&A
  *
  * Copyright ⓒ 2017 LG Display & LG CNS All rights reserved
  *------------------------------------------------------------------------------
- *                  변         경         사         항                       
+ *                  변         경         사         항
  *------------------------------------------------------------------------------
  *    VER  	DATE        AUTHOR      DESCRIPTION
  * -----------------------------------------------------------------------------
- * 	1. 0	2025.12.01     HMT_20251201  Retrieve Paid Leave Employee List    
+ * 	1. 0	2025.12.01     HMT_20251201  Retrieve Paid Leave Employee List
+ * 	1. 1	2026.10.26     HMT           Rebuild : fix save/upload/apply, overlap check
  *------------------------------------------------------------------------------
  */
 @Service(value="LGVPAY00031Service")
@@ -37,13 +40,13 @@ public class LGVPAY00031ServiceImpl implements LGVPAY00031Service {
 
 	@Resource(name="commonDao")
 	CommonDao commonDao;
-	
+
 	@Resource(name="messageSourceAccessor")
     protected MessageSourceAccessor messageSourceAccessor;
 
 	/**
-	 * Desc : Retrieve Paid Leave Set Emp List.
-	 * @Method Name : retrievePaidLeaveSetEmpList
+	 * Desc : Paid Leave 등록자 조회
+	 * @Method Name : retrievePaidLeaveEmpList
 	 * @param  param
 	 * @return List<?>
 	 * @throws Exception
@@ -53,51 +56,65 @@ public class LGVPAY00031ServiceImpl implements LGVPAY00031Service {
 		return this.commonDao.selectList("LGVPAY00031.retrievePaidLeaveEmpList",param);
 	}
 
-	
 	/**
-     * Desc : 급여대상자를 저장한다.
-     * @Method Name : savePaidLeaveSetEmp
+     * Desc : Paid Leave 등록자 저장 (기간 중복 체크)
+     * @Method Name : savePaidLeaveEmp
      * @param  param
      * @throws Exception
      */
     @SuppressWarnings("unchecked")
+    @Transactional(propagation=Propagation.REQUIRED)
 	public void savePaidLeaveEmp(LGCOMData param) {
-		LOGGER.debug("savePaidLeaveSetEmp param = " + param);
-		
-		LGCOMData resultData = new LGCOMData();
+		LOGGER.debug("savePaidLeaveEmp param = " + param);
+
 		LGCOMData userSession = (LGCOMData)param.get("USER_SESSION");
-		int resultCnt = 0;
-		
-		LGCOMData parameter = (LGCOMData)param.get("parameter");
-		
+		LGCOMData parameter   = (LGCOMData)param.get("parameter");
+
+		String payMonth            = parameter.getString("payMonth");
+		String paidLeaveDetailCode = parameter.getString("paidLeaveDetailCode");
+
 		List<LGCOMData> insertList = (List<LGCOMData>)param.get(LGCOMConstants.STATUS_INSERT);
 		List<LGCOMData> updateList = (List<LGCOMData>)param.get(LGCOMConstants.STATUS_UPDATE);
 		List<LGCOMData> deleteList = (List<LGCOMData>)param.get(LGCOMConstants.STATUS_DELETE);
-		
+
 		//삭제처리
 		for( LGCOMData dItem : LGCOMUtils.emptyIfNull(deleteList) ) {
-			
-			dItem.put("applicationUserId", userSession.get("applicationUserId"));
-			dItem.put("payMonth", parameter.getString("payMonth"));
 			this.commonDao.delete("LGVPAY00031.deletePaidLeaveEmp",dItem);
 		}
-		//Update
+		//수정처리
 		for( LGCOMData uItem : LGCOMUtils.emptyIfNull(updateList) ) {
 			uItem.put("applicationUserId", userSession.get("applicationUserId"));
-			uItem.put("payMonth", parameter.getString("payMonth"));
+			uItem.put("paidLeaveDetailCode", paidLeaveDetailCode);
+			checkOverlap(uItem);
 			this.commonDao.update("LGVPAY00031.updatePaidLeaveEmp",uItem);
 		}
 		//등록처리
 		for( LGCOMData iItem : LGCOMUtils.emptyIfNull(insertList) ) {
-			//기등록된 사용자 체크
-			iItem.put("payMonth", parameter.getString("payMonth"));
 			iItem.put("applicationUserId", userSession.get("applicationUserId"));
-			this.commonDao.update("LGVPAY00031.insertPaidLeaveEmp",iItem);
+			iItem.put("payMonth", payMonth);
+			iItem.put("paidLeaveDetailCode", paidLeaveDetailCode);
+			iItem.put("paidLeaveId", "");
+			checkOverlap(iItem);
+			this.commonDao.insert("LGVPAY00031.insertPaidLeaveEmp",iItem);
 		}
 	}
-    
+
     /**
-     * Desc : 급여대상자 리스트 엑셀 다운로드
+     * Desc : 같은 사번 + PL 코드의 기간 중복 체크
+     * @Method Name : checkOverlap
+     * @param  item
+     */
+    private void checkOverlap(LGCOMData item) {
+    	LGCOMData result = (LGCOMData)this.commonDao.select("LGVPAY00031.retrieveOverlapCount", item);
+    	if(result != null && Integer.parseInt(String.valueOf(result.get("overlapCnt"))) > 0) {
+    		throw new LGCOMException("[" + item.getString("employeeNo") + "] "
+    				+ item.getString("startDate") + " ~ " + item.getString("endDate")
+    				+ " : Period overlaps an existing registration.");
+    	}
+    }
+
+    /**
+     * Desc : Paid Leave 등록자 엑셀 다운로드
      * @Method Name : createExcelExportData
      * @param  param
      * @throws Exception
@@ -107,110 +124,97 @@ public class LGVPAY00031ServiceImpl implements LGVPAY00031Service {
         param.set("sessionId", sessionId);
         LOGGER.debug("param = " + param);
         int resultCnt = this.commonDao.insert("LGVPAY00031.createExcelDownloadData",param);
-        
+
         List<LGCOMData> list = LGCOMData.createList();
-        
+
         try {
         	LGCOMData result = new LGCOMData();
             result.set("resultCnt", resultCnt);
             result.set("sessionId", sessionId);
-            
+
             list.add(result);
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);
         }
-        
+
         return list;
     }
-    
+
     /**
-     * Desc : 엑셀업로드
+     * Desc : 엑셀업로드 (lgvpay_paid_leave_pkg.upload_paid_leave_emp)
      * @Method Name : createPaidLeaveEmpUpload
      * @param  param
      * @throws Exception
      */
     public void createPaidLeaveEmpUpload(LGCOMData param) {
         LOGGER.debug("param = " + param);
-        
+
         LGCOMData inputData = new LGCOMData();
         LGCOMData userSession = (LGCOMData)param.get("USER_SESSION");
-        
+
         inputData.set("sessionId", param.getString("sessionId"));
         inputData.set("payMonth", param.getString("payMonth"));
         inputData.set("paidLeaveDetailCode", param.getString("paidLeaveDetailCode"));
         inputData.set("applicationUserId", userSession.get("applicationUserId"));
-        
+
 		this.commonDao.select("LGVPAY00031.createPaidLeaveEmpUpload",inputData);
-		
+
 		if(inputData.getString("errorCode") != null) {
 			throw new LGCOMException( inputData.getString("errorMsg") );
 		}
 	}
-    
 
     /**
-     * Desc : Calculate Attendance Paid Leave.
+     * Desc : 등록 기간을 근태 계획/실적에 PL + 상세코드로 반영
      * @Method Name : saveCalculateAttendancePL
      * @param  param
      * @throws Exception
      */
-    public void saveCalculateAttendancePL(LGCOMData param) {
+    @Transactional(propagation=Propagation.REQUIRED)
+    public LGCOMData saveCalculateAttendancePL(LGCOMData param) {
         LOGGER.debug("param = " + param);
-        
+
         LGCOMData inputData = new LGCOMData();
         LGCOMData userSession = (LGCOMData)param.get("USER_SESSION");
-        
-        inputData.set("sessionId", param.getString("sessionId"));
+
         inputData.set("applicationUserId", userSession.get("applicationUserId"));
         inputData.set("payMonth", param.getString("payMonth"));
         inputData.set("paidLeaveDetailCode", param.getString("paidLeaveDetailCode"));
-        inputData.set("calculationSetId", param.getString("calculationSetId"));
-        
-        this.commonDao.update("LGVPAY00031.saveCalculateAttendancePLPlan", inputData);
-        this.commonDao.update("LGVPAY00031.saveCalculateAttendancePLActual", inputData);
-        
-        this.commonDao.update("LGVPAY00031.saveCalculatePLDetail", inputData);
-		
-		if(inputData.getString("errorCode") != null) {
-			throw new LGCOMException( inputData.getString("errorMsg") );
-		}
+
+        int planCnt   = this.commonDao.update("LGVPAY00031.saveCalculateAttendancePLPlan", inputData);
+        int actualCnt = this.commonDao.update("LGVPAY00031.saveCalculateAttendancePLActual", inputData);
+
+        LGCOMData result = new LGCOMData();
+        result.set("planCnt", planCnt);
+        result.set("actualCnt", actualCnt);
+        return result;
 	}
-    
+
     /**
-     * Desc : Delete All PaidLeave In Month.
+     * Desc : 월 + PL 코드의 등록자 전체 삭제
      * @Method Name : deleteAllPaidLeaveInMonth
      * @param  param
      * @throws Exception
      */
     public void deleteAllPaidLeaveInMonth(LGCOMData param) {
         LOGGER.debug("param = " + param);
-        
+
         LGCOMData inputData = new LGCOMData();
-        LGCOMData userSession = (LGCOMData)param.get("USER_SESSION");
-        
-        inputData.set("sessionId", param.getString("sessionId"));
-        inputData.set("applicationUserId", userSession.get("applicationUserId"));
         inputData.set("payMonth", param.getString("payMonth"));
-        
-		this.commonDao.update("LGVPAY00031.deleteAllPaidLeaveInMonth",inputData);
-		
-		if(inputData.getString("errorCode") != null) {
-			throw new LGCOMException( inputData.getString("errorMsg") );
-		}
+        inputData.set("paidLeaveDetailCode", param.getString("paidLeaveDetailCode"));
+
+		this.commonDao.delete("LGVPAY00031.deleteAllPaidLeaveInMonth",inputData);
 	}
+
     /**
 	 * Desc : 행추가된 사용자 정보를 조회한다.
 	 * @Method Name : retrieveEmployeeInfo
 	 * @param  param
-	 * @return List<?>
+	 * @return LGCOMData
 	 * @throws Exception
 	 */
 	public LGCOMData retrieveEmployeeInfo(LGCOMData param) {
 		LOGGER.debug("param = " + param);
-		LGCOMData resultData = new LGCOMData();
-		
-		resultData = (LGCOMData) this.commonDao.select("LGVPAY00031.retrieveEmployeeInfo",param);
-		
-		return resultData;
+		return (LGCOMData) this.commonDao.select("LGVPAY00031.retrieveEmployeeInfo",param);
 	}
 }

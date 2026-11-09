@@ -143,6 +143,7 @@ File `PROGRAM INFO.xlsx` (gốc repo) là export bảng menu (`LGCOM_MENU_M`): `
 | M_LGVATT_1072 | LGVATT30092 | T&A Result Report › Weekly Dept T&A Summary |
 | M_LGVATT_1073 | LGVATT30093 | T&A Result Report › Monthly Dept T&A Summary |
 | M_LGVATT_1078 | LGVATT30094 | T&A Result Report › shift in/out data by employee |
+| M_LGVATT_1089 | LGVATT30095 | T&A Result Report › Employee T&A Check |
 | M_LGVATT_1009 | LGVATT50020 | T&A Setup › Holiday Inquiry |
 | M_LGVATT_1060 | LGVATT50040 | T&A Setup › Setup OT level |
 | M_LGVATT_1081 | LGVATT50060 | T&A Setup › Employee Unpaid Leave Warning |
@@ -179,9 +180,9 @@ File `PROGRAM INFO.xlsx` (gốc repo) là export bảng menu (`LGCOM_MENU_M`): `
 | M_LGVPAY_1055 | LGVPAY00029 | Pre-Work › Calculate Severance Allowance |
 | M_LGVPAY_1051 | LGVPAY00025 | Pre-Work › Payroll Employee Email |
 | M_LGVPAY_1054 | LGVPAY00030 | Pre-Work › Other Income Upload |
-| M_LGVPAY_1057 | LGVPAY00031 | Pre-Work › Paid Leave Upload |
-| M_LGVPAY_1058 | LGVPAY00032 | Pre-Work › Paid Leave Hours & Adj for PL Hours |
-| M_LGVPAY_1059 | LGVPAY00033 | Pre-Work › Perfect Actual |
+| M_LGVPAY_1057 | LGVPAY00031 | Pre-Work › Paid Leave Registration (PL_SW/PL_PLP: đăng ký, upload, Apply to T&A) |
+| M_LGVPAY_1058 | LGVPAY00032 | Pre-Work › Paid Leave Payment Calculation |
+| M_LGVPAY_1059 | LGVPAY00033 | Pre-Work › Paid Leave Payment Rate Setup |
 | M_LGVPAY_1013 | LGVPAY00007 | Payroll Run › Payroll Activity Management |
 | M_LGVPAY_1014 | LGVPAY00005 | Payroll Run › Calculation Set Employee |
 | M_LGVPAY_1060 | LGVPAY00035 | Payroll Run › Payroll OS Running |
@@ -271,6 +272,7 @@ Không dùng làm mẫu: bảng backup/tạm (`*_BK_0618`, `*_ORG_0612`, `*_BAK`
 | `lgvpay_common_pkg` | Tiện ích lương | `get_planned_item_value`, `get_calc_var_value` |
 | `lgvpay_aggr_pkg`, `lgvpay_calculation_set_pkg` | Aggregate, đối tượng hưởng lương | `calculation_aggr`, `creation_target_employee` |
 | `lgvpay_upload_pkg` | Upload Excel lương | `upload_payroll_employee*`, `entry_payroll_item_by_item` |
+| `lgvpay_paid_leave_pkg` | Nghỉ hưởng lương PL_SW/PL_PLP (LGVPAY00031~33; DDL `lgvpay_paid_leave_ddl.sql`) | `upload_paid_leave_emp`, `calculate_paid_leave`, `calculation_pl_item` (formula item lương), `get_pl_days/hours` |
 | `lgvpay_payroll_invoice_pkg`, `LGVPAY_LOG_PKG` | Gửi kết quả lương, log | `send_pay_result`, `set_log_msg_payroll_result` |
 | `lgvinf_if_batch_pkg`, `lgvinf_if_pay_batch_pkg` | Batch I/F `lgvinf` | `main_code/org/emp/per/asg/family/qualification/contract/grade_point`, `user_role_proc`, `main_assess_add` |
 | `lgcom_bizweb_approval_pkg` | Phê duyệt | `request_create_proc`, `forward_request_proc`, `get_portal_mandator_info`, `approval_line_create_proc` |
