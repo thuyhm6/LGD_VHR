@@ -70,6 +70,13 @@
                END AS input_enable_flag /* 입력가능 */
              , ac.update_enable_flag    /* 수정가능 근태코드여부 */
              , NVL((SELECT lgvatt_common_pkg.get_holiday_flag(ap.subsidiary_code, ap.shift_type_code, ap.time_and_attendance_date) FROM DUAL), 'N') AS holiday_flag /* 휴일여부 */
+             /* 임신 직원(LGVATT00031) OT 불가 기간 여부 */
+             ,(CASE WHEN EXISTS (SELECT 1 FROM tb_att_pregnant_emp_m pg
+                                  WHERE pg.subsidiary_code = ap.subsidiary_code
+                                    AND pg.employee_no     = ap.employee_no
+                                    AND pg.ot_allow_flag   = 'N'
+                                    AND ap.time_and_attendance_date BETWEEN DECODE(pg.emp_category_code, 'PREGNANT', pg.week25_date, pg.effective_start_date) AND NVL(pg.effective_end_date, TO_DATE('31/12/9999', 'DD/MM/YYYY')) /* Bau : tu tuan 25, Nuoi con nho : tu ngay bat dau. Ngay ket thuc trong = khong gioi han */)
+                    THEN 'Y' ELSE 'N' END) AS pregnant_ot_block_flag
 
         FROM   tb_att_plan_n            ap /* 계획 근태 */
              , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{attendanceYyyymmdd},'DDMMYYYY'), 'PLAN') AS lgvatt_input_date_tbl)) dt /* 입력일에 따른 입력가능 일자 조회 */
@@ -247,6 +254,13 @@
                FROM   dual) AS out_time_red_flag /* 퇴근시간 적색표시여부 */
              
              ,ac.attendance_days AS attend_days
+             /* 임신 직원(LGVATT00031) OT 불가 기간 여부 */
+             ,(CASE WHEN EXISTS (SELECT 1 FROM tb_att_pregnant_emp_m pg
+                                  WHERE pg.subsidiary_code = ar.subsidiary_code
+                                    AND pg.employee_no     = ar.employee_no
+                                    AND pg.ot_allow_flag   = 'N'
+                                    AND ar.time_and_attendance_date BETWEEN DECODE(pg.emp_category_code, 'PREGNANT', pg.week25_date, pg.effective_start_date) AND NVL(pg.effective_end_date, TO_DATE('31/12/9999', 'DD/MM/YYYY')) /* Bau : tu tuan 25, Nuoi con nho : tu ngay bat dau. Ngay ket thuc trong = khong gioi han */)
+                    THEN 'Y' ELSE 'N' END) AS pregnant_ot_block_flag
 
         FROM   tb_att_result_n          ar /* 실적근태 */
              , TABLE(CAST(lgvatt_common_pkg.get_input_date(#{LGVHR_PROJECT_SESSION.subsidiaryCode}, TO_DATE(#{attendanceYyyymmdd}, 'DDMMYYYY'), 'RESULT') AS lgvatt_input_date_tbl)) dt /* 입력일에 따른 입력가능 일자 조회 */

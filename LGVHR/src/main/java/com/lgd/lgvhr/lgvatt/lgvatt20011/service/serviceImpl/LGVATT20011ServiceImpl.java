@@ -218,6 +218,10 @@ public class LGVATT20011ServiceImpl implements LGVATT20011Service {
 		            
 		        	//기요청건인지 체크
 		        	if ( !retrieveValidateRequestFlag(item, "PLAN") ) {
+		        		//임신 직원(LGVATT00031) OT 불가 기간 체크
+		        		lgvattcomm.validatePregnantOt(projectSession.getString("subsidiaryCode"), masterData.getString("employeeNo"),
+		        				item.getString("attendanceYyyymmdd"), item.get("overtimeSumHours"));
+
 			        	//계획근태 저장
 			            this.commonDao.update("LGVATT20011.updateAttendancePlan",item);
 			
@@ -255,6 +259,14 @@ public class LGVATT20011ServiceImpl implements LGVATT20011Service {
 		            
 		        	//기요청건인지 체크
 		        	if ( !retrieveValidateRequestFlag(item, "RESULT") ) {
+		        		//임신 직원(LGVATT00031) OT 불가 기간 체크
+		        		lgvattcomm.validatePregnantOt(projectSession.getString("subsidiaryCode"), masterData.getString("employeeNo"),
+		        				item.getString("attendanceYyyymmdd"),
+		        				item.get("overtimeSumHours"), item.get("actualOtHours"), item.get("actualOtMinutes"),
+		        				item.get("weekdayOvertimeHours"), item.get("holidayOvertimeHours"), item.get("publicHolidayOvertimeHours"),
+		        				item.get("weekdayNightOvertimeHours"), item.get("weekdayOtAfNightWorkHours"),
+		        				item.get("holidayNightOvertimeHours"), item.get("publicHolidayNightOtHours"));
+
 			        	/* 입력, 수정 구분 */
 			        	LGCOMData existsData = this.commonDao.select("LGVATT20011.retrieveResultExistsFlag", item);
 			            if ( "N".equals(existsData.getString("existsFlag")) ) {//신규

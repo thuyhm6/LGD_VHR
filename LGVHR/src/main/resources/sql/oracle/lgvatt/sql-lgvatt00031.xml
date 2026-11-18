@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    LGVATT00031 : Pregnant EMP Management
+    - TB_ATT_PREGNANT_EMP_M (DDL : LGD_VHR Package/lgvatt_pregnant_emp_ddl.sql)
+-->
+<mapper namespace="LGVATT00031">
+
+	<!-- 임신 직원 목록 조회 -->
+	<select id="retrievePregnantEmp" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		/*LGVATT00031.retrievePregnantEmp*/
+		SELECT pg.employee_no                                     AS employee_no
+		      ,em.full_name_local                                 AS employee_name
+		      ,em.org_name_local                                  AS emp_org_name
+		      ,to_char(pg.effective_start_date, 'DD/MM/YYYY')     AS effective_start_date
+		      ,to_char(pg.effective_end_date, 'DD/MM/YYYY')       AS effective_end_date
+		      ,pg.ot_allow_flag                                   AS ot_allow_flag
+		      ,pg.emp_category_code                               AS emp_category_code
+		      ,to_char(pg.week25_date, 'DD/MM/YYYY')              AS week25_date
+		      ,pg.remark                                          AS remark
+		      ,to_char(pg.creation_date, 'DD/MM/YYYY')            AS creation_date
+		FROM   tb_att_pregnant_emp_m pg
+		      ,emp_master            em
+		WHERE  em.employee_number = pg.employee_no
+		AND    pg.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+	]]>
+		<include refid="searchCondition"/>
+		ORDER BY pg.employee_no, pg.effective_start_date
+	</select>
+
+	<!-- 조회 조건 (조회/엑셀 다운로드 공통) -->
+	<sql id="searchCondition">
+		<if test="employeeNo != null and employeeNo != ''">
+			AND em.employee_number = #{employeeNo}
+		</if>
+		<if test="employeeName != null and employeeName != ''">
+			AND em.full_name_local LIKE '%' || #{employeeName} || '%'
+		</if>
+		<if test="orgName != null and orgName != ''">
+			AND em.organization_id = #{orgName}
+		</if>
+		<if test="otAllowFlag != null and otAllowFlag != ''">
+			AND pg.ot_allow_flag = #{otAllowFlag}
+		</if>
+		<if test="empCategoryCode != null and empCategoryCode != ''">
+			AND pg.emp_category_code = #{empCategoryCode}
+		</if>
+		<!-- 기간이 조회기간과 겹치는 건 -->
+		<if test="fromDate != null and fromDate != ''">
+			AND NVL(pg.effective_end_date, to_date('31/12/9999', 'DD/MM/YYYY')) &gt;= to_date(#{fromDate}, 'DD/MM/YYYY')
+		</if>
+		<if test="toDate != null and toDate != ''">
+			AND pg.effective_start_date &lt;= to_date(#{toDate}, 'DD/MM/YYYY')
+		</if>
+	</sql>
+
+	<!-- 엑셀 다운로드 -->
+	<insert id="excelDownData" parameterType="java.util.HashMap">
+		/*LGVATT00031.excelDownData*/
+		INSERT INTO xxlge_export_info (SESSION_ID, CREATED_BY, CREATION_DATE, SEQ_NO, CHARACTER_SET_NAME
+		      ,ATTRIBUTE1, ATTRIBUTE2, ATTRIBUTE3, ATTRIBUTE4, ATTRIBUTE5, ATTRIBUTE6, ATTRIBUTE7, ATTRIBUTE8, ATTRIBUTE9)
+		SELECT AI.* FROM (
+		SELECT #{sessionId}
+		      ,#{USER_SESSION.applicationUserId}
+		      ,SYSDATE
+		      ,1
+		      ,'KO16KSC5601'
+		      ,'Employee No'          AS employee_no
+		      ,'Employee Name'        AS employee_name
+		      ,'Organization'         AS emp_org_name
+		      ,'Start Date'           AS effective_start_date
+		      ,'End Date'             AS effective_end_date
+		      ,'OT Allowed (Y/N)'     AS ot_allow_flag
+		      ,'Category'             AS emp_category_code
+		      ,'Week 25 Date'         AS week25_date
+		      ,'Remark'               AS remark
+		FROM   DUAL
+		UNION ALL
+		SELECT #{sessionId}
+		      ,#{USER_SESSION.applicationUserId}
+		      ,SYSDATE
+		      ,2
+		      ,'KO16KSC5601'
+		      ,pg.employee_no
+		      ,em.full_name_local
+		      ,em.org_name_local
+		      ,to_char(pg.effective_start_date, 'DD/MM/YYYY')
+		      ,to_char(pg.effective_end_date, 'DD/MM/YYYY')
+		      ,pg.ot_allow_flag
+		      ,DECODE(pg.emp_category_code, 'PREGNANT', 'Pregnant', 'CHILD_CARE', 'Raising Young Child', pg.emp_category_code)
+		      ,to_char(pg.week25_date, 'DD/MM/YYYY')
+		      ,pg.remark
+		FROM   tb_att_pregnant_emp_m pg
+		      ,emp_master            em
+		WHERE  em.employee_number = pg.employee_no
+		AND    pg.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		<include refid="searchCondition"/>
+		) AI
+	</insert>
+
+	<!-- 사번 존재여부 체크 -->
+	<select id="retrieveEmployeeExists" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*LGVATT00031.retrieveEmployeeExists*/
+		       COUNT(*) AS cnt
+		FROM   emp_master em
+		WHERE  em.employee_number = #{employeeNo}
+	</select>
+
+	<!-- 저장 (신규/수정) -->
+	<update id="mergePregnantEmp" parameterType="LGCOMData">
+		/*LGVATT00031.mergePregnantEmp*/
+		MERGE INTO tb_att_pregnant_emp_m a
+		USING dual b
+		ON (    a.subsidiary_code      = #{subsidiaryCode}
+		    AND a.employee_no          = #{employeeNo}
+		    AND a.effective_start_date = to_date(#{effectiveStartDate}, 'DD/MM/YYYY'))
+		WHEN MATCHED THEN
+		UPDATE
+		SET    effective_end_date  = to_date(#{effectiveEndDate, jdbcType=VARCHAR}, 'DD/MM/YYYY')
+		      ,ot_allow_flag       = NVL(#{otAllowFlag, jdbcType=VARCHAR}, 'N')
+		      ,emp_category_code   = NVL(#{empCategoryCode, jdbcType=VARCHAR}, 'PREGNANT')
+		      ,week25_date         = to_date(#{week25Date, jdbcType=VARCHAR}, 'DD/MM/YYYY')
+		      ,remark              = #{remark, jdbcType=VARCHAR}
+		      ,last_update_user_id = #{applicationUserId}
+		      ,last_update_date    = SYSDATE
+		WHEN NOT MATCHED THEN
+		INSERT (subsidiary_code
+		       ,employee_no
+		       ,effective_start_date
+		       ,effective_end_date
+		       ,ot_allow_flag
+		       ,emp_category_code
+		       ,week25_date
+		       ,remark
+		       ,creation_user_id
+		       ,creation_date
+		       ,last_update_user_id
+		       ,last_update_date)
+		VALUES (#{subsidiaryCode}
+		       ,#{employeeNo}
+		       ,to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+		       ,to_date(#{effectiveEndDate, jdbcType=VARCHAR}, 'DD/MM/YYYY')
+		       ,NVL(#{otAllowFlag, jdbcType=VARCHAR}, 'N')
+		       ,NVL(#{empCategoryCode, jdbcType=VARCHAR}, 'PREGNANT')
+		       ,to_date(#{week25Date, jdbcType=VARCHAR}, 'DD/MM/YYYY')
+		       ,#{remark, jdbcType=VARCHAR}
+		       ,#{applicationUserId}
+		       ,SYSDATE
+		       ,#{applicationUserId}
+		       ,SYSDATE)
+	</update>
+
+	<!-- 삭제 -->
+	<delete id="deletePregnantEmp" parameterType="LGCOMData">
+		DELETE /*LGVATT00031.deletePregnantEmp*/
+		FROM   tb_att_pregnant_emp_m
+		WHERE  subsidiary_code      = #{subsidiaryCode}
+		AND    employee_no          = #{employeeNo}
+		AND    effective_start_date = to_date(#{effectiveStartDate}, 'DD/MM/YYYY')
+	</delete>
+
+	<!-- 동일 사번의 기간 중복 조회 (저장 후 체크) -->
+	<select id="retrieveOverlapPeriod" parameterType="LGCOMData" resultType="LGCOMData">
+	<![CDATA[
+		SELECT /*LGVATT00031.retrieveOverlapPeriod*/
+		       a.employee_no                                  AS employee_no
+		      ,to_char(a.effective_start_date, 'DD/MM/YYYY')  AS effective_start_date
+		      ,to_char(a.effective_end_date, 'DD/MM/YYYY')    AS effective_end_date
+		FROM   tb_att_pregnant_emp_m a
+		      ,tb_att_pregnant_emp_m b
+		WHERE  a.subsidiary_code       = #{subsidiaryCode}
+		AND    a.employee_no           = #{employeeNo}
+		AND    b.subsidiary_code       = a.subsidiary_code
+		AND    b.employee_no           = a.employee_no
+		AND    b.effective_start_date <> a.effective_start_date
+		AND    a.effective_start_date <= NVL(b.effective_end_date, to_date('31/12/9999', 'DD/MM/YYYY'))  /* 종료일 없음 = 무기한 */
+		AND    b.effective_start_date <= NVL(a.effective_end_date, to_date('31/12/9999', 'DD/MM/YYYY'))
+		AND    ROWNUM = 1
+	]]>
+	</select>
+
+	<!-- 엑셀 업로드 공통 : lgcom_import_n -> 정규화 (엑셀 다운로드 파일과 동일한 컬럼 순서)
+	     엑셀 컬럼 : A.Employee No / B.Employee Name(무시) / C.Organization(무시) / D.Start Date(DD/MM/YYYY)
+	                 / E.End Date(DD/MM/YYYY, 선택 - 공백=무기한) / F.OT Allowed(Y/N, 공백=N)
+	                 / G.Category(PREGNANT/CHILD_CARE 또는 Pregnant/Raising Young Child, 공백=PREGNANT)
+	                 / H.Week 25 Date(DD/MM/YYYY, PREGNANT 인 경우 필수 - 시작일~종료일 사이) / I.Remark
+	     1행은 헤더 -->
+	<sql id="uploadSource">
+		SELECT li.seq_no
+		      ,trim(li.attribute1)                         AS employee_no
+		      ,trim(li.attribute4)                         AS start_str
+		      ,trim(li.attribute5)                         AS end_str
+		      ,NVL(upper(trim(li.attribute6)), 'N')        AS ot_allow_flag
+		      ,CASE WHEN trim(li.attribute7) IS NULL                                   THEN 'PREGNANT'
+		            WHEN upper(trim(li.attribute7)) IN ('PREGNANT')                    THEN 'PREGNANT'
+		            WHEN upper(trim(li.attribute7)) IN ('CHILD_CARE', 'RAISING YOUNG CHILD') THEN 'CHILD_CARE'
+		            ELSE upper(trim(li.attribute7))
+		       END                                         AS emp_category_code
+		      ,trim(li.attribute8)                         AS week25_str
+		      ,trim(li.attribute9)                         AS remark
+		FROM   lgcom_import_n li
+		WHERE  li.session_id = #{sessionId}
+		AND    li.seq_no &gt; 1
+		AND    trim(li.attribute1) IS NOT NULL
+	</sql>
+
+	<!-- 엑셀 업로드 데이터 검증 -->
+	<select id="retrieveUploadErrorList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*LGVATT00031.retrieveUploadErrorList*/
+		       x.seq_no
+		      ,x.employee_no
+		      ,x.error_msg
+		FROM  (SELECT u.seq_no
+		             ,u.employee_no
+		             ,CASE WHEN NOT EXISTS (SELECT 1 FROM emp_master em WHERE em.employee_number = u.employee_no)
+		                   THEN 'Employee No does not exist'
+		                   WHEN u.start_str IS NULL OR NOT REGEXP_LIKE(u.start_str, '^[0-9]{2}/[0-9]{2}/[0-9]{4}$')
+		                   THEN 'Start Date must be DD/MM/YYYY'
+		                   WHEN u.end_str IS NOT NULL AND NOT REGEXP_LIKE(u.end_str, '^[0-9]{2}/[0-9]{2}/[0-9]{4}$')
+		                   THEN 'End Date must be DD/MM/YYYY'
+		                   WHEN u.end_str IS NOT NULL AND to_date(u.end_str, 'DD/MM/YYYY') &lt; to_date(u.start_str, 'DD/MM/YYYY')
+		                   THEN 'End Date is earlier than Start Date'
+		                   WHEN u.ot_allow_flag NOT IN ('Y', 'N')
+		                   THEN 'OT Allowed must be Y or N'
+		                   WHEN u.emp_category_code NOT IN ('PREGNANT', 'CHILD_CARE')
+		                   THEN 'Category must be Pregnant(PREGNANT) or Raising Young Child(CHILD_CARE)'
+		                   WHEN u.emp_category_code = 'PREGNANT' AND u.week25_str IS NULL
+		                   THEN 'Week 25 Date is required for Pregnant'
+		                   WHEN u.emp_category_code = 'PREGNANT' AND NOT REGEXP_LIKE(u.week25_str, '^[0-9]{2}/[0-9]{2}/[0-9]{4}$')
+		                   THEN 'Week 25 Date must be DD/MM/YYYY'
+		                   WHEN u.emp_category_code = 'PREGNANT'
+		                    AND to_date(u.week25_str, 'DD/MM/YYYY') NOT BETWEEN to_date(u.start_str, 'DD/MM/YYYY') AND NVL(to_date(u.end_str, 'DD/MM/YYYY'), to_date('31/12/9999', 'DD/MM/YYYY'))
+		                   THEN 'Week 25 Date must be between Start Date and End Date'
+		                   ELSE NULL
+		              END AS error_msg
+		       FROM  (<include refid="uploadSource"/>) u) x
+		WHERE  x.error_msg IS NOT NULL
+		ORDER BY x.seq_no
+	</select>
+
+	<!-- 엑셀 업로드 저장 (사번 + 시작일 기준 MERGE) -->
+	<update id="mergeUploadPregnantEmp" parameterType="LGCOMData">
+		/*LGVATT00031.mergeUploadPregnantEmp*/
+		MERGE INTO tb_att_pregnant_emp_m a
+		USING (SELECT u.employee_no
+		             ,to_date(u.start_str, 'DD/MM/YYYY')  AS effective_start_date
+		             ,to_date(u.end_str, 'DD/MM/YYYY')    AS effective_end_date
+		             ,u.ot_allow_flag
+		             ,u.emp_category_code
+		             ,CASE WHEN u.emp_category_code = 'PREGNANT'
+		                   THEN to_date(u.week25_str, 'DD/MM/YYYY')
+		              END                                 AS week25_date
+		             ,u.remark
+		       FROM  (<include refid="uploadSource"/>) u) b
+		ON (    a.subsidiary_code      = #{subsidiaryCode}
+		    AND a.employee_no          = b.employee_no
+		    AND a.effective_start_date = b.effective_start_date)
+		WHEN MATCHED THEN
+		UPDATE
+		SET    a.effective_end_date  = b.effective_end_date
+		      ,a.ot_allow_flag       = b.ot_allow_flag
+		      ,a.emp_category_code   = b.emp_category_code
+		      ,a.week25_date         = b.week25_date
+		      ,a.remark              = b.remark
+		      ,a.last_update_user_id = #{applicationUserId}
+		      ,a.last_update_date    = SYSDATE
+		WHEN NOT MATCHED THEN
+		INSERT (subsidiary_code, employee_no, effective_start_date, effective_end_date, ot_allow_flag, emp_category_code, week25_date, remark
+		       ,creation_user_id, creation_date, last_update_user_id, last_update_date)
+		VALUES (#{subsidiaryCode}, b.employee_no, b.effective_start_date, b.effective_end_date, b.ot_allow_flag, b.emp_category_code, b.week25_date, b.remark
+		       ,#{applicationUserId}, SYSDATE, #{applicationUserId}, SYSDATE)
+	</update>
+
+	<!-- 업로드 대상 사번 목록 (기간 중복 체크용) -->
+	<select id="retrieveUploadEmployeeList" parameterType="LGCOMData" resultType="LGCOMData">
+		SELECT /*LGVATT00031.retrieveUploadEmployeeList*/
+		       DISTINCT trim(li.attribute1) AS employee_no
+		FROM   lgcom_import_n li
+		WHERE  li.session_id = #{sessionId}
+		AND    li.seq_no &gt; 1
+		AND    trim(li.attribute1) IS NOT NULL
+	</select>
+
+</mapper>

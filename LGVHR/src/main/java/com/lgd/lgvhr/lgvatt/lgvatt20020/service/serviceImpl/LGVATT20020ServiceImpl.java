@@ -206,7 +206,15 @@ public class LGVATT20020ServiceImpl implements LGVATT20020Service {
 					        if ( NullUtil.notNone(errorMsg) ) {
 					        	throw new LGCOMException(errorMsg);
 					        }
-				            
+
+					        //임신 직원(LGVATT00031) OT 불가 기간 체크 (수정요청서 대상자 = 로그인 사용자)
+					        lgvattcomm.validatePregnantOt(projectSession.getString("subsidiaryCode"), projectSession.getString("employeeNo"),
+					        		item.getString("attendanceYyyymmdd"),
+					        		item.get("overtimeSumHours"), item.get("actualOtHours"), item.get("actualOtMinutes"),
+					        		item.get("weekdayOvertimeHours"), item.get("holidayOvertimeHours"), item.get("publicHolidayOvertimeHours"),
+					        		item.get("weekdayNightOvertimeHours"), item.get("weekdayOtAfNightWorkHours"),
+					        		item.get("holidayNightOvertimeHours"), item.get("publicHolidayNightOtHours"));
+
 				            //수정요청서 저장
 				            this.commonDao.insert("LGVATT20020.insertResultUpdateReqDetailList", item);
 				

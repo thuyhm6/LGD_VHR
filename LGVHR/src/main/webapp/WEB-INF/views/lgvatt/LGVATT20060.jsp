@@ -296,6 +296,15 @@ var LGVATT20060 = function(){
 								grid1.getGridBase().setCellStyle(i, "actualDinnerChk", "unableEdit", true);
 							}
 							/* HMS_20260601 2A,2B working end*/
+							/* 임신 직원(LGVATT00031) OT 불가 기간 : 수정(NEW) 행 OT 값 0 으로 초기화 후 입력 불가 */
+							if( data.result[i]["actualPregnantOtBlock"] == 'Y' ) {
+								if( data.result[i]["dataOldNewType"] != 'OLD' ) {
+									fncClearPregnantOt(i);
+								}
+								grid1.getGridBase().setCellStyle(i, "actualOT", "unableEdit", true);
+								grid1.getGridBase().setCellStyle(i, "actualOtHours", "unableEdit", true);
+								grid1.getGridBase().setCellStyle(i, "actualOtMinutes", "unableEdit", true);
+							}
 							if(data.result[i]["illegalInTimeFlag"] == 'Y') {
 								grid1.getGridBase().setCellStyle(i, "actualInTime", "illegalAtt", true);
 							}
@@ -417,7 +426,11 @@ var LGVATT20060 = function(){
 			    		grid1.getDataProvider().setValue(i,'atNightWeekdayHoliday', grid1.getGridBase().getValue(grid1.getGridBase().getCurrent().itemIndex, 'atNightWeekdayHoliday'));
 			    		grid1.getDataProvider().setValue(i,'atNightPublicHoliday', grid1.getGridBase().getValue(grid1.getGridBase().getCurrent().itemIndex, 'atNightPublicHoliday'));
 			    		grid1.getDataProvider().setValue(i,'nightNormal', grid1.getGridBase().getValue(grid1.getGridBase().getCurrent().itemIndex, 'nightNormal'));
-			    		
+			    		// 임신 직원(LGVATT00031) OT 불가 기간 : OT 복사하지 않음
+			    		if( grid1.getDataProvider().getValue(i, 'actualPregnantOtBlock') == 'Y' ) {
+			    			fncClearPregnantOt(i);
+			    		}
+
 			    		isillegalAtt(grid1.getGridBase(), grid1.getGridBase().getItemIndex(i), i);
 		    		}
 		    		
@@ -759,7 +772,19 @@ var LGVATT20060 = function(){
 	};
 	
 	/*** 내부 함수  ***/
-	
+
+	// 임신 직원(LGVATT00031) OT 불가 기간 : 해당 행의 OT 값을 0 으로 초기화
+	function fncClearPregnantOt(dataRow) {
+		var provider = grid1.getDataProvider();
+		var columns = ["actualOT", "actualOtHours", "actualOtMinutes", "weekday", "weekdayHoliday", "publicHoliday",
+		               "atNightWeekday", "atNightWeekdayAfterOT", "atNightWeekdayHoliday", "atNightPublicHoliday"];
+		for(var k=0; k<columns.length; k++) {
+			if( Number(provider.getValue(dataRow, columns[k])) > 0 ) {
+				provider.setValue(dataRow, columns[k], 0);
+			}
+		}
+	}
+
 	//어제 날짜 구하기
 	function setYesterday(date){
 		var selectDate = date.split("/");
@@ -1283,7 +1308,8 @@ var LGVATT20060 = function(){
 							{ fieldName:'actualHolidayFlag'        		, dataType:'text'  },
 							{ fieldName:'illegalInTimeFlag'        		, dataType:'text'  },
 							{ fieldName:'illegalOutTimeFlag'        	, dataType:'text'  },
-							{ fieldName:'isEditOt'        				, dataType:'text'  }
+							{ fieldName:'isEditOt'        				, dataType:'text'  },
+							{ fieldName:'actualPregnantOtBlock'        	, dataType:'text'  }  // 임신 직원(LGVATT00031) OT 불가 여부
 						]
 				);
 

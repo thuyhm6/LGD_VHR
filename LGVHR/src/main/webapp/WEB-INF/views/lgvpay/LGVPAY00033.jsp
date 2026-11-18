@@ -31,7 +31,7 @@ var LGVPAY00033 = function() {
 
     //급여항목 콤보
     var payrollItemList = [];
-	myForm.transaction_sync("lgvhr", "lgvpay/LGVPAY00033/retrievePayrollItemList", {}, function(data) {
+	transaction_sync("lgvhr", "lgvpay/LGVPAY00033/retrievePayrollItemList", {}, function(data) {
 		if ( data.result ) {
 			payrollItemList = data.result;
 		}
@@ -197,7 +197,7 @@ var LGVPAY00033 = function() {
 	//변경 행만 반환
 	function fncChangedRows(grid) {
 		var gv = grid.getGridBase();
-		var provider = gv.getDataProvider();
+		var provider = grid.getDataProvider();
 		var rows = [];
 		for(var i = 0; i < gv.getItemCount(); i++) {
 			var state = provider.getRowState(gv.getDataRow(i));
@@ -258,7 +258,7 @@ var LGVPAY00033 = function() {
 		return { name:name, fieldName:name, width:width,
 		         header:{text:text, required:!!required}, styles:{textAlignment:'center'},
 		         lookupDisplay:true, lookupSourceId:lookupId, lookupKeyFields:[name],
-		         editor:{type:'dropDown', textReadOnly:true}, editButtonVisibility:'visible' };
+		         editor:{type:'dropDown', textReadOnly:true} };
 	}
 	function numCol(name, text, width, required) {
 		return { name:name, fieldName:name, width:width,
@@ -270,7 +270,9 @@ var LGVPAY00033 = function() {
 		         header:{text:text, required:!!required}, styles:{textAlignment:'center'},
 		         editor:{type:'date', datetimeFormat:'dd/MM/yyyy', maxLength:10}, editButtonVisibility:'visible' };
 	}
-	var gridOptions = {
+	//그리드 옵션 : setOptions 가 옵션 객체를 변경하므로 그리드마다 새 객체 생성
+	function getGridOptions() {
+		return {
 		grid: {
 			hideDeletedRows: false,
 			indicator: {visible:false},
@@ -285,7 +287,8 @@ var LGVPAY00033 = function() {
 		},
 		dataProvider: { insertable: true, updatable: true, deletable: true, softDeleting: true, deleteCreated: true },
 		display: { fitStyle: 'none' }
-	};
+		};
+	}
 
 	function buildRateGrid(gridId) {
 		var grid = new RealGrid(myForm, gridId);
@@ -333,7 +336,7 @@ var LGVPAY00033 = function() {
 			dateCol('endDate'  , '<lgcom:message code="EndDate"/>'  , false),
 			{ name:'note', fieldName:'note', width:250, header:{text:'<lgcom:message code="note"/>'}, editor:{maxLength:500} }
 		]);
-		grid.setOptions($.extend(true, {}, gridOptions, {grid:{fixed:{colCount:3}}}));
+		grid.setOptions($.extend(true, getGridOptions(), {grid:{fixed:{colCount:3}}}));
 		grid.setContextMenu();
 		return grid;
 	}
@@ -363,12 +366,10 @@ var LGVPAY00033 = function() {
 			comboCol('applyValueType', '<lgcom:message code="label.pay.plApplyValueType"/>', 150, 'applyValue', true),
 			{ name:'note', fieldName:'note', width:300, header:{text:'<lgcom:message code="note"/>'}, editor:{maxLength:500} }
 		]);
-		grid.setOptions(gridOptions);
+		grid.setOptions(getGridOptions());
 		grid.setContextMenu();
 		return grid;
 	}
-
-	search();
 }
 
 LGVPAY00033.prototype = new BizForm("${param.bizFormId}");
@@ -404,10 +405,12 @@ $(document).ready( function() {
 		                	<td><select class="form-control input-sm" name="paidLeaveDetailCode"></select></td>
 		                	<th><label><lgcom:message code="label.pay.effectiveDate"/></label></th>
 		                	<td>
-		                		<div class="input-group input-group-sm date">
-		                			<input type="text" class="form-control input-sm" name="effectiveDate">
-		                			<span class="input-group-addon"><span class="fa fa-calendar"></span></span>
-		                		</div>
+		                		<span class="form-inline">
+		                			<input type="text" class="form-control input-sm size_80" name="effectiveDate" placeholder="dd/mm/yyyy" readonly />
+		                			<button type="button" class="btn btn-ico" aria-label="calendar">
+		                				<span class="ico ico-calendar" aria-hidden="true"></span>
+		                			</button>
+		                		</span>
 		                	</td>
 		                	<td></td>
 						</tr>
@@ -417,7 +420,7 @@ $(document).ready( function() {
 			</form>
 		</div>
 		<%-- 지급률 --%>
-		<div class="rateControls module-group">
+		<div class="rateControls module-group clearfix">
 			<h3 class="title pull-left"><lgcom:message code="label.pay.plRateSetup"/></h3>
 			<div class="btn-toolbar pull-right">
 				<div class="btn-group">
@@ -434,7 +437,7 @@ $(document).ready( function() {
 			<div class="grid plRateGrid"></div>
 		</div>
 		<%-- 급여항목 매핑 --%>
-		<div class="mapControls module-group">
+		<div class="mapControls module-group clearfix">
 			<h3 class="title pull-left"><lgcom:message code="label.pay.plItemMapping"/></h3>
 			<div class="btn-toolbar pull-right">
 				<div class="btn-group">

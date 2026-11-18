@@ -162,6 +162,19 @@
 		            END AS illegal_out_time_flag
 		      ,'N'                                        AS is_edit_ot
 		      ,tat.attendance_days                        AS attend_days
+		      /* 임신 직원(LGVATT00031) OT 불가 기간 여부 */
+		      ,(CASE WHEN EXISTS (SELECT 1 FROM tb_att_pregnant_emp_m pg
+		                           WHERE pg.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                             AND pg.employee_no     = tpt.employee_number
+		                             AND pg.ot_allow_flag   = 'N'
+		                             AND tpt.time_and_attendance_date BETWEEN DECODE(pg.emp_category_code, 'PREGNANT', pg.week25_date, pg.effective_start_date) AND NVL(pg.effective_end_date, TO_DATE('31/12/9999', 'DD/MM/YYYY')) /* Bau : tu tuan 25, Nuoi con nho : tu ngay bat dau. Ngay ket thuc trong = khong gioi han */)
+		             THEN 'Y' ELSE 'N' END)               AS plan_pregnant_ot_block
+		      ,(CASE WHEN EXISTS (SELECT 1 FROM tb_att_pregnant_emp_m pg
+		                           WHERE pg.subsidiary_code = #{LGVHR_PROJECT_SESSION.subsidiaryCode}
+		                             AND pg.employee_no     = tat.employee_number
+		                             AND pg.ot_allow_flag   = 'N'
+		                             AND tat.time_and_attendance_date BETWEEN DECODE(pg.emp_category_code, 'PREGNANT', pg.week25_date, pg.effective_start_date) AND NVL(pg.effective_end_date, TO_DATE('31/12/9999', 'DD/MM/YYYY')) /* Bau : tu tuan 25, Nuoi con nho : tu ngay bat dau. Ngay ket thuc trong = khong gioi han */)
+		             THEN 'Y' ELSE 'N' END)               AS actual_pregnant_ot_block
 		  FROM tb_plan_temp   tpt
 		      ,tb_actual_temp tat
 		 WHERE 1 = 1

@@ -2393,4 +2393,18 @@
         }
     </select>
 
+    <!-- 임신 직원(LGVATT00031) OT 불가 기간 조회 : 근태일자가 OT_ALLOW_FLAG = 'N' 기간에 포함되는지 -->
+    <select id="retrievePregnantOtBlock" parameterType="LGCOMData" resultType="LGCOMData">
+        SELECT /* LGVATTCOMM.retrievePregnantOtBlock */
+               pg.employee_no                                  AS employee_no
+             , TO_CHAR(pg.effective_start_date, 'DD/MM/YYYY')  AS effective_start_date
+             , TO_CHAR(pg.effective_end_date, 'DD/MM/YYYY')    AS effective_end_date
+        FROM   tb_att_pregnant_emp_m pg
+        WHERE  pg.subsidiary_code = #{subsidiaryCode}
+        AND    pg.employee_no     = #{employeeNo}
+        AND    pg.ot_allow_flag   = 'N'
+        AND    TO_DATE(#{attDate}, 'DDMMYYYY') BETWEEN DECODE(pg.emp_category_code, 'PREGNANT', pg.week25_date, pg.effective_start_date) AND NVL(pg.effective_end_date, TO_DATE('31/12/9999', 'DD/MM/YYYY')) /* Bau : tu tuan 25, Nuoi con nho : tu ngay bat dau. Ngay ket thuc trong = khong gioi han */
+        AND    ROWNUM = 1
+    </select>
+
 </mapper>

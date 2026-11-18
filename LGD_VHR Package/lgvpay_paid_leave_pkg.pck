@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE VHR_MGR.LGVPAY_PAID_LEAVE_PKG IS
+CREATE OR REPLACE PACKAGE LGVPAY_PAID_LEAVE_PKG IS
 /******************************************************************************/
 /*  Paid Leave (PL_SW : Stop Working / PL_PLP : Prenatal Leave) payment       */
 /*                                                                            */
@@ -52,7 +52,7 @@ FUNCTION get_pl_hours( p_subsidiary_code        IN VARCHAR2
 
 END LGVPAY_PAID_LEAVE_PKG;
 /
-CREATE OR REPLACE PACKAGE BODY VHR_MGR.LGVPAY_PAID_LEAVE_PKG IS
+CREATE OR REPLACE PACKAGE BODY LGVPAY_PAID_LEAVE_PKG IS
 
     g_module_code CONSTANT lgcom_error_log.module_code%TYPE := 'LGVPAY';
     g_step        lgcom_error_log.error_explanation_text%TYPE := NULL;

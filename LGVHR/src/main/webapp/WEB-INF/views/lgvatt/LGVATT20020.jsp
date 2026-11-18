@@ -1119,6 +1119,18 @@ var LGVATT20020 = function() {
 	    				//행별 수정가능 컬럼 여부 판별
 	    				fncSetEditableControl(cgrid, provider, dataRow, "N");
 	    				fncSetEditableControl(cgrid, provider, dataRow+1, "Y");
+
+	    				//임신 직원(LGVATT00031) OT 불가 기간인 경우 OT 입력 불가
+	    				if ( resultData.pregnantOtBlockFlag == "Y" ) {
+	    					var otColumns = ["actualOtHours", "actualOtMinutes", "overtimeSumHours", "weekdayOvertimeHours", "holidayOvertimeHours", "publicHolidayOvertimeHours"
+	    					               , "weekdayNightOvertimeHours", "weekdayOtAfNightWorkHours", "holidayNightOvertimeHours", "publicHolidayNightOtHours"];
+	    					for (var k=0; k<otColumns.length; k++) {
+	    						provider.setValue(dataRow+1, otColumns[k], 0);
+	    					}
+	    					cgrid.setCellStyle(dataRow+1, "actualOtHours", "readOnlyStyle", true);
+	    					cgrid.setCellStyle(dataRow+1, "actualOtMinutes", "readOnlyStyle", true);
+	    					Message.alert("Pregnant employee (OT not allowed) on " + attendanceYyyymmdd + ". Overtime hours cannot be entered.");
+	    				}
 	    			}
 	    		}
 	    	});

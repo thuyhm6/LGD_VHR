@@ -17,6 +17,7 @@ import com.lgd.lgcom.framework.log.LGCOMLogger;
 import com.lgd.lgcom.framework.log.LGCOMLoggerFactory;
 import com.lgd.lgcom.framework.model.LGCOMData;
 import com.lgd.lgvhr.lgvatt.lgvatt20060.service.LGVATT20060Service;
+import com.lgd.lgvhr.lgvatt.lgvattcommon.service.LGVATTCOMMService;
 
 @Service(value="LGVATT20060Service")
 public class LGVATT20060ServiceImpl implements LGVATT20060Service {
@@ -27,6 +28,9 @@ public class LGVATT20060ServiceImpl implements LGVATT20060Service {
 
 	@Resource(name="messageSourceAccessor")
     protected MessageSourceAccessor messageSourceAccessor;
+
+	@Resource(name="LGVATTCOMMService")
+	private LGVATTCOMMService lgvattcomm;
 	
 	/**
 	 * Desc : 
@@ -97,7 +101,11 @@ public class LGVATT20060ServiceImpl implements LGVATT20060Service {
 				item.put("subsidiaryCode",projectSession.getString("subsidiaryCode"));
 				
 				LOGGER.debug("item=>" + item);
-				
+
+				//임신 직원(LGVATT00031) OT 불가 기간 체크
+				lgvattcomm.validatePregnantOt(projectSession.getString("subsidiaryCode"), item.getString("employeeNo"),
+						item.getString("actualDate"), item.get("actualOT"), item.get("actualOtHours"), item.get("actualOtMinutes"));
+
 				LGCOMData isExistFlag = this.commonDao.select("LGVATT20060.isExistResult", item);
 				
 				if(isExistFlag.get("isExistFlag").equals("true")) {

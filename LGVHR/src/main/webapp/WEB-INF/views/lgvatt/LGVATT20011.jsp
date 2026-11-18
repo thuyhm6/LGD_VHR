@@ -1594,7 +1594,31 @@ var LGVATT20011 = function() {
 					} else {
 						resultGrid.getGridBase().setCellStyles(i, controlColumns.deductionColumn, "enableEdit");
 					}
-					
+
+				}
+
+				//임신 직원(LGVATT00031) OT 불가 기간인 경우 OT 값 0 으로 초기화 후 입력 불가
+				if ( gridEditFlag ) {
+					for(var i=0; i<planList.length; i++) {
+						if( planList[i].pregnantOtBlockFlag == "Y" ) {
+							if( Number(planList[i].overtimeSumHours) > 0 ) {
+								planGrid.getDataProvider().setValue(i, "overtimeSumHours", 0);
+							}
+							planGrid.getGridBase().setCellStyle(i, "overtimeSumHours", "readOnlyStyle", true);
+						}
+					}
+					var resultOtColumns = ["actualOtHours", "actualOtMinutes", "overtimeSumHours", "weekdayOvertimeHours", "holidayOvertimeHours", "publicHolidayOvertimeHours"
+					                     , "weekdayNightOvertimeHours", "weekdayOtAfNightWorkHours", "holidayNightOvertimeHours", "publicHolidayNightOtHours"];
+					for(var i=0; i<resultList.length; i++) {
+						if( resultList[i].pregnantOtBlockFlag == "Y" ) {
+							for(var k=0; k<resultOtColumns.length; k++) {
+								if( Number(resultList[i][resultOtColumns[k]]) > 0 ) {
+									resultGrid.getDataProvider().setValue(i, resultOtColumns[k], 0);
+								}
+							}
+							resultGrid.getGridBase().setCellStyles(i, ["actualOtHours", "actualOtMinutes"], "unableEdit");
+						}
+					}
 				}
 				//trace("gridEditFlag("+gridEditFlag+"), planEditFlag("+planEditFlag+"), resultEditFlag("+resultEditFlag+"), baseInfo.inputEnableTimeFlag("+baseInfo.inputEnableTimeFlag+")");
 				//화면 모드에 따라 처리

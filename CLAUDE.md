@@ -133,6 +133,7 @@ File `PROGRAM INFO.xlsx` (gốc repo) là export bảng menu (`LGCOM_MENU_M`): `
 | M_LGVATT_1056 | LGVATT40012 | T&A Management › [OW]Search for Daily T&A |
 | M_LGVATT_1057 | LGVATT00020 | T&A Management › T&A Management (Master) |
 | M_LGVATT_1070 | LGVATT00030 | T&A Management › Employee Shift Group Info |
+| M_LGVATT_1090 | LGVATT00031 | T&A Management › Pregnant EMP Management (`OT_ALLOW_FLAG='N'` → chặn nhập OT trong khoảng Bầu: `WEEK25_DATE`~kết thúc, Nuôi con nhỏ: bắt đầu~kết thúc, ở 20011/20020/20040/20060 qua `LGVATTCOMMService.validatePregnantOt`; DDL `lgvatt_pregnant_emp_ddl.sql`) |
 | M_LGVATT_1027 | LGVATT60010 | T&A Result Report › Attendance Weekly Report |
 | M_LGVATT_1048 | LGVATT30060 | T&A Result Report › T&A Result Monthly Report |
 | M_LGVATT_1050 | LGVATTQ0001 | T&A Result Report › Dynamic Query |
@@ -244,7 +245,7 @@ Hậu tố tên bảng: `_M` master, `_N` dữ liệu nghiệp vụ, `_C` mã, `
 
 | Nhóm | Prefix | Bảng chính |
 |---|---|---|
-| Chấm công | `TB_ATT_*` | `TB_ATT_PLAN_N` (kế hoạch), `TB_ATT_RESULT_N` / `_H` (kết quả), `TB_ATT_UPDATE_REQ_N` (yêu cầu sửa), `TB_ATT_CODE_C`, `TB_ATT_CALENDAR_N`, `TB_ATT_CLOSE_N`, `TB_ATT_BASE_BAS_N`, `TB_ATT_CONTRACT_N`, `TB_ATT_ANNUAL_LEAVE_N`, `TB_ATT_EMP_ANNUAL_M`, `TB_ATT_IDCARD_ACS_TIME_N`, `TB_ATT_EMP_IDCARD_M`, `TB_ATT_OT_LEVEL*`, `TB_ATT_OT_VALIDATION_N`, `TB_ATT_SPECIAL_OT_RESULT_N`, `TB_ATT_SWAP_HOLIDAY_REQUEST_N`, `TB_ATT_LT_TIME_ATTEND_PLAN_N`, `TB_ATT_HOLIDAY_INFO_N`, `TB_ATT_DAILY_REPORT_S` |
+| Chấm công | `TB_ATT_*` | `TB_ATT_PLAN_N` (kế hoạch), `TB_ATT_RESULT_N` / `_H` (kết quả), `TB_ATT_UPDATE_REQ_N` (yêu cầu sửa), `TB_ATT_CODE_C`, `TB_ATT_CALENDAR_N`, `TB_ATT_CLOSE_N`, `TB_ATT_BASE_BAS_N`, `TB_ATT_CONTRACT_N`, `TB_ATT_ANNUAL_LEAVE_N`, `TB_ATT_EMP_ANNUAL_M`, `TB_ATT_IDCARD_ACS_TIME_N`, `TB_ATT_EMP_IDCARD_M`, `TB_ATT_OT_LEVEL*`, `TB_ATT_OT_VALIDATION_N`, `TB_ATT_SPECIAL_OT_RESULT_N`, `TB_ATT_SWAP_HOLIDAY_REQUEST_N`, `TB_ATT_LT_TIME_ATTEND_PLAN_N`, `TB_ATT_HOLIDAY_INFO_N`, `TB_ATT_DAILY_REPORT_S`, `TB_ATT_PREGNANT_EMP_M` (LGVATT00031, chưa có trong `LGD_VHR table.sql`) |
 | Lương | `TB_PAY_*`, `TB_RETRO_*` | `TB_PAY_PAYROLL_ITEM_M`, `TB_PAY_ITEM_*` (detail, aggregate, payment plan), `TB_PAY_CALC_*` (set, formula, var, period, exec, result, error), `TB_PAY_RESULT_S`, `TB_PAY_USER_DFIN_TABLE_*` (UDT), `TB_PAY_EMP_*` (hợp đồng, gia đình, bậc, chứng chỉ, thu nhập khác), `TB_PAY_PAID_LEAVE_*`, `TB_PAY_SEVERANCE_ALLOWANCE`, `TB_PAY_SLIP_SEND_N`, `TB_PAY_KPI_*OS*` (outsourcing), `TB_RETRO_*` (truy lĩnh) |
 | Nhân sự / tổ chức (nhận I/F) | — | `EMP_MASTER`, `EMP_ASSIG`, `EMP_INFO`, `ORG_MASTER`, `SHIFT_CODE`, `CURRENCY`, `INSURANCE`, `LGCOM_ORGANIZATION_M`, `LGCOM_EHR_R_EMPLOYEE` |
 | Interface staging | `TB_INTF_*`, `TB_IFR_*`, `XVH_*_IF`, `XXHR_*` | dữ liệu thô nhận từ EAI/ERP trước khi batch `lgvinf` đổ vào bảng chính |

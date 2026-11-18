@@ -19,10 +19,12 @@ import java.util.List;
 
 import javax.annotation.Resource;
 
+import org.springframework.context.support.MessageSourceAccessor;
 import org.springframework.stereotype.Service;
 
 import com.lgd.lgcom.common.dao.CommonDao;
 import com.lgd.lgcom.common.util.LGCOMUtils;
+import com.lgd.lgcom.framework.exception.LGCOMException;
 import com.lgd.lgcom.framework.log.LGCOMLogger;
 import com.lgd.lgcom.framework.log.LGCOMLoggerFactory;
 import com.lgd.lgcom.framework.model.LGCOMData;
@@ -45,7 +47,10 @@ public class LGVATTCOMMServiceImpl implements LGVATTCOMMService {
 
 	@Resource(name="commonDao")
 	CommonDao commonDao;
-	
+
+	@Resource(name="messageSourceAccessor")
+	protected MessageSourceAccessor messageSourceAccessor;
+
 	
 
 	/**
@@ -278,5 +283,65 @@ public class LGVATTCOMMServiceImpl implements LGVATTCOMMService {
 	public LGCOMData retrievePortletATTSummary(LGCOMData param) {
 		LOGGER.debug("param = " + param);
 		return this.commonDao.select("LGVATTCOMM.retrievePortletATTSummary",param);
+	}
+
+	/**
+	 * Desc : 임신 직원(LGVATT00031) OT 입력 제한 체크.
+	 *        근태일자가 OT 불가(OT_ALLOW_FLAG = 'N') 기간(임신 : 25주차 시작일 ~ 종료일, 육아 : 시작일 ~ 종료일)에 포함되고, 입력한 OT 시간 중 0보다 큰 값이 있으면 LGCOMException 발생.
+	 * @Method Name : validatePregnantOt
+	 * @param  subsidiaryCode 법인코드
+	 * @param  employeeNo     사번
+	 * @param  attDate        근태일자 (DD/MM/YYYY 또는 DDMMYYYY)
+	 * @param  otHours        체크할 OT 시간 값들 (Number 또는 String)
+	 */
+	public void validatePregnantOt(String subsidiaryCode, String employeeNo, String attDate, Object... otHours) {
+		if ( !hasOtHours(otHours) || NullUtil.isNone(employeeNo) || NullUtil.isNone(attDate) ) {
+			return;
+		}
+
+		LGCOMData param = new LGCOMData();
+		param.set("subsidiaryCode", subsidiaryCode);
+		param.set("employeeNo", employeeNo);
+		param.set("attDate", attDate.replace("/", ""));
+		LOGGER.debug("param = " + param);
+
+		LGCOMData blockData = this.commonDao.select("LGVATTCOMM.retrievePregnantOtBlock", param);
+		if ( blockData != null && !blockData.isEmpty() ) {
+			String ddmmyyyy = attDate.replace("/", "");
+			String displayDate = (ddmmyyyy.length() == 8) ? ddmmyyyy.substring(0, 2) + "/" + ddmmyyyy.substring(2, 4) + "/" + ddmmyyyy.substring(4) : attDate;
+			throw new LGCOMException( messageSourceAccessor.getMessage("note.att.pregnantOtNotAllowed"
+					, new Object[] { employeeNo, displayDate }
+					, "Employee {0} is registered as pregnant (OT not allowed) on {1}. Overtime hours cannot be entered.") );
+		}
+	}
+
+	/* OT 시간 값 중 0보다 큰 값이 있는지 여부 */
+	private boolean hasOtHours(Object... otHours) {
+		if ( otHours == null ) {
+			return false;
+		}
+		for ( Object value : otHours ) {
+			if ( value == null ) {
+				continue;
+			}
+			if ( value instanceof Number ) {
+				if ( ((Number)value).doubleValue() > 0 ) {
+					return true;
+				}
+			} else {
+				String str = String.valueOf(value).trim();
+				if ( str.length() == 0 || "null".equalsIgnoreCase(str) ) {
+					continue;
+				}
+				try {
+					if ( Double.parseDouble(str) > 0 ) {
+						return true;
+					}
+				} catch (NumberFormatException e) {
+					LOGGER.debug("not a number : " + str);
+				}
+			}
+		}
+		return false;
 	}
 }

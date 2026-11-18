@@ -127,4 +127,16 @@ public interface LGVATTCOMMService {
 	 */
 	public List<LGCOMData> retrieveAllOrgList(LGCOMData param);
 
+	/**
+	 * Desc : 임신 직원(LGVATT00031) OT 입력 제한 체크.
+	 *        근태일자가 OT 불가(OT_ALLOW_FLAG = 'N') 기간(임신 : 25주차 시작일 ~ 종료일, 육아 : 시작일 ~ 종료일)에 포함되고, 입력한 OT 시간 중 0보다 큰 값이 있으면 LGCOMException 발생.
+	 *        (LGVATT20011, LGVATT20020, LGVATT20040, LGVATT20060 저장 시 호출)
+	 * @Method Name : validatePregnantOt
+	 * @param  subsidiaryCode 법인코드
+	 * @param  employeeNo     사번
+	 * @param  attDate        근태일자 (DD/MM/YYYY 또는 DDMMYYYY)
+	 * @param  otHours        체크할 OT 시간 값들 (Number 또는 String)
+	 */
+	public void validatePregnantOt(String subsidiaryCode, String employeeNo, String attDate, Object... otHours);
+
 ;}

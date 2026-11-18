@@ -17,6 +17,7 @@ import com.lgd.lgcom.framework.log.LGCOMLogger;
 import com.lgd.lgcom.framework.log.LGCOMLoggerFactory;
 import com.lgd.lgcom.framework.model.LGCOMData;
 import com.lgd.lgvhr.lgvatt.lgvatt20040.service.LGVATT20040Service;
+import com.lgd.lgvhr.lgvatt.lgvattcommon.service.LGVATTCOMMService;
 
 @Service(value="LGVATT20040Service")
 public class LGVATT20040ServiceImpl implements LGVATT20040Service {
@@ -30,6 +31,9 @@ public class LGVATT20040ServiceImpl implements LGVATT20040Service {
 
 	@Resource(name="messageSourceAccessor")
     protected MessageSourceAccessor messageSourceAccessor;
+
+	@Resource(name="LGVATTCOMMService")
+	private LGVATTCOMMService lgvattcomm;
 	
 	/**
 	 * Desc : 
@@ -69,7 +73,13 @@ public class LGVATT20040ServiceImpl implements LGVATT20040Service {
         	item.set("newInputResultAttCode",item.getString("actualAttendanceDetail"));
         	
         	LOGGER.debug("item = " + item);
-        	
+
+        	//임신 직원(LGVATT00031) OT 불가 기간 체크 (계획 : planDate, 실적 : actualDate)
+        	lgvattcomm.validatePregnantOt(item.getString("subsidiaryCode"), item.getString("employeeNo"),
+        			item.getString("planDate"), item.get("planOT"));
+        	lgvattcomm.validatePregnantOt(item.getString("subsidiaryCode"), item.getString("employeeNo"),
+        			item.getString("actualDate"), item.get("actualOT"), item.get("actualOtHours"), item.get("actualOtMinutes"));
+
         	if( "Y".equals(item.getString("isEditOt")) ) {
         		
         		LGCOMData tempData = new LGCOMData();
